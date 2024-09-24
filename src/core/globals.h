@@ -123,6 +123,8 @@ extern float RfFreq;
 
 extern int RfidModule;
 
+extern int Rf_legacy;
+
 extern String cachedPassword;
 extern String wigleBasicToken;
 

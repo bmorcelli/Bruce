@@ -21,6 +21,7 @@ void load_eeprom() {
     FGCOLOR = EEPROM.read(EEPROM_FGCOLOR0) << 8 | EEPROM.read(EEPROM_FGCOLOR1);
     RfModule = EEPROM.read(EEPROM_RF_MODULE);
     RfidModule = EEPROM.read(EEPROM_RFID_MODULE);
+    Rf_legacy = EEPROM.read(EEPROM_RF_LEGACY);
 
     log_i("\
     \n*-*EEPROM Settings*-* \
@@ -35,8 +36,9 @@ void load_eeprom() {
     \n- FGColor   =0x%04X \
     \n- RfModule  =%03d, \
     \n- RfidModule=%03d, \
+    \n- RfLegacy  =%03d, \
     \n*-*-*-*-*-*-*-*-*-*-*",
-    rotation, dimmerSet, bright,IrTx, IrRx, RfTx, RfRx, tmz, FGCOLOR, RfModule, RfidModule
+    rotation, dimmerSet, bright,IrTx, IrRx, RfTx, RfRx, tmz, FGCOLOR, RfModule, RfidModule, Rf_legacy
     );
 
     if (
@@ -72,6 +74,7 @@ void load_eeprom() {
         EEPROM.write(EEPROM_FGCOLOR0, int((FGCOLOR >> 8) & 0x00FF));
         EEPROM.write(EEPROM_FGCOLOR1, int(FGCOLOR & 0x00FF));
         EEPROM.write(EEPROM_RF_MODULE, RfModule);
+        EEPROM.write(EEPROM_RF_LEGACY,Rf_legacy);
         EEPROM.write(EEPROM_RFID_MODULE, RfidModule);
         EEPROM.writeString(20,"");
 
@@ -159,6 +162,7 @@ void sync_eeprom_values(void) {
     if(EEPROM.read(EEPROM_FGCOLOR1) != int(FGCOLOR & 0x00FF)) { EEPROM.write(EEPROM_FGCOLOR1, int(FGCOLOR & 0x00FF)); count++; }
     if(EEPROM.read(EEPROM_RF_MODULE) != RfModule) { EEPROM.write(EEPROM_RF_MODULE, RfModule); count++; }
     if(EEPROM.read(EEPROM_RFID_MODULE) != RfidModule) { EEPROM.write(EEPROM_RFID_MODULE, RfidModule); count++; }
+    if(EEPROM.read(EEPROM_RF_LEGACY)!= Rf_legacy) { EEPROM.write(EEPROM_RF_LEGACY, Rf_legacy); count++; } //Used only on StickC+(1 and 2) devices
     // TODO: add RfFreq
 
     //If something changed, saves the changes on EEPROM.

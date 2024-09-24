@@ -23,6 +23,7 @@ int IrRx;
 int RfTx;
 int RfRx;
 int RfModule=0;  // 0 - single-pinned, 1 - CC1101+SPI
+int Rf_legacy=0; // Used only in StickC+ devices
 float RfFreq=433.92;
 int RfidModule=M5_RFID2_MODULE;
 String cachedPassword="";
@@ -106,10 +107,16 @@ void setup_gpio() {
     pinMode(DW_BTN, INPUT);
     pinMode(4, OUTPUT);     // Keeps the Stick alive after take off the USB cable
     digitalWrite(4,HIGH);   // Keeps the Stick alive after take off the USB cable
+    //Disables G25 to allow using G36 in CC1101, NRF24 and SDCard
+    gpio_pulldown_dis(GPIO_NUM_36);
+    gpio_pullup_dis(GPIO_NUM_36);
   #elif defined(STICK_C_PLUS)
     pinMode(SEL_BTN, INPUT);
     pinMode(DW_BTN, INPUT);
     axp192.begin();           // Start the energy management of AXP192
+    //Disables G25 to allow using G36 in CC1101, NRF24 and SDCard
+    gpio_pulldown_dis(GPIO_NUM_36);
+    gpio_pullup_dis(GPIO_NUM_36);
   #elif defined(CARDPUTER)
     Keyboard.begin();
     pinMode(0, INPUT);
@@ -127,6 +134,13 @@ void setup_gpio() {
   #if defined(BACKLIGHT)
   pinMode(BACKLIGHT, OUTPUT);
   #endif
+
+  //Set CC1101 and NRF24 CS pin to HIGH to prevent SPI bus beng used by 2 devices.
+  pinMode(GROVE_SCL,OUTPUT);
+  digitalWrite(GROVE_SCL,HIGH);
+  
+  pinMode(GROVE_SDA,OUTPUT);
+  digitalWrite(GROVE_SDA,LOW);
   //if(RfModule==1)
   initCC1101once(&sdcardSPI); // Sets GPIO in the CC1101 lib
 }
@@ -269,9 +283,9 @@ void setup() {
   wifiConnected=false;
   BLEConnected=false;
 
+  load_eeprom();
   setup_gpio();
   begin_tft();
-  load_eeprom();
   init_clock();
 
   if(!LittleFS.begin(true)) { LittleFS.format(), LittleFS.begin();}

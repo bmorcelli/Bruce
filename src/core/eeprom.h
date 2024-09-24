@@ -23,7 +23,7 @@ EEPROM ADDRESSES MAP
 12  FGCOLOR       28	Pass	44	Pass	60	Pass	76	Pass	92		    108		124	(L-FGCOLOR)
 13  RfModule      29	Pass	45	Pass	61	Pass	77	Pass	93		    109		125	(L-FGCOLOR)
 14  RfidModule    30	Pass	46	Pass	62	Pass	78	Pass	94		    110		126	(L-AskSpiffs)
-15		          31	Pass	47	Pass	63	Pass	79	Pass	95		    111		127	(L-OnlyBins)
+15	RFLegacy      31	Pass	47	Pass	63	Pass	79	Pass	95		    111		127	(L-OnlyBins)
 
 From 1 to 5: Nemo shared addresses
 (L -*) stands for Launcher addresses
@@ -42,6 +42,7 @@ From 1 to 5: Nemo shared addresses
 #define EEPROM_FGCOLOR1       (12)
 #define EEPROM_RF_MODULE      (13)
 #define EEPROM_RFID_MODULE    (14)
+#define EEPROM_RF_LEGACY      (15)
 #define EEPROM_PWD            (20)
 
 

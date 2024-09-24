@@ -276,10 +276,20 @@ void setRFModuleMenu() {
   delay(200);
   if(result == 1) {
     #ifdef USE_CC1101_VIA_SPI
+     #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+      options = {
+          {"Default 1101",      [=]()  { Rf_legacy=0; }},
+          {"Legacy plugs",      [=]()  { Rf_legacy=1; }},
+      };
+      delay(200);
+      loopOptions(options);
+      delay(200);
+     #endif
     ELECHOUSE_cc1101.Init();
     if (ELECHOUSE_cc1101.getCC1101()){
       RfModule=1;
       write_eeprom(EEPROM_RF_MODULE, RfModule);
+      write_eeprom(EEPROM_RF_LEGACY, Rf_legacy);
       return;
     }
     #endif
@@ -697,9 +707,9 @@ void getConfigs() {
     if(file) {
       // init with default settings
       #if ROTATION >1
-      file.print("[{\"rot\":3,\"dimmerSet\":10,\"bright\":100,\"wui_usr\":\"admin\",\"wui_pwd\":\"bruce\",\"Bruce_FGCOLOR\":43023,\"IrTx\":"+String(LED)+",\"IrRx\":"+String(GROVE_SCL)+",\"RfTx\":"+String(GROVE_SDA)+",\"RfRx\":"+String(GROVE_SCL)+",\"tmz\":3,\"RfModule\":0,\"RfFreq\":433.92,\"RfidModule\":"+String(RfidModule)+",\"wifi\":[{\"ssid\":\"myNetSSID\",\"pwd\":\"myNetPassword\"}],\"wigleBasicToken\":\"\",\"devMode\":0,\"soundEnabled\":1}]");
+      file.print("[{\"rot\":3,\"dimmerSet\":10,\"bright\":100,\"wui_usr\":\"admin\",\"wui_pwd\":\"bruce\",\"Bruce_FGCOLOR\":43023,\"IrTx\":"+String(LED)+",\"IrRx\":"+String(GROVE_SCL)+",\"RfTx\":"+String(GROVE_SDA)+",\"RfRx\":"+String(GROVE_SCL)+",\"tmz\":3,\"RfModule\":0,\"RfFreq\":433.92,\"RfidModule\":"+String(RfidModule)+",\"wifi\":[{\"ssid\":\"myNetSSID\",\"pwd\":\"myNetPassword\"}],\"wigleBasicToken\":\"\",\"devMode\":0,\"RfLegacy\":0}]");
       #else
-      file.print("[{\"rot\":1,\"dimmerSet\":10,\"bright\":100,\"wui_usr\":\"admin\",\"wui_pwd\":\"bruce\",\"Bruce_FGCOLOR\":43023,\"IrTx\":"+String(LED)+",\"IrRx\":"+String(GROVE_SCL)+",\"RfTx\":"+String(GROVE_SDA)+",\"RfRx\":"+String(GROVE_SCL)+",\"tmz\":3,\"RfModule\":0,\"RfFreq\":433.92,\"RfidModule\":"+String(RfidModule)+",\"wifi\":[{\"ssid\":\"myNetSSID\",\"pwd\":\"myNetPassword\"}],\"wigleBasicToken\":\"\",\"devMode\":0,\"soundEnabled\":1}]");
+      file.print("[{\"rot\":1,\"dimmerSet\":10,\"bright\":100,\"wui_usr\":\"admin\",\"wui_pwd\":\"bruce\",\"Bruce_FGCOLOR\":43023,\"IrTx\":"+String(LED)+",\"IrRx\":"+String(GROVE_SCL)+",\"RfTx\":"+String(GROVE_SDA)+",\"RfRx\":"+String(GROVE_SCL)+",\"tmz\":3,\"RfModule\":0,\"RfFreq\":433.92,\"RfidModule\":"+String(RfidModule)+",\"wifi\":[{\"ssid\":\"myNetSSID\",\"pwd\":\"myNetPassword\"}],\"wigleBasicToken\":\"\",\"devMode\":0,\"RfLegacy\":0}]");
       #endif
     }
     file.close();
@@ -732,6 +742,7 @@ void getConfigs() {
     if(setting.containsKey("RfRx"))      { RfRx       = setting["RfRx"].as<int>(); } else { count++; log_i("Fail"); }
     if(setting.containsKey("tmz"))       { tmz        = setting["tmz"].as<int>(); } else { count++; log_i("Fail"); }
     if(setting.containsKey("RfModule"))  { RfModule   = setting["RfModule"].as<int>(); } else { count++; log_i("Fail"); }
+    if(setting.containsKey("RfLegacy"))  { Rf_legacy = setting["RfLegacy"].as<int>(); } else { count++; log_i("Fail"); } //Used only in StickC+ devices
     if(setting.containsKey("RfFreq"))    { RfFreq     = setting["RfFreq"].as<float>(); } else { count++; log_i("Fail"); }
     if(setting.containsKey("RfidModule")){ RfidModule = setting["RfidModule"].as<int>(); } else { count++; log_i("Fail"); }
 
@@ -783,6 +794,7 @@ void saveConfigs() {
   setting["RfTx"] = RfTx;
   setting["RfRx"] = RfRx;
   setting["RfModule"] = RfModule;
+  setting["RfLegacy"] = Rf_legacy;
   setting["RfFreq"] = RfFreq;
   setting["RfidModule"] = RfidModule;
   setting["tmz"] = tmz;

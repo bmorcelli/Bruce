@@ -71,6 +71,10 @@ void initRMT() {
     rxconfig.gpio_num            = gpio_num_t(RfRx);
     #ifdef USE_CC1101_VIA_SPI
     if(RfModule==1)
+      #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+        if(Rf_legacy) rxconfig.gpio_num = gpio_num_t(25);
+        else
+      #endif
         rxconfig.gpio_num            = gpio_num_t(CC1101_GDO0_PIN);
     #endif
     rxconfig.clk_div             = RMT_CLK_DIV; // RMT_DEFAULT_CLK_DIV=32
@@ -136,6 +140,10 @@ void rf_jammerFull() { //@IncursioHack - https://github.com/IncursioHack -  than
     if(!initRfModule("tx")) return;
     if(RfModule == 1) { // CC1101 in use
         #ifdef USE_CC1101_VIA_SPI
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            if(Rf_legacy) nTransmitterPin = 25;
+            else
+          #endif
             nTransmitterPin = CC1101_GDO0_PIN;
         #else
             return;
@@ -168,6 +176,10 @@ void rf_jammerIntermittent() { //@IncursioHack - https://github.com/IncursioHack
     if(!initRfModule("tx")) return;
     if(RfModule == 1) { // CC1101 in use
         #ifdef USE_CC1101_VIA_SPI
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            if(Rf_legacy) nTransmitterPin = 25;
+            else
+          #endif
             nTransmitterPin = CC1101_GDO0_PIN;
         #else
             return;
@@ -219,6 +231,10 @@ void RCSwitch_send(uint64_t data, unsigned int bits, int pulse, int protocol, in
         
     if(RfModule==1) {
         #ifdef USE_CC1101_VIA_SPI
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            if(Rf_legacy) mySwitch.enableTransmit(25);
+            else
+          #endif
             mySwitch.enableTransmit(CC1101_GDO0_PIN);
         #else
             Serial.println("USE_CC1101_VIA_SPI not defined");
@@ -369,10 +385,19 @@ void initCC1101once(SPIClass* SSPI) {
    
     #ifdef USE_CC1101_VIA_SPI
         // derived from https://github.com/LSatan/SmartRC-CC1101-Driver-Lib/blob/master/examples/Rc-Switch%20examples%20cc1101/ReceiveDemo_Advanced_cc1101/ReceiveDemo_Advanced_cc1101.ino
+      #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+        if(Rf_legacy) ELECHOUSE_cc1101.setSpiPin(0, 33, 32, 26, SSPI);
+        else
+      #endif
+                                   // SCK        , MISO,          , MOSI           , CS
         ELECHOUSE_cc1101.setSpiPin(CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN, CC1101_SS_PIN, SSPI);
         #ifdef CC1101_GDO2_PIN
             ELECHOUSE_cc1101.setGDO(CC1101_GDO0_PIN, CC1101_GDO2_PIN); 	//Set Gdo0 (tx) and Gdo2 (rx) for serial transmission function.
         #else
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            if(Rf_legacy) ELECHOUSE_cc1101.setGDO0(25);
+            else
+          #endif
             ELECHOUSE_cc1101.setGDO0(CC1101_GDO0_PIN);  // use Gdo0 for both Tx and Rx
         #endif
         /*
@@ -401,25 +426,33 @@ void deinitRfModule() {
             return;
         #endif
     else
-        digitalWrite(RfTx, LED_OFF);
+        digitalWrite(RfTx, LOW);
 }
 
 
 bool initRfModule(String mode, float frequency) {
     #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
-    initCC1101once(&CC_NRF_SPI);
+    Serial.println(0);
+    initCC1101once(&sdcardSPI); //CC_NRF_SPI
     #elif defined(CARDPUTER) || defined(ESP32S3DEVKITC1)
     initCC1101once(&sdcardSPI);
     #else 
     initCC1101once(&SPI);
     #endif
+    Serial.println(1);
     
     // use default frequency if no one is passed
     if(!frequency) frequency = RfFreq;
-    
+    Serial.println(2);
     if(RfModule == 1) { // CC1101 in use
         #ifdef USE_CC1101_VIA_SPI 
+        Serial.println(3);
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            sdcardSPI.endTransaction();
+          #endif
+
             ELECHOUSE_cc1101.Init();
+            Serial.println(4);
             if (ELECHOUSE_cc1101.getCC1101()){       // Check the CC1101 Spi connection.
                 Serial.println("cc1101 Connection OK");
             } else {
@@ -440,6 +473,10 @@ bool initRfModule(String mode, float frequency) {
         
             /* MEMO: cannot change other params after this is executed */
             if(mode=="tx") {
+              #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+                if(Rf_legacy) pinMode(25, OUTPUT);
+                else
+              #endif
                 pinMode(CC1101_GDO0_PIN, OUTPUT);
                 ELECHOUSE_cc1101.setPA(12);       // set TxPower. The following settings are possible depending
                 Serial.println("cc1101 setPA();");
@@ -447,6 +484,10 @@ bool initRfModule(String mode, float frequency) {
                 Serial.println("cc1101 SetTx();");
             }
             else if(mode=="rx") {
+              #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+                if(Rf_legacy) pinMode(25, INPUT);
+                else
+              #endif
                 pinMode(CC1101_GDO0_PIN, INPUT);
                 ELECHOUSE_cc1101.SetRx();
                 Serial.println("cc1101 SetRx();");
@@ -504,6 +545,10 @@ RestartRec:
             #ifdef CC1101_GDO2_PIN
                 rcswitch.enableReceive(CC1101_GDO2_PIN);
             #else
+              #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+                if(Rf_legacy) rcswitch.enableReceive(25);
+                else
+              #endif
                 rcswitch.enableReceive(CC1101_GDO0_PIN);
                 Serial.println("CC1101 enableReceive()");
             #endif
@@ -613,6 +658,9 @@ RestartRec:
                     int i=0;
                     File file;
                     String FS="";
+                #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+                    setupSdCard();
+                #endif
                     if(SD.begin()) {
                         if (!SD.exists("/BruceRF")) SD.mkdir("/BruceRF");
                         while(SD.exists("/BruceRF/bruce_" + String(i) + ".sub")) i++;
@@ -633,6 +681,9 @@ RestartRec:
                         displayError("Error saving file");
                     }
                     file.close();
+                #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+                    if(Rf_legacy) closeSdCard();
+                #endif
                     delay(2000);
                     drawMainBorder();
                     tft.setCursor(10, 28);
@@ -667,6 +718,10 @@ void RCSwitch_RAW_Bit_send(RfCodes data) {
   int nTransmitterPin = RfTx;
   if(RfModule==1) {
       #ifdef USE_CC1101_VIA_SPI
+       #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+        if(Rf_legacy) nTransmitterPin = 25;
+        else
+       #endif
          nTransmitterPin = CC1101_GDO0_PIN;
       #else
         return;
@@ -710,6 +765,10 @@ void RCSwitch_RAW_send(int * ptrtransmittimings) {
   int nTransmitterPin = RfTx;
   if(RfModule==1) {
       #ifdef USE_CC1101_VIA_SPI
+       #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+        if(Rf_legacy) nTransmitterPin = 25;
+        else
+       #endif
          nTransmitterPin = CC1101_GDO0_PIN;
       #else
         return;
@@ -829,6 +888,10 @@ void sendRfCommand(struct RfCodes rfcode) {
             if(deviation) ELECHOUSE_cc1101.setDeviation(deviation);
             if(rxBW) ELECHOUSE_cc1101.setRxBW(rxBW);		// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
             if(dataRate) ELECHOUSE_cc1101.setDRate(dataRate); 
+          #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2)
+            if(Rf_legacy) pinMode(25, OUTPUT);
+            else
+          #endif
             pinMode(CC1101_GDO0_PIN, OUTPUT);
             ELECHOUSE_cc1101.setPA(12);       // set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12)   Default is max!
             ELECHOUSE_cc1101.SetTx();
