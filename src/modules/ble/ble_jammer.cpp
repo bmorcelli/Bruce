@@ -14,6 +14,9 @@ void ble_jammer() {
     CC_NRF_SPI.begin(NRF24_SCK_PIN,NRF24_MISO_PIN,NRF24_MOSI_PIN,NRF24_SS_PIN);
   #elif defined(CARDPUTER) || defined(ESP32S3DEVKITC1)
     sdcardSPI.begin(NRF24_SCK_PIN,NRF24_MISO_PIN,NRF24_MOSI_PIN,NRF24_SS_PIN);
+  #elif defined(M5STACK)
+  SPI.begin(NRF24_SS_PIN);
+  
   #else 
     SPI.begin(NRF24_SCK_PIN,NRF24_MISO_PIN,NRF24_MOSI_PIN,NRF24_SS_PIN);
   #endif

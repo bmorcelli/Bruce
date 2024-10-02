@@ -117,6 +117,15 @@ void setup_gpio() {
   #elif ! defined(HAS_SCREEN)
     // do nothing
   #elif defined(M5STACK) // init must be done after tft, to make SDCard work
+    #if defined(USE_CC1101_VIA_SPI)
+      pinMode(CC1101_SS_PIN, OUTPUT);
+      digitalWrite(CC1101_SS_PIN,HIGH);
+    #endif
+    #if defined(USE_NRF24_VIA_SPI)
+      pinMode(NRF24_SS_PIN, OUTPUT);
+      digitalWrite(NRF24_SS_PIN,HIGH);
+    #endif
+
     //M5.begin();
   #else
     pinMode(UP_BTN, INPUT);   // Sets the power btn as an INPUT
