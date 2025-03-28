@@ -200,6 +200,8 @@ void checkReboot() { }
 ** Function name: isCharging()
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
+/*
 bool isCharging() {
-      return axp192.isCharging();    // Return the charging status from AXP 
+      return axp192.isCharging();    // Return the charging status from AXP
 }
+*/
