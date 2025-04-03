@@ -26,4 +26,6 @@
 #include "../smoochiee-board/pins_arduino.h"
 #elif T_WATCH_S3
 #include "../lilygo-t-watch-s3/pins_arduino.h"
+#elif T_DISPLAY_S3_PRO
+#include "../lilygo-t-display-s3-pro/pins_arduino.h"
 #endif
