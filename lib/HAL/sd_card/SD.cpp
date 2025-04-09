@@ -17,7 +17,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "SDM.h"
 #include "io_pin_remap.h"
 #include "pins_arduino.h"
 #ifdef SOC_SDMMC_HOST_SUPPORTED
@@ -26,7 +25,6 @@
 #include "driver/sdmmc_defs.h"
 #include "driver/sdmmc_host.h"
 #include "esp_vfs_fat.h"
-#include "ff.h"
 #include "sdmmc_cmd.h"
 #include "soc/sdmmc_pins.h"
 #include <dirent.h>
