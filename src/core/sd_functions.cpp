@@ -26,10 +26,12 @@ std::vector<FileList> fileList;
 ** Description:   Start SD Card
 ***************************************************************************************/
 bool setupSdCard() {
-    if (SDCARD_SCK == -1) {
+#ifndef USE_SD_MMC
+    if (bruceConfig.SDCARD_bus.sck < 0) {
         sdcardMounted = false;
         return false;
     }
+#endif
     // avoid unnecessary remounting
     if (sdcardMounted) return true;
 #ifdef USE_TFT_eSPI_TOUCH
@@ -42,7 +44,7 @@ bool setupSdCard() {
 #ifdef USE_SD_MMC
     if (!SD.begin("/sdcard", true)) {
         sdcardMounted = false;
-        return false;
+        result = false;
     }
 #else
     if (task) { // Not using InputHandler (SdCard on default &SPI bus)
