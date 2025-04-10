@@ -19,16 +19,8 @@
     "flash_mode": "qio",
     "hwids": [
       [
-        "0x239A",
-        "0x811B"
-      ],
-      [
-        "0x239A",
-        "0x011B"
-      ],
-      [
-        "0x239A",
-        "0x811C"
+        "0X303A",
+        "0x1001"
       ]
     ],
     "mcu": "esp32s3",
@@ -39,11 +31,7 @@
     "wifi"
   ],
   "debug": {
-    "default_tool": "esp-builtin",
-    "onboard_tools": [
-      "esp-builtin"
-    ],
-    "openocd_target": "esp32s3.cfg"
+    "openocd_target": "esp32s3-builtin.cfg"
   },
   "frameworks": [
     "arduino",
@@ -55,8 +43,8 @@
     "maximum_ram_size": 327680,
     "maximum_size": 16777216,
     "require_upload_port": true,
-    "speed": 460800
+    "speed": 921600
   },
-  "url": "https://www.lilygo.cc",
-  "vendor": "LilyGo"
+  "url": "https://www.lilygo.cc/products/t-display-s3",
+  "vendor": "LILYGO"
 }

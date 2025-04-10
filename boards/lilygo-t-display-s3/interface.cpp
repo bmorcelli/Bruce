@@ -106,6 +106,8 @@ void _setup_gpio() {
 
     bruceConfig.irRx = RXLED;
     bruceConfig.irTx = LED;
+
+    Serial.begin(115200);
 }
 
 /***************************************************************************************

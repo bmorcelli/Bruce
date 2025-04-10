@@ -7,32 +7,8 @@
 // Lite Version
 // #define LITE_VERSION 1
 
-// Main I2C Bus
-#ifndef USE_SD_MMC
-#define SPI_SS_PIN 10
-#define SPI_MOSI_PIN 11
-#define SPI_MISO_PIN 13
-#define SPI_SCK_PIN 12
-
-#define SDCARD_CS SPI_SS_PIN
-#define SDCARD_SCK SPI_SCK_PIN
-#define SDCARD_MISO SPI_MISO_PIN
-#define SDCARD_MOSI SPI_MOSI_PIN
-
-#define USE_CC1101_VIA_SPI
-#define CC1101_GDO0_PIN 44
-#define CC1101_SS_PIN 43
-#define CC1101_MOSI_PIN SPI_MOSI_PIN
-#define CC1101_SCK_PIN SPI_SCK_PIN
-#define CC1101_MISO_PIN SPI_MISO_PIN
-
-#define USE_NRF24_VIA_SPI
-#define NRF24_CE_PIN 3
-#define NRF24_SS_PIN SPI_SS_PIN
-#define NRF24_MOSI_PIN SPI_MOSI_PIN
-#define NRF24_SCK_PIN SPI_SCK_PIN
-#define NRF24_MISO_PIN SPI_MISO_PIN
-#else
+// Main SPI Bus
+#ifdef USE_SD_MMC
 
 // Willy board definitions
 #define SPI_SS_PIN 1
@@ -58,6 +34,32 @@
 #define NRF24_MOSI_PIN 3
 #define NRF24_SCK_PIN 43
 #define NRF24_MISO_PIN 2
+
+#else
+
+#define SPI_SS_PIN 10
+#define SPI_MOSI_PIN 11
+#define SPI_MISO_PIN 13
+#define SPI_SCK_PIN 12
+
+#define SDCARD_CS SPI_SS_PIN
+#define SDCARD_SCK SPI_SCK_PIN
+#define SDCARD_MISO SPI_MISO_PIN
+#define SDCARD_MOSI SPI_MOSI_PIN
+
+#define USE_CC1101_VIA_SPI
+#define CC1101_GDO0_PIN 44
+#define CC1101_SS_PIN 43
+#define CC1101_MOSI_PIN SPI_MOSI_PIN
+#define CC1101_SCK_PIN SPI_SCK_PIN
+#define CC1101_MISO_PIN SPI_MISO_PIN
+
+#define USE_NRF24_VIA_SPI
+#define NRF24_CE_PIN 3
+#define NRF24_SS_PIN SPI_SS_PIN
+#define NRF24_MOSI_PIN SPI_MOSI_PIN
+#define NRF24_SCK_PIN SPI_SCK_PIN
+#define NRF24_MISO_PIN SPI_MISO_PIN
 #endif
 
 static const uint8_t SS = SPI_SS_PIN;
@@ -132,12 +134,12 @@ static const uint8_t SCL = GROVE_SCL;
 #define BTN_ACT LOW
 
 // IR pins
-#ifndef USE_SD_MMC
-#define LED 44
-#define RXLED 43
-#else
+#ifdef USE_SD_MMC
 #define LED 10
 #define RXLED 44
+#else
+#define LED 44
+#define RXLED 43
 #endif
 #define LED_ON HIGH
 #define LED_OFF LOW
