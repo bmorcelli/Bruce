@@ -28,4 +28,6 @@
 #include "../lilygo-t-watch-s3/pins_arduino.h"
 #elif T_DISPLAY_S3_PRO
 #include "../lilygo-t-display-s3-pro/pins_arduino.h"
+#elif TTGO
+#include "../lilygo-t-display-ttgo/pins_arduino.h"
 #endif

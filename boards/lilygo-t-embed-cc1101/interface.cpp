@@ -70,14 +70,30 @@ void _setup_gpio() {
         PPM.disableOTG();
         PPM.enableCharge();
     }
-#else
-    pinMode(BAT_PIN, INPUT); // Battery value
-#endif
-
     // Start with default IR, RF and RFID Configs, replace old
     bruceConfig.rfModule = CC1101_SPI_MODULE;
     bruceConfig.rfidModule = PN532_I2C_MODULE;
     bruceConfig.irRx = 1;
+#else
+    pinMode(BAT_PIN, INPUT); // Battery value
+    Wire.begin(GROVE_SDA, GROVE_SCL);
+    Wire.beginTransmission(0x40);
+    if (Wire.endTransmission() == 0) {
+        Serial.println("ES7210 Online, No CC1101 version");
+        Wire.end();
+    } else {
+        Serial.println("Probably CC1101 exists");
+        bruceConfig.CC1101_bus.cs = GPIO_NUM_17;
+        bruceConfig.CC1101_bus.io0 = GPIO_NUM_18;
+        bruceConfig.rfModule = CC1101_SPI_MODULE;
+
+        //* If it does not exist, then the CC1101 shield may exist, so there is no need for Wire to exist.
+        Wire.endTransmission();
+        Wire.end();
+    }
+    bruceConfig.rfidModule = PN532_SPI_MODULE;
+
+#endif
 
 #ifdef T_EMBED_1101
     pinMode(BK_BTN, INPUT);
@@ -152,6 +168,7 @@ void InputHandler(void) {
     static unsigned long tm = millis();
     static int _last_dir = 0;
     _last_dir = (int)encoder->getDirection();
+    // pinMode(SEL_BTN, INPUT);
     if (_last_dir != 0 || digitalRead(SEL_BTN) == BTN_ACT) {
         if (!wakeUpScreen()) AnyKeyPress = true;
         else goto END;
@@ -230,7 +247,7 @@ void checkReboot() {
 ** Function name: isCharging()
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
-#ifdef USE_BQ27220_VIA_I2
+#ifdef USE_BQ27220_VIA_I2C
 bool isCharging() {
     return bq.getIsCharging(); // Return the charging status from BQ27220
 }
