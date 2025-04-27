@@ -124,19 +124,23 @@ struct TouchPointPro {
 **********************************************************************/
 void InputHandler(void) {
     static long tm = 0;
-    bool sel = digitalRead(SEL_BTN);
-    bool prev = digitalRead(UP_BTN);
-    bool next = digitalRead(DW_BTN);
     TouchPointPro t;
+    bool touched = touch.getPoint(t.x, t.y, touch.getSupportTouchPoint());
     if (millis() - tm > 200 || LongPress) {
-        if (sel || next || prev) {
+        int sel = digitalRead(SEL_BTN);
+        int prev = digitalRead(UP_BTN);
+        int next = digitalRead(DW_BTN);
+        if (sel == 0 || next == 0 || prev == 0) {
+            tm = millis();
             if (!wakeUpScreen()) AnyKeyPress = true;
             else return;
-            SelPress = sel;
-            NextPress = next;
-            PrevPress = prev;
+            SelPress = !sel;
+            NextPress = !next;
+            PrevPress = !prev;
+            // Serial.printf("Sel: %d, Next: %d, Prev: %d\n", SelPress, NextPress, PrevPress);
+            return;
         }
-        if (touch.getPoint(t.x, t.y, touch.getSupportTouchPoint()) && touch.isPressed()) {
+        if (touched && touch.isPressed()) {
             tm = millis();
             if (bruceConfig.rotation == 1) { t.y[0] = TFT_WIDTH - t.y[0]; }
             if (bruceConfig.rotation == 3) { t.x[0] = TFT_HEIGHT - t.x[0]; }
@@ -152,7 +156,7 @@ void InputHandler(void) {
                 t.y[0] = TFT_HEIGHT - tmp;
             }
 
-            Serial.printf("\nPressed x=%d , y=%d, rot: %d", t.x[0], t.y[0], bruceConfig.rotation);
+            // Serial.printf("\nPressed x=%d , y=%d, rot: %d", t.x[0], t.y[0], bruceConfig.rotation);
 
             if (!wakeUpScreen()) AnyKeyPress = true;
             else return;
