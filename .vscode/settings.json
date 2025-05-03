@@ -62,5 +62,6 @@
     "githubPullRequests.ignoredPullRequestBranches": [
         "main"
     ],
-    "cmake.sourceDirectory": "C:/Projetos/Bruce/lib/M5GFX"
+    "cmake.sourceDirectory": "/home/jimmy/Documents/GitHub/Bruce/.pio/libdeps/CYD-2432S028/Adafruit BusIO",
+    "idf.pythonInstallPath": "/usr/bin/python"
 }
