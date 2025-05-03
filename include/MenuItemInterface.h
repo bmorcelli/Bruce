@@ -10,15 +10,24 @@ public:
     virtual ~MenuItemInterface() = default;
     virtual void optionsMenu(void) = 0;
     virtual void drawIcon(float scale = 1) = 0;
+    virtual void drawIconImg() = 0;
+    virtual bool getTheme() = 0;
 
     String getName() const {return _name;}
 
     void draw(float scale = 1) {
         if(rotation!=bruceConfig.rotation) resetCoordinates();
-
-        drawIcon(scale);
-        drawArrows(scale);
-        drawTitle(scale);
+        if(!getTheme()) {
+            drawIcon(scale);
+            drawArrows(scale);
+            drawTitle(scale);
+        } else {
+            clearImgArea();
+            if(bruceConfig.theme.label) drawTitle(scale); // If using .GIF, labels are draw after complete, which takes some time
+            drawIconImg();
+            if(bruceConfig.theme.label) drawTitle(scale); // Makes sure to draw over the image
+        }
+        drawStatusBar();
     }
 
     void drawArrows(float scale = 1) {
@@ -33,7 +42,7 @@ public:
 
         // Left Arrow
         tft.drawWideLine(
-            arrowX, 
+            arrowX,
             arrowY,
             arrowX + arrowSize,
             arrowY + arrowSize,
@@ -76,6 +85,7 @@ public:
         int titleY = iconCenterY + iconAreaH/2 + FG;
 
         tft.setTextSize(FM);
+        tft.drawPixel(0, 0, 0);
         tft.fillRect(
             arrowAreaX, titleY,
             tftWidth - 2*arrowAreaX, LH*FM,
@@ -97,6 +107,7 @@ protected:
 
     int iconCenterX = tftWidth/2;
     int iconCenterY = tftHeight/2;
+    int imgCenterY = 13;
 
     int iconAreaX = iconCenterX - iconAreaW/2;
     int iconAreaY = iconCenterY - iconAreaH/2;
@@ -109,7 +120,9 @@ protected:
     void clearIconArea(void) {
         tft.fillRect(iconAreaX, iconAreaY, iconAreaW, iconAreaH, bruceConfig.bgColor);
     }
-    
+    void clearImgArea(void) {
+        tft.fillRect(7, 27, tftWidth-14, tftHeight-34, bruceConfig.bgColor);
+    }
     void resetCoordinates(void) {
         // Recalculate Center and ared due to portrait/landscape changings
         if(tftWidth>tftHeight) {

@@ -3,13 +3,14 @@
 
 #include <MenuItemInterface.h>
 
-
 class OthersMenu : public MenuItemInterface {
 public:
     OthersMenu() : MenuItemInterface("Others") {}
 
     void optionsMenu(void);
     void drawIcon(float scale);
+    void drawIconImg();
+    bool getTheme() { return bruceConfig.theme.others; }
 };
 
 #endif

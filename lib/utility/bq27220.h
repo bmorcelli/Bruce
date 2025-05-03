@@ -2,8 +2,12 @@
 #define __BQ27220_H__
 
 #define BQ27220_I2C_ADDRESS 0x55 // device addr
+#ifndef BQ27220_I2C_SDA
 #define BQ27220_I2C_SDA
+#endif
+#ifndef BQ27220_I2C_SCL
 #define BQ27220_I2C_SCL
+#endif
 #define BQ27220_DEVICE_ID 0x0220 // device id
 
 // commands
@@ -71,7 +75,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-typedef enum OP_STATUS{
+enum OP_STATUS{
     SEALED = 0b11,
     UNSEALED = 0b10,
     FULL = 0b01,
@@ -137,8 +141,8 @@ public:
     uint16_t getId();
 
 private:
-    TwoWire *wire;
     uint8_t addr;
+    TwoWire *wire;
     int scl;
     int sda;
     union battery_state bat_st;

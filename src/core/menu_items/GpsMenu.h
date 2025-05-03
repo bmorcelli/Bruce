@@ -3,13 +3,14 @@
 
 #include <MenuItemInterface.h>
 
-
 class GpsMenu : public MenuItemInterface {
 public:
     GpsMenu() : MenuItemInterface("GPS") {}
 
     void optionsMenu(void);
     void drawIcon(float scale);
+    void drawIconImg();
+    bool getTheme() { return bruceConfig.theme.gps; }
 
 private:
     void configMenu(void);

@@ -1,19 +1,18 @@
 #ifndef __BRUCE_CONFIG_H__
 #define __BRUCE_CONFIG_H__
 
-// #include <globals.h>
+#include "theme.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <map>
-#include <vector>
 #include <set>
-
-#define DEFAULT_PRICOLOR 0xA80F
+#include <vector>
 
 enum RFIDModules {
-    M5_RFID2_MODULE  = 0,
+    M5_RFID2_MODULE = 0,
     PN532_I2C_MODULE = 1,
     PN532_SPI_MODULE = 2,
+    RC522_SPI_MODULE = 3,
 };
 
 enum RFModules {
@@ -21,8 +20,7 @@ enum RFModules {
     CC1101_SPI_MODULE = 1,
 };
 
-
-class BruceConfig {
+class BruceConfig : public BruceTheme {
 public:
     struct WiFiCredential {
         String ssid;
@@ -39,11 +37,6 @@ public:
 
     const char *filepath = "/bruce.conf";
 
-    // Theme colors in RGB565 format
-    uint16_t priColor = DEFAULT_PRICOLOR;
-    uint16_t secColor = DEFAULT_PRICOLOR-0x2000;
-    uint16_t bgColor  = 0x0000;
-
     // Settings
     int rotation = ROTATION > 1 ? 3 : 1;
     int dimmerSet = 10;
@@ -51,18 +44,25 @@ public:
     int tmz = 0;
     int soundEnabled = 1;
     int wifiAtStartup = 0;
+    int instantBoot = 0;
 
     // Led
     int ledBright = 75;
     uint32_t ledColor = 0;
+    int ledBlinkEnabled = 1;
 
     // Wifi
     Credential webUI = {"admin", "bruce"};
     WiFiCredential wifiAp = {"BruceNet", "brucenet"};
     std::map<String, String> wifi = {};
+    std::set<String> evilWifiNames = {};
+
+    // BLE
+    String bleName = String("Keyboard_" + String((uint8_t)(ESP.getEfuseMac() >> 32), HEX));
 
     // IR
     int irTx = LED;
+    uint8_t irTxRepeats = 0;
     int irRx = GROVE_SCL;
 
     // RF
@@ -72,6 +72,9 @@ public:
     float rfFreq = 433.92;
     int rfFxdFreq = 1;
     int rfScanRange = 3;
+
+    // iButton Pin
+    int iButton = 0;
 
     // RFID
     int rfidModule = M5_RFID2_MODULE;
@@ -84,14 +87,15 @@ public:
     String startupApp = "";
     String wigleBasicToken = "";
     int devMode = 0;
+    int colorInverted = 1;
 
     std::vector<String> disabledMenus = {};
 
     std::vector<QrCodeEntry> qrCodes = {
-        {"Bruce AP", "WIFI:T:WPA;S:BruceNet;P:brucenet;;"},
+        {"Bruce AP",   "WIFI:T:WPA;S:BruceNet;P:brucenet;;"},
         {"Bruce Wiki", "https://github.com/pr3y/Bruce/wiki"},
-        {"Bruce Site", "https://bruce.computer"},
-        {"Rickroll", "https://youtu.be/dQw4w9WgXcQ"}
+        {"Bruce Site", "https://bruce.computer"            },
+        {"Rickroll",   "https://youtu.be/dQw4w9WgXcQ"      }
     };
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -105,12 +109,12 @@ public:
     /////////////////////////////////////////////////////////////////////////////////////
     void saveFile();
     void fromFile();
+    void factoryReset();
     void validateConfig();
     JsonDocument toJson() const;
 
-    // Theme
-    void setTheme(uint16_t primary, uint16_t secondary = NULL, uint16_t background = NULL);
-    void validateTheme();
+    // UI Color
+    void setUiColor(uint16_t primary, uint16_t *secondary = nullptr, uint16_t *background = nullptr);
 
     // Settings
     void setRotation(int value);
@@ -131,17 +135,25 @@ public:
     void validateLedBrightValue();
     void setLedColor(uint32_t value);
     void validateLedColorValue();
+    void setLedBlinkEnabled(int value);
+    void validateLedBlinkEnabledValue();
 
     // Wifi
-    void setWebUICreds(const String& usr, const String& pwd);
-    void setWifiApCreds(const String& ssid, const String& pwd);
-    void addWifiCredential(const String& ssid, const String& pwd);
-    void addQrCodeEntry(const String& menuName, const String& content);
-    void removeQrCodeEntry(const String& menuName);
-    String getWifiPassword(const String& ssid) const;
+    void setWebUICreds(const String &usr, const String &pwd);
+    void setWifiApCreds(const String &ssid, const String &pwd);
+    void addWifiCredential(const String &ssid, const String &pwd);
+    void addQrCodeEntry(const String &menuName, const String &content);
+    void removeQrCodeEntry(const String &menuName);
+    String getWifiPassword(const String &ssid) const;
+    void addEvilWifiName(String value);
+    void removeEvilWifiName(String value);
+
+    // BLE
+    void setBleName(const String name);
 
     // IR
     void setIrTxPin(int value);
+    void setIrTxRepeats(uint8_t value);
     void setIrRxPin(int value);
 
     // RF
@@ -149,10 +161,13 @@ public:
     void setRfRxPin(int value);
     void setRfModule(RFModules value);
     void validateRfModuleValue();
-    void setRfFreq(float value, int fxdFreq = NULL);
+    void setRfFreq(float value, int fxdFreq = 2);
     void setRfFxdFreq(float value);
     void setRfScanRange(int value, int fxdFreq = 0);
     void validateRfScanRangeValue();
+
+    // iButton
+    void setiButtonPin(int value);
 
     // RFID
     void setRfidModule(RFIDModules value);
@@ -169,6 +184,8 @@ public:
     void setWigleBasicToken(String value);
     void setDevMode(int value);
     void validateDevModeValue();
+    void setColorInverted(int value);
+    void validateColorInverted();
     void addDisabledMenu(String value);
     // TODO: removeDisabledMenu(String value);
 };

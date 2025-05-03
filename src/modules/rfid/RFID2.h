@@ -7,8 +7,9 @@
  */
 
 #include "RFIDInterface.h"
-#include <MFRC522_I2C.h>
-
+#include <MFRC522Driver.h>
+#include <MFRC522DriverPinSimple.h>
+#include <MFRC522v2.h>
 
 class RFID2 : public RFIDInterface {
 public:
@@ -17,7 +18,8 @@ public:
     /////////////////////////////////////////////////////////////////////////////////////
     // Constructor
     /////////////////////////////////////////////////////////////////////////////////////
-    RFID2();
+    RFID2(bool use_i2c = true);
+    ~RFID2();
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Life Cycle
@@ -27,15 +29,19 @@ public:
     /////////////////////////////////////////////////////////////////////////////////////
     // Operations
     /////////////////////////////////////////////////////////////////////////////////////
-    int read();
+    int read(int cardBaudRate = 0);
     int clone();
     int erase();
-    int write();
+    int write(int cardBaudRate = 0);
     int write_ndef();
     int load();
     int save(String filename);
 
 private:
+    bool _use_i2c;
+    MFRC522Driver *_driver;
+    MFRC522DriverPinSimple ss_pin = MFRC522DriverPinSimple(SPI_SS_PIN);
+
     /////////////////////////////////////////////////////////////////////////////////////
     // Converters
     /////////////////////////////////////////////////////////////////////////////////////
@@ -49,11 +55,11 @@ private:
     bool PICC_IsNewCardPresent();
 
     String get_tag_type();
-    bool read_data_blocks();
-    bool read_mifare_classic_data_blocks(byte piccType);
-    bool read_mifare_classic_data_sector(byte sector);
-    bool authenticate_mifare_classic(byte block);
-    bool read_mifare_ultralight_data_blocks();
+    int read_data_blocks();
+    int read_mifare_classic_data_blocks(byte piccType);
+    int read_mifare_classic_data_sector(byte sector);
+    int authenticate_mifare_classic(byte block);
+    int read_mifare_ultralight_data_blocks();
 
     int write_data_blocks();
     bool write_mifare_classic_data_block(int block, String data);

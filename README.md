@@ -35,38 +35,38 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>WiFi</h2></summary>
-  
-- [x] Connect to WiFi  
-- [x] WiFi AP  
-- [x] Disconnect WiFi  
+
+- [x] Connect to WiFi
+- [x] WiFi AP
+- [x] Disconnect WiFi
 - [x] [WiFi Atks](https://github.com/pr3y/Bruce/wiki/WiFi#wifi-atks)
   - [x] [Beacon Spam](https://github.com/pr3y/Bruce/wiki/WiFi#beacon-spam)
   - [x] [Target Atk](https://github.com/pr3y/Bruce/wiki/WiFi#target-atk)
     - [x] Information
     - [x] Target Deauth
     - [x] EvilPortal + Deauth
-  - [x] Deauth Flood (More than one target)  
-- [x] [Wardriving](https://github.com/pr3y/Bruce/wiki/Wardriving)  
-- [x] [TelNet](https://github.com/pr3y/Bruce/wiki/WiFi#telnet)  
-- [x] [SSH](https://github.com/pr3y/Bruce/wiki/WiFi#ssh)  
-- [x] [RAW Sniffer](https://github.com/pr3y/Bruce/wiki/WiFi#raw-sniffer)  
-- [x] [TCP Client](https://github.com/pr3y/Bruce/wiki/WiFi#tcp-client)  
-- [x] [TCP Listener](https://github.com/pr3y/Bruce/wiki/WiFi#tcp-listener)  
-- [x] [DPWO-ESP32](https://github.com/pr3y/Bruce/wiki/WiFi#dpwo-esp32)  
-- [x] [Evil Portal](https://github.com/pr3y/Bruce/wiki/WiFi#evil-portal)  
-- [x] [Scan Hosts](https://github.com/pr3y/Bruce/wiki/WiFi#evil-portal)  
-- [x] [Wireguard Tunneling](https://github.com/pr3y/Bruce/wiki/WiFi#wireguard-tunneling)  
+  - [x] Deauth Flood (More than one target)
+- [x] [Wardriving](https://github.com/pr3y/Bruce/wiki/Wardriving)
+- [x] [TelNet](https://github.com/pr3y/Bruce/wiki/WiFi#telnet)
+- [x] [SSH](https://github.com/pr3y/Bruce/wiki/WiFi#ssh)
+- [x] [RAW Sniffer](https://github.com/pr3y/Bruce/wiki/WiFi#raw-sniffer)
+- [x] [TCP Client](https://github.com/pr3y/Bruce/wiki/WiFi#tcp-client)
+- [x] [TCP Listener](https://github.com/pr3y/Bruce/wiki/WiFi#tcp-listener)
+- [x] [DPWO-ESP32](https://github.com/pr3y/Bruce/wiki/WiFi#dpwo-esp32)
+- [x] [Evil Portal](https://github.com/pr3y/Bruce/wiki/WiFi#evil-portal)
+- [x] [Scan Hosts](https://github.com/pr3y/Bruce/wiki/WiFi#evil-portal)
+- [x] [Wireguard Tunneling](https://github.com/pr3y/Bruce/wiki/WiFi#wireguard-tunneling)
 - [x] Brucegotchi
-  - [x] Pwnagotchi friend  
-  - [x] Pwngrid spam faces & names  
-    - [x] [Optional] DoScreen a very long name and face  
-    - [x] [Optional] Flood uniq peer identifiers  
+  - [x] Pwnagotchi friend
+  - [x] Pwngrid spam faces & names
+    - [x] [Optional] DoScreen a very long name and face
+    - [x] [Optional] Flood uniq peer identifiers
 
 </details>
 
 <details>
   <summary><h2>BLE</h2></summary>
-    
+
 - [X] [BLE Scan](https://github.com/pr3y/Bruce/wiki/BLE#ble-scan)
 - [X] Bad BLE - Run Ducky scripts, similar to [BadUsb](https://github.com/pr3y/Bruce/wiki/Others#badusb)
 - [X] BLE Keyboard - Cardputer and T-Deck Only
@@ -80,7 +80,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>RF</h2></summary>
-    
+
 - [x] Scan/Copy
 - [x] [Custom SubGhz](https://github.com/pr3y/Bruce/wiki/RF#replay-payloads-like-flipper)
 - [x] Spectrum
@@ -98,7 +98,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>RFID</h2></summary>
-    
+
 - [x] Read tag
 - [x] Read 125kHz
 - [x] Clone tag
@@ -112,12 +112,13 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 - [x] Config
     - [X] [RFID Module](https://github.com/pr3y/Bruce/wiki/RFID#supported-modules)
         - [x] PN532
+        - [x] PN532Killer
 - [ ] Emulate tag
 </details>
 
 <details>
   <summary><h2>IR</h2></summary>
-    
+
 - [x] TV-B-Gone
 - [x] IR Receiver
 - [x] [Custom IR (NEC, NECext, SIRC, SIRC15, SIRC20, Samsung32, RC5, RC5X, RC6)](https://github.com/pr3y/Bruce/wiki/IR#replay-payloads-like-flipper)
@@ -128,7 +129,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>FM</h2></summary>
-    
+
 - [x] [Broadcast standard](https://github.com/pr3y/Bruce/wiki/FM#play_or_pause_button-broadcast-standard)
 - [x] [Broadcast reserved](https://github.com/pr3y/Bruce/wiki/FM#no_entry_sign-broadcast-rerserved)
 - [x] [Broadcast stop](https://github.com/pr3y/Bruce/wiki/FM#stop_button-broadcast-stop)
@@ -139,7 +140,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>NRF24</h2></summary>
-    
+
 - [X] [NRF24 Jammer](https://github.com/pr3y/Bruce/wiki/BLE#nrf24-jammer)
 - [X] 2.4G Spectrum
 - [ ] Mousejack
@@ -147,13 +148,13 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>Scripts</h2></summary>
-    
+
 - [X] [JavaScript Interpreter](https://github.com/pr3y/Bruce/wiki/Interpreter) [Credits to justinknight93](https://github.com/justinknight93/Doolittle)
 </details>
 
 <details>
   <summary><h2>Others</h2></summary>
-    
+
 - [X] Mic Spectrum
 - [X] QRCodes
     - [x] Custom
@@ -180,7 +181,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>Clock</h2></summary>
-    
+
 - [X] RTC Support
 - [X] NTP time adjust
 - [X] Manual adjust
@@ -188,14 +189,16 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 
 <details>
   <summary><h2>Connect (ESPNOW)</h2></summary>
-    
+
 - [X] Send File
 - [X] Receive File
+- [X] Send Commands
+- [X] Receive Commands
 </details>
 
 <details>
   <summary><h2>Config</h2></summary>
-    
+
 - [x] Brightness
 - [x] Dim Time
 - [x] Orientation
@@ -207,20 +210,22 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 </details>
 
 ## Specific functions per Device, the ones not mentioned here are available to all.
-| Device                  | CC1101    | NRF24    | Interpreter  | FM Radio  | PN532     | Mic   | BadUSB    | RGB Led | Speaker   | Fuel Guage | LITE_MODE |
-| ---                     | :---:     | :---:    | :---:        | :---:     | :---:     | :---: | :---:     | :---:   | :---:     | :---:      | :---:     |
-| [M5Stack Cardputer](https://shop.m5stack.com/products/m5stack-cardputer-kit-w-m5stamps)       | :ok:      | :ok:     | :ok:         | :ok:      | :ok:      | :ok:  | :ok:      | :ok:    | NS4168    | :x:        | :x:       |
-| [M5Stack M5StickC PLUS2](https://shop.m5stack.com/products/m5stickc-plus2-esp32-mini-iot-development-kit)  | :ok:      | :ok:     | :ok:         | :ok:      | :ok:      | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:       |
-| [M5Stack M5StickC PLUS](https://shop.m5stack.com/products/m5stickc-plus-esp32-pico-mini-iot-development-kit)   | :ok:      | :ok:     | :x:          | :ok:      | :ok:      | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:²      |
-| [M5Stack M5Core BASIC](https://shop.m5stack.com/products/basic-core-iot-development-kit)    | :x:       | :x:      | :x:          | :x:       | :x:       | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:       |
-| [M5Stack M5Core2 v1.1](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit-v1-1)    | :x:       | :x:      | :x:          | :x:       | :x:       | :ok:  | :ok:¹     | :x:     | :x:       | :x:        | :x:       |
-| [M5Stack M5CoreS3](https://shop.m5stack.com/products/m5stack-cores3-esp32s3-lotdevelopment-kit)/[SE](https://shop.m5stack.com/products/m5stack-cores3-se-iot-controller-w-o-battery-bottom)     | :x:       | :x:      | :ok:         | :x:       | :x:       | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
-| [JCZN CYD&#x2011;2432S028](https://www.aliexpress.us/item/3256804774970998.html)       | :ok:      | :ok:     | :ok:         | :x:       | :ok:      | :x:   | :ok:¹     | :x:     | :x:       | :x:        | :x:²      |
-| [Lilygo T&#x2011;Embed CC1101](https://lilygo.cc/products/t-embed-cc1101)   | :ok:      | :x:      | :ok:         | :x:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :ok:       | :x:       |
-| [Lilygo T&#x2011;Embed](https://lilygo.cc/products/t-embed)          | :x:       | :x:      | :ok:         | :x:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :x:        | :x:       |
-| [Lilygo T&#x2011;Deck](https://lilygo.cc/products/t-deck) ([and pro](https://lilygo.cc/products/t-deck-plus-1)) | :x:       | :x:      | :ok:         | :x:       | :x:       | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
+| Device                  | CC1101    | NRF24    | FM Radio  | PN532     | Mic   | BadUSB    | RGB Led | Speaker   | Fuel Guage | LITE_MODE |
+| ---                     | :---:     | :---:    | :---:     | :---:     | :---: | :---:     | :---:   | :---:     | :---:      | :---:     |
+| [M5Stack Cardputer](https://shop.m5stack.com/products/m5stack-cardputer-kit-w-m5stamps)       | :ok:      | :ok:     | :ok:      | :ok:      | :ok:  | :ok:      | :ok:    | NS4168    | :x:        | :x:       |
+| [M5Stack M5StickC PLUS2](https://shop.m5stack.com/products/m5stickc-plus2-esp32-mini-iot-development-kit)  | :ok:      | :ok:         | :ok:      | :ok:      | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:       |
+| [M5Stack M5StickC PLUS](https://shop.m5stack.com/products/m5stickc-plus-esp32-pico-mini-iot-development-kit)   | :ok:      | :ok:          | :ok:      | :ok:      | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:²     |
+| [M5Stack M5Core BASIC](https://shop.m5stack.com/products/basic-core-iot-development-kit)    | :ok:        | :ok:       | :ok:       | :ok:        | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:       |
+| [M5Stack M5Core2](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit-v1-1)    | :ok:        | :ok:          | :ok:        | :ok:        | :ok:  | :ok:¹     | :x:     | :x:       | :x:        | :x:       |
+| [M5Stack M5CoreS3](https://shop.m5stack.com/products/m5stack-cores3-esp32s3-lotdevelopment-kit)/[SE](https://shop.m5stack.com/products/m5stack-cores3-se-iot-controller-w-o-battery-bottom)     | :ok:        | :ok:         | :ok:        | :ok:        | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
+| [JCZN CYD&#x2011;2432S028](https://www.aliexpress.us/item/3256804774970998.html)       | :ok:      | :ok:     | :ok:       | :ok:      | :x:   | :ok:¹     | :x:     | :x:       | :x:        | :x:²      |
+| [Lilygo T&#x2011;Embed CC1101](https://lilygo.cc/products/t-embed-cc1101)   | :ok:      | :ok:         | :ok:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :ok:       | :x:       |
+| [Lilygo T&#x2011;Embed](https://lilygo.cc/products/t-embed)          | :ok:       | :ok:      | :ok:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :x:        | :x:       |
+| [Lilygo T-Display-S3](https://lilygo.cc/products/t-display-s3) | :ok:       | :ok:      | :x:       | :x:       | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
+| [Lilygo T&#x2011;Deck](https://lilygo.cc/products/t-deck) ([and pro](https://lilygo.cc/products/t-deck-plus-1)) | :ok:       | :x:      | :x:       | :x:       | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
+| [Lilygo T-Watch-S3](https://lilygo.cc/products/t-watch-s3) | :x:       | :x:      | :x:       | :x:       | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
 
-² CYD and StickCPlus 1.1 have a LITE_VERSION version for Launcher Compatibility
+² CYD have a LITE_VERSION version for Launcher Compatibility
 ¹ Core, CYD and StickCs Bad-USB: [here](https://github.com/pr3y/Bruce/wiki/Others#badusb)
 
 *LITE_MODE*: TelNet, SSH, DPWO, WireGuard, ScanHosts, RawSniffer, Brucegotchi, BLEBacon, BLEScan, Interpreter and OpenHaystack are NOT available for M5Launcher Compatibility
@@ -245,6 +250,8 @@ Other media can be [found here](./media/).
 + [@eadmaster](https://github.com/eadmaster) for adding a lot of features.
 + [@rennancockles](https://github.com/rennancockles) for a lot of RFID code, refactoring and others features.
 + [@7h30th3r0n3](https://github.com/7h30th3r0n3) refactoring and a lot of help with WiFi attacks.
++ [@Tawank](https://github.com/Tawank) refactoring interpreter among many other things
++ [@pablonymous]() new RF functions to read RAW Data
 + [Smoochiee]() for Bruce PCB design.
 + [TH3_KR4K3N]() for Stick cplus extender PCB design.
 + Everyone who contributed in some way to the project, thanks :heart:

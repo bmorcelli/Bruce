@@ -9,3 +9,5 @@ bruce.conf
 _*.sh
 tmp
 ISSUES.md
+include/webFiles.h
+checksum.sha256

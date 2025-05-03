@@ -8,21 +8,17 @@
 
 #include "timer.h"
 #include "core/display.h"
-#include "modules/others/audio.h"
 #include "core/utils.h"
+#include "modules/others/audio.h"
 
 #define DELAY_VALUE 150
 
-Timer::Timer() {
-    setup();
-}
-
+Timer::Timer() { setup(); }
 
 Timer::~Timer() {
     tft.fillScreen(bruceConfig.bgColor);
     backToMenu();
 }
-
 
 void Timer::setup() {
     int hours = 0;
@@ -37,7 +33,7 @@ void Timer::setup() {
     delay(DELAY_VALUE);
 
     while (true) {
-        snprintf(timeString, sizeof(timeString), "%02d:%02d:%02d", hours, minutes, seconds);
+        snprintf(timeString, sizeof(timeString), "%02d:%02d:%02d", hours % 100, minutes % 100, seconds % 100);
 
         drawMainBorderWithTitle("Set a timer", false);
         tft.setTextSize(fontSize);
@@ -45,7 +41,7 @@ void Timer::setup() {
 
         clearUnderline();
 
-        if      (settingMode == 0) underlineHours();
+        if (settingMode == 0) underlineHours();
         else if (settingMode == 1) underlineMinutes();
         else if (settingMode == 2) underlineSeconds();
 
@@ -77,13 +73,10 @@ void Timer::setup() {
 
             if (settingMode > 2) settingMode = 0;
         }
-
-        delay(DELAY_VALUE);
     }
 
     return loop();
 }
-
 
 void Timer::loop() {
     unsigned long startMillis = millis();
@@ -102,7 +95,7 @@ void Timer::loop() {
 
         int seconds = (remainingMillis / 1000) % 60;
         int minutes = (remainingMillis / 60000) % 60;
-        int hours = (remainingMillis / 3600000);
+        int hours = (remainingMillis / 3600000) % 100;
 
         snprintf(timeString, sizeof(timeString), "%02d:%02d:%02d", hours, minutes, seconds);
 
@@ -112,51 +105,41 @@ void Timer::loop() {
         tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
         tft.drawCentreString(timeString, timerX, timerY, 1);
 
-        if (check(EscPress)) {
-            break;
-        }
+        if (check(EscPress)) { break; }
 
         if (elapsedMillis >= duration) {
             _tone(2000, 1000);
             break;
         }
-
-        delay(DELAY_VALUE);
     }
 }
 
-
 void Timer::clearUnderline() {
-    tft.drawLine(
-        BORDER_PAD_X, underlineY,
-        tftWidth - BORDER_PAD_X, underlineY,
-        bruceConfig.bgColor
-    );
+    tft.drawLine(BORDER_PAD_X, underlineY, tftWidth - BORDER_PAD_X, underlineY, bruceConfig.bgColor);
 }
-
 
 void Timer::underlineHours() {
     tft.drawLine(
-        timerX - (4 * LW * fontSize), underlineY,
-        timerX - (2 * LW * fontSize), underlineY,
+        timerX - (4 * LW * fontSize),
+        underlineY,
+        timerX - (2 * LW * fontSize),
+        underlineY,
         bruceConfig.priColor
     );
 }
-
 
 void Timer::underlineMinutes() {
     tft.drawLine(
-        timerX - (LW * fontSize), underlineY,
-        timerX + (LW * fontSize), underlineY,
-        bruceConfig.priColor
+        timerX - (LW * fontSize), underlineY, timerX + (LW * fontSize), underlineY, bruceConfig.priColor
     );
 }
 
-
 void Timer::underlineSeconds() {
     tft.drawLine(
-        timerX + (2 * LW * fontSize), underlineY,
-        timerX + (4 * LW * fontSize), underlineY,
+        timerX + (2 * LW * fontSize),
+        underlineY,
+        timerX + (4 * LW * fontSize),
+        underlineY,
         bruceConfig.priColor
     );
 }
