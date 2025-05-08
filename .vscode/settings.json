@@ -78,18 +78,6 @@
     "githubPullRequests.ignoredPullRequestBranches": [
         "main"
     ],
-
-    "cmake.ignoreCMakeListsMissing": true,
-    "cmake.sourceDirectory": "C:/Projetos/Bruce/lib/M5GFX",
-
-    "[cpp]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools",
-        "editor.rulers": [120],
-        "editor.tabSize": 4,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit"
-        },
-        "editor.formatOnType": true,
-    },
+    "cmake.sourceDirectory": "/home/jimmy/Documents/GitHub/Bruce/.pio/libdeps/LAUNCHER_CYD-2USB/Adafruit BusIO",
+    "idf.pythonInstallPath": "/usr/bin/python"
 }
