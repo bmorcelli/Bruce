@@ -8,8 +8,10 @@
 #define USE_NIMBLE
 #if defined(USE_NIMBLE)
 
+#include "NimBLEAdvertising.h"
 #include "NimBLECharacteristic.h"
 #include "NimBLEHIDDevice.h"
+#include "NimBLEServer.h"
 
 #define BLEDevice NimBLEDevice
 #define BLEServerCallbacks NimBLEServerCallbacks
@@ -97,12 +99,12 @@ public:
 protected:
     bool _randUUID = false;
     virtual void onStarted(BLEServer *pServer) {};
-    virtual void onConnect(BLEServer *pServer) override;
-    virtual void onDisconnect(BLEServer *pServer) override;
+    virtual void onConnect(BLEServer *pServer);
+    virtual void onDisconnect(BLEServer *pServer);
     virtual void onAuthenticationComplete(ble_gap_conn_desc *desc);
-    virtual void onWrite(BLECharacteristic *me) override;
+    virtual void onWrite(BLECharacteristic *me);
     virtual void
-    onSubscribe(NimBLECharacteristic *pCharacteristic, ble_gap_conn_desc *desc, uint16_t subValue) override;
+    onSubscribe(NimBLECharacteristic *pCharacteristic, ble_gap_conn_desc *desc, uint16_t subValue);
 };
 
 #endif // CONFIG_BT_ENABLED

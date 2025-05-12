@@ -259,7 +259,7 @@ void PN532KillerTools::setEmulatorNextSlot(bool reverse) {
 }
 
 class RxCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) override {
+    void onWrite(BLECharacteristic *pCharacteristic) {
         std::string value = pCharacteristic->getValue();
         if (!value.empty()) { Serial1.write((uint8_t *)value.data(), value.length()); }
         if (!BLEConnected) {

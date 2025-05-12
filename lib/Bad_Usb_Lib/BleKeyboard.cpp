@@ -173,9 +173,9 @@ void BleKeyboard::begin(const uint8_t *layout, uint16_t showAs) {
     pServer->setCallbacks(this);
 
     hid = new BLEHIDDevice(pServer);
-    inputKeyboard = hid->inputReport(KEYBOARD_ID); // <-- input REPORTID from report map
-    outputKeyboard = hid->outputReport(KEYBOARD_ID);
-    inputMediaKeys = hid->inputReport(MEDIA_KEYS_ID);
+    inputKeyboard = hid->getInputReport(KEYBOARD_ID); // <-- input REPORTID from report map
+    outputKeyboard = hid->getOutputReport(KEYBOARD_ID);
+    inputMediaKeys = hid->getInputReport(MEDIA_KEYS_ID);
 
     inputKeyboard->setCallbacks(this);
     outputKeyboard->setCallbacks(this);
@@ -196,7 +196,8 @@ void BleKeyboard::begin(const uint8_t *layout, uint16_t showAs) {
 
 #endif // USE_NIMBLE
 
-    hid->reportMap((uint8_t *)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+    // hid->reportMap((uint8_t *)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+    hid->setReportMap((uint8_t *)_hidReportDescriptor, sizeof(_hidReportDescriptor));
     hid->startServices();
 
     onStarted(pServer);
@@ -206,9 +207,9 @@ void BleKeyboard::begin(const uint8_t *layout, uint16_t showAs) {
     if (_randUUID) { // this workaround makes 2 Bruce connect and work on the same Android device
         advertising->addServiceUUID(BLEUUID((uint16_t)(ESP.getEfuseMac() & 0xFFFF)));
     } else {
-        advertising->addServiceUUID(hid->hidService()->getUUID());
+        advertising->addServiceUUID(hid->getHidService()->getUUID());
     }
-    advertising->setScanResponse(false);
+    advertising->enableScanResponse(false);
     advertising->start();
     hid->setBatteryLevel(batteryLevel);
 }
@@ -249,8 +250,9 @@ void BleKeyboard::set_product_id(uint16_t pid) { this->pid = pid; }
 void BleKeyboard::set_version(uint16_t version) { this->version = version; }
 
 void BleKeyboard::sendReport(KeyReport *keys) {
-    // if (this->isConnected())
-    if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0) {
+    if (this->isConnected()) {
+        // https://github.com/h2zero/NimBLE-Arduino/issues/814
+        // if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0) {
         this->inputKeyboard->setValue((uint8_t *)keys, sizeof(KeyReport));
         this->inputKeyboard->notify();
 #if defined(USE_NIMBLE)
@@ -261,8 +263,9 @@ void BleKeyboard::sendReport(KeyReport *keys) {
 }
 
 void BleKeyboard::sendReport(MediaKeyReport *keys) {
-    // if (this->isConnected())
-    if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0) {
+    if (this->isConnected()) {
+        // https://github.com/h2zero/NimBLE-Arduino/issues/814
+        // if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0) {
         this->inputMediaKeys->setValue((uint8_t *)keys, sizeof(MediaKeyReport));
         this->inputMediaKeys->notify();
 #if defined(USE_NIMBLE)
