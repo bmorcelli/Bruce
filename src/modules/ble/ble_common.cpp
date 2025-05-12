@@ -57,7 +57,7 @@ void ble_info(String name, String address, String signal) {
     }
 }
 
-class AdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
+class AdvertisedDeviceCallbacks : public NimBLEScanCallbacks {
     void onResult(NimBLEAdvertisedDevice *advertisedDevice) {
         String bt_title;
         String bt_name;
@@ -84,7 +84,7 @@ class AdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 void ble_scan_setup() {
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan();
-    pBLEScan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks());
+    pBLEScan->setScanCallbacks(new AdvertisedDeviceCallbacks());
     // Active scan uses more power, but get results faster
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(SCAN_INT);
@@ -111,7 +111,7 @@ void ble_scan() {
 
     options = {};
     ble_scan_setup();
-    BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
+    pBLEScan->start(scanTime, false);
 
     addOptionToMainMenu();
 

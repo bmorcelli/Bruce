@@ -1,3 +1,4 @@
+#if 0
 #include "wg.h"
 #include "core/display.h"
 #include "core/sd_functions.h"
@@ -149,3 +150,4 @@ void wg_setup() {
     isConnectedWireguard = true;
     tft.fillScreen(bruceConfig.bgColor);
 }
+#endif

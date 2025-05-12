@@ -3,7 +3,7 @@
 #include "core/settings.h"
 #include "core/utils.h"
 #include "core/wifi/webInterface.h"
-#include "core/wifi/wg.h"
+//#include "core/wifi/wg.h"
 #include "core/wifi/wifi_common.h"
 #include "modules/wifi/ap_info.h"
 #include "modules/wifi/clients.h"
@@ -63,7 +63,7 @@ void WifiMenu::optionsMenu() {
     options.push_back({"DPWO", dpwo_setup});
     options.push_back({"Raw Sniffer", sniffer_setup});
     options.push_back({"Scan Hosts", local_scan_setup});
-    options.push_back({"Wireguard", wg_setup});
+    //options.push_back({"Wireguard", wg_setup});
     options.push_back({"Brucegotchi", brucegotchi_start});
 #endif
     options.push_back({"Config", [=]() { configMenu(); }});

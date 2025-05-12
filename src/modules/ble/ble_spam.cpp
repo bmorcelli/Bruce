@@ -370,8 +370,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
             AdvData_Raw[i++] = 0x80;
             memcpy(&AdvData_Raw[i], Name, name_len);
             i += name_len;
-
-            AdvData.addData(std::string((char *)AdvData_Raw, 7 + name_len));
+            AdvData.addData(AdvData_Raw, 7 + name_len);
             break;
         }
         case Apple: {
@@ -381,13 +380,13 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
                                       0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45,
                                       0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00,
                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-                AdvData.addData(std::string((char *)packet, 31));
+                AdvData.addData(packet, 31);
             } else if (rand == 1) {
                 uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a,
                                       0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, IOS2[random() % sizeof(IOS2)],
                                       0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00,
                                       0x00, 0x00};
-                AdvData.addData(std::string((char *)packet, 23));
+                AdvData.addData(packet, 23);
             } else {
                 uint8_t packet[17];
                 uint8_t i = 0;
@@ -406,7 +405,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
                 packet[i++] = 0x00; // ???
                 packet[i++] = 0x10; // Type ???
                 esp_fill_random(&packet[i], 3);
-                AdvData.addData(std::string((char *)packet, 17));
+                AdvData.addData(packet, 17);
             }
 
             break;
@@ -431,7 +430,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
                 0x43,
                 (uint8_t)((model >> 0x00) & 0xFF)
             };
-            AdvData.addData(std::string((char *)Samsung_Data, 15));
+            AdvData.addData(Samsung_Data, 15);
 
             break;
         }
@@ -453,7 +452,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
                 0x0A,
                 (uint8_t)((rand() % 120) - 100)
             }; // 2 more data to inform RSSI data.
-            AdvData.addData(std::string((char *)Google_Data, 14));
+            AdvData.addData(Google_Data, 14);
             break;
         }
         default: {

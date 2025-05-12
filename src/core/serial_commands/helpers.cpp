@@ -1,6 +1,6 @@
 #include "helpers.h"
-
-bool _setupPsramFs() {
+/*
+bool _setupPsramFs() { // not being used
     // https://github.com/tobozo/ESP32-PsRamFS/blob/main/examples/PSRamFS_Test/PSRamFS_Test.ino
     static bool psRamFSMounted = false;
     if (psRamFSMounted) return true; // avoid reinit
@@ -20,7 +20,7 @@ bool _setupPsramFs() {
     psRamFSMounted = true;
     return true;
 }
-
+*/
 char *_readFileFromSerial(size_t fileSizeChar) {
     char *buf;
     size_t bufSize = 0;

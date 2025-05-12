@@ -1,4 +1,5 @@
 #pragma once
+#include "esp_mac.h"
 #include <Arduino.h>
 #include <NimBLEBeacon.h>
 #include <NimBLEDevice.h>

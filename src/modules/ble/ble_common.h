@@ -5,7 +5,7 @@
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
-
+#include "esp_mac.h"
 #include <NimBLEScan.h>
 #include <NimBLEAdvertisedDevice.h>
 #include <NimBLEBeacon.h>

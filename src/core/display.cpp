@@ -8,7 +8,7 @@
 #include <interface.h> //for charging ischarging to print charging indicator
 
 #define MAX_MENU_SIZE (int)(tftHeight / 25)
-
+bool isConnectedWireguard = false;
 bool __attribute__((weak)) isCharging() { return false; }
 /***************************************************************************************
 ** Function name: displayScrollingText

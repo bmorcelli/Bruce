@@ -181,10 +181,9 @@ void BleKeyboard::begin(const uint8_t *layout, uint16_t showAs) {
     outputKeyboard->setCallbacks(this);
     inputMediaKeys->setCallbacks(this);
 
-    hid->manufacturer()->setValue(deviceManufacturer);
-
-    hid->pnp(0x02, vid, pid, version);
-    hid->hidInfo(0x00, 0x01);
+    hid->setManufacturer("Espressif");
+    hid->setPnp(0x02, vid, pid, version);
+    hid->setHidInfo(0x00, 0x01);
 
 #if defined(USE_NIMBLE)
 

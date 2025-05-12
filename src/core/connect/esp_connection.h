@@ -20,7 +20,6 @@ public:
         ABORTED,
     };
 
-    // Struct has to be 250 B max
     struct Message {
         char filename[ESP_FILENAME_SIZE];
         char filepath[ESP_FILEPATH_SIZE];
@@ -33,7 +32,6 @@ public:
         bool ping;
         bool pong;
 
-        // Constructor to initialize defaults
         Message()
             : dataSize(0), totalBytes(0), bytesSent(0), isFile(false), done(false), ping(false), pong(false) {
         }
@@ -44,12 +42,8 @@ public:
 
     static void setInstance(EspConnection *conn) { instance = conn; }
 
-    static void onDataSentStatic(const uint8_t *mac_addr, esp_now_send_status_t status) {
-        if (instance) instance->onDataSent(mac_addr, status);
-    };
-    static void onDataRecvStatic(const uint8_t *mac, const uint8_t *incomingData, int len) {
-        if (instance) instance->onDataRecv(mac, incomingData, len);
-    };
+    static void onDataSentStatic(const uint8_t *mac_addr, esp_now_send_status_t status);
+    static void onDataRecvStatic(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len);
 
 protected:
     Status recvStatus;

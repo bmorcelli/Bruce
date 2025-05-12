@@ -1,3 +1,4 @@
+#if 0
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <WireGuard-ESP32.h>
@@ -9,3 +10,4 @@ void parse_config_file(fs::File configFile);
 void read_and_parse_file();
 
 void wg_setup();
+#endif

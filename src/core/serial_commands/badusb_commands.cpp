@@ -44,11 +44,11 @@ uint32_t badusbFileCallback(cmd *c) {
 }
 
 uint32_t badusbBufferCallback(cmd *c) {
-    if (!(_setupPsramFs())) return false;
+    // if (!(_setupPsramFs())) return false;
 
     char *txt = _readFileFromSerial();
     String tmpfilepath = "/tmpramfile"; // TODO: Change to use char *txt directly
-    File f = PSRamFS.open(tmpfilepath, FILE_WRITE);
+    File f = LittleFS.open(tmpfilepath, FILE_WRITE);
     if (!f) return false;
 
     f.write((const uint8_t *)txt, strlen(txt));
@@ -57,14 +57,14 @@ uint32_t badusbBufferCallback(cmd *c) {
 
 #ifdef USB_as_HID
     ducky_startKb(hid_usb, KeyboardLayout_en_US, false);
-    key_input(PSRamFS, tmpfilepath, hid_usb);
+    key_input(LittleFS, tmpfilepath, hid_usb);
     delete hid_usb;
     hid_usb = nullptr;
 
-    PSRamFS.remove(tmpfilepath);
+    LittleFS.remove(tmpfilepath);
     return true;
 #else
-    PSRamFS.remove(tmpfilepath);
+    LittleFS.remove(tmpfilepath);
     return false;
 #endif
 }

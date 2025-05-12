@@ -118,13 +118,15 @@ static duk_ret_t native_dacWrite(duk_context *ctx) {
 }
 
 static duk_ret_t native_ledcSetup(duk_context *ctx) {
-    int val = ledcSetup(duk_get_int(ctx, 0), duk_get_int(ctx, 1), duk_get_int(ctx, 2));
+    int val = ledcAttach(duk_get_int(ctx, 0), 50, duk_get_int(ctx, 1));
+
     duk_push_int(ctx, val);
     return 1;
 }
 
 static duk_ret_t native_ledcAttachPin(duk_context *ctx) {
-    ledcAttachPin(duk_get_int(ctx, 0), duk_get_int(ctx, 1));
+
+    ledcAttach(duk_get_int(ctx, 0), 50, duk_get_int(ctx, 1));
     return 0;
 }
 

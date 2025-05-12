@@ -4,9 +4,9 @@
 #include "core/mykeyboard.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h"
+#include "esp_mac.h"
 #include "wifi_atks.h" // to use Station Deauth
 #include <globals.h>
-
 // thx to 7h30th3r0n3, which made scanHosts faster using ARP
 
 static std::vector<Host> hostslist;
@@ -33,21 +33,24 @@ void local_scan_setup() {
     if (doScan) {
         hostslist.clear();
 
-        // IPAddress uint32_t op returns number in big-endian
-        // for simplicity of iteration and arithmetics convert to little-endian
+        // Obtemos os IPs em big-endian, convertemos para little-endian para trabalhar
         const uint32_t localIp = ntohl(WiFi.localIP());
         const IPAddress gateway = WiFi.gatewayIP();
         const uint32_t subnetMask = ntohl(WiFi.subnetMask());
         const uint32_t networkAddress = ntohl(gateway) & subnetMask;
         const uint32_t broadcast = networkAddress | ~subnetMask;
 
-        // get iface
-        void *netif = nullptr;
-        tcpip_adapter_get_netif(TCPIP_ADAPTER_IF_STA, &netif);
-        struct netif *net_iface = (struct netif *)netif;
-        etharp_cleanup_netif(net_iface); // to avoid gateway duplication
+        // Atualizado: pegar netif usando o novo esp_netif API
+        esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (!netif) {
+            ESP_LOGE("local_scan_setup", "Failed to get WIFI_STA_DEF netif handle");
+            return;
+        }
+        struct netif *net_iface = (struct netif *)esp_netif_get_netif_impl(netif);
 
-        // send arp requests, read table each ARP_TABLE_SIZE requests
+        // Limpa entradas antigas da tabela ARP para evitar duplicação
+        etharp_cleanup_netif(net_iface);
+
         uint16_t tableReadCounter = 0;
         uint32_t hostsScanned = 0;
         const uint32_t totalHosts = broadcast - networkAddress - 1;
@@ -56,10 +59,10 @@ void local_scan_setup() {
         for (uint32_t ip_le = networkAddress + 1; ip_le < broadcast; ++ip_le) {
             if (ip_le == localIp) continue;
 
-            ip4_addr_t ip_be{htonl(ip_le)}; // big endian
+            ip4_addr_t ip_be = {htonl(ip_le)}; // Mantemos em big-endian para envio
 
             hostsScanned++;
-            if (millis() - lastUpdate > 500) { // Update display every 500ms
+            if (millis() - lastUpdate > 500) { // Atualiza o display a cada 500ms
                 displayRedStripe(
                     "Probing " + String(hostsScanned) + " of " + String(totalHosts) + " hosts",
                     getComplementaryColor2(bruceConfig.priColor),
@@ -68,17 +71,20 @@ void local_scan_setup() {
                 lastUpdate = millis();
             }
 
+            // Solicita ARP manualmente
             err_t res = etharp_request(net_iface, &ip_be);
 
             if (res != ERR_OK) {
-                Serial.println("Arp req for: " + IPAddress(ip_be.addr).toString() + "failed with ec: " + res);
+                Serial.println(
+                    "Arp req for: " + IPAddress(ip_be.addr).toString() + " failed with ec: " + String(res)
+                );
             } else {
                 ++tableReadCounter;
             }
 
             vTaskDelay(arpRequestDelay);
 
-            // read table if we sent ARP_TABLE_SIZE requests
+            // Lê tabela ARP a cada ARP_TABLE_SIZE pacotes enviados
             if (tableReadCounter == ARP_TABLE_SIZE) {
                 readArpTable(net_iface);
                 tableReadCounter = 0;

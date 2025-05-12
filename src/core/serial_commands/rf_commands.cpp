@@ -120,19 +120,19 @@ uint32_t rfTxFileCallback(cmd *c) {
 }
 
 uint32_t rfTxBufferCallback(cmd *c) {
-    if (!(_setupPsramFs())) return false;
+    // if (!(_setupPsramFs())) return false;
 
     char *txt = _readFileFromSerial();
     String tmpfilepath = "/tmpramfile"; // TODO: Change to use char *txt directly
-    File f = PSRamFS.open(tmpfilepath, FILE_WRITE);
+    File f = LittleFS.open(tmpfilepath, FILE_WRITE);
     if (!f) return false;
 
     f.write((const uint8_t *)txt, strlen(txt));
     f.close();
     free(txt);
 
-    bool r = txSubFile(&PSRamFS, tmpfilepath);
-    PSRamFS.remove(tmpfilepath);
+    bool r = txSubFile(&LittleFS, tmpfilepath);
+    LittleFS.remove(tmpfilepath);
 
     return r;
 }

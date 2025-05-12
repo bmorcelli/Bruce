@@ -2,12 +2,15 @@
 #define __SCAN_HOSTS_H__
 
 #include "core/net_utils.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_netif_net_stack.h"
+#include "lwip/etharp.h"
+#include "lwip/ip4_addr.h"
 #include <FS.h>
 #include <WiFi.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "lwip/etharp.h"
 // sets number of maximum of pending requests to table size
 #define ARP_MAXPENDING ARP_TABLE_SIZE
 

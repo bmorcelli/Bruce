@@ -2,16 +2,14 @@
 #include "core/display.h"
 #include <WiFi.h>
 
-// Initialize the static instance pointer
 EspConnection *EspConnection::instance = nullptr;
 std::vector<Option> peerOptions;
 
 EspConnection::EspConnection() { setInstance(this); }
 
 EspConnection::~EspConnection() {
-    esp_now_unregister_send_cb();
-    esp_now_unregister_recv_cb();
-
+    esp_now_register_send_cb(nullptr); // desregistra
+    esp_now_register_recv_cb(nullptr);
     esp_now_deinit();
 }
 
@@ -50,7 +48,7 @@ bool EspConnection::beginEspnow() {
         return false;
     }
 
-    esp_now_register_send_cb(onDataSentStatic);
+    esp_now_register_send_cb(onDataSentStatic); // <- sem passar 'this'
     esp_now_register_recv_cb(onDataRecvStatic);
 
     return true;
@@ -58,14 +56,11 @@ bool EspConnection::beginEspnow() {
 
 EspConnection::Message EspConnection::createMessage(String text) {
     Message message;
-
     message.dataSize = text.length();
     message.totalBytes = text.length();
     message.bytesSent = text.length();
     message.done = true;
-
     strncpy(message.data, text.c_str(), ESP_DATA_SIZE);
-
     return message;
 }
 
@@ -85,14 +80,12 @@ EspConnection::Message EspConnection::createFileMessage(File file) {
 EspConnection::Message EspConnection::createPingMessage() {
     Message message;
     message.ping = true;
-
     return message;
 }
 
 EspConnection::Message EspConnection::createPongMessage() {
     Message message;
     message.pong = true;
-
     return message;
 }
 
@@ -122,7 +115,6 @@ bool EspConnection::setupPeer(const uint8_t *mac) {
     if (esp_now_is_peer_exist(mac)) return true;
 
     esp_now_peer_info_t peerInfo = {};
-
     memcpy(peerInfo.peer_addr, mac, 6);
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
@@ -155,15 +147,11 @@ void EspConnection::printMessage(Message message) {
     Serial.println("Done: " + String(message.done));
     Serial.print("Data: ");
 
-    // Append data to the result if dataSize is greater than 0
     if (message.dataSize > 0) {
-        for (size_t i = 0; i < message.dataSize; ++i) {
-            Serial.print((char)message.data[i]); // Assuming data contains valid characters
-        }
+        for (size_t i = 0; i < message.dataSize; ++i) { Serial.print((char)message.data[i]); }
     } else {
         Serial.println("No data");
     }
-
     Serial.println("");
 }
 
@@ -190,9 +178,8 @@ void EspConnection::onDataSent(const uint8_t *mac_addr, esp_now_send_status_t st
 void EspConnection::onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     Message recvMessage;
 
-    // Use reinterpret_cast and copy assignment
     const Message *incomingMessage = reinterpret_cast<const Message *>(incomingData);
-    recvMessage = *incomingMessage; // Use copy assignment
+    recvMessage = *incomingMessage;
 
     printMessage(recvMessage);
 
@@ -200,4 +187,14 @@ void EspConnection::onDataRecv(const uint8_t *mac, const uint8_t *incomingData, 
     if (recvMessage.pong) return appendPeerToList(mac);
 
     recvQueue.push_back(recvMessage);
+}
+
+// --- Callbacks corretos para IDF 5.3.0 ---
+
+void EspConnection::onDataSentStatic(const uint8_t *mac_addr, esp_now_send_status_t status) {
+    if (instance) instance->onDataSent(mac_addr, status);
+}
+
+void EspConnection::onDataRecvStatic(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
+    if (instance) instance->onDataRecv(info->src_addr, incomingData, len);
 }
