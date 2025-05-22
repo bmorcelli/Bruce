@@ -262,13 +262,13 @@ jobs:
         run: |
           pip install requests esptool
 
-      - name: Cache PlatformIO
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio
-          key: Bruce-platformio-${{ hashFiles('**/platformio.ini') }}
-          restore-keys: Bruce-platformio-
+      # - name: Cache PlatformIO
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       ~/.platformio
+      #     key: Bruce-platformio-${{ hashFiles('**/platformio.ini') }}
+      #     restore-keys: Bruce-platformio-
 
       # - name: Restore PIO
       #   uses: actions/cache/restore@v4
