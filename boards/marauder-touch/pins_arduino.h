@@ -98,6 +98,7 @@ static const uint8_t ADC2 = 8;
 #define SPI_READ_FREQUENCY 16000000
 #define SPI_TOUCH_FREQUENCY 2500000
 #define TOUCH_CS 21
+#define HAS_TOUCH 1
 
 #define SDCARD_CS 12
 #define SDCARD_SCK 18
