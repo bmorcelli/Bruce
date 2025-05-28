@@ -12,6 +12,9 @@ void _setup_gpio() {
     pinMode(DW_BTN, INPUT);
     pinMode(R_BTN, INPUT);
     pinMode(L_BTN, INPUT);
+    pinMode(TFT_BL, OUTPUT);
+    bruceConfig.colorInverted = 0;
+    bruceConfig.rotation = 0; // portrait mode for Phantom
 }
 
 /***************************************************************************************
@@ -44,6 +47,8 @@ void _setBrightness(uint8_t brightval) {
 **********************************************************************/
 void InputHandler(void) {
     static unsigned long tm = millis();
+    static unsigned long esc_tm = millis();
+    static bool esc_armed = false;
     if (millis() - tm > 200 || LongPress) {
     } else return;
 
@@ -52,16 +57,32 @@ void InputHandler(void) {
     bool r = digitalRead(R_BTN);
     bool l = digitalRead(L_BTN);
     bool s = digitalRead(SEL_BTN);
-    if (s == BTN_ACT || u == BTN_ACT || d == BTN_ACT || r == BTN_ACT || l == BTN_ACT) {
+    if (!s || !u || !d || !r || !l) {
         tm = millis();
         if (!wakeUpScreen()) AnyKeyPress = true;
         else return;
     }
-    if (l == BTN_ACT) PrevPress = true;
-    if (r == BTN_ACT) NextPress = true;
-    if (u == BTN_ACT) UpPress = true;
-    if (d == BTN_ACT) DownPress = true;
-    if (s == BTN_ACT) SelPress = true;
+    if (!l && !s) {
+        EscPress = true;
+        return;
+    }
+    if (!l) {
+        PrevPress = true;
+        if (esc_armed == false) {
+            esc_tm = millis();
+            esc_armed = true;
+        }
+    }
+    if (esc_armed && millis() - esc_tm > 1000) {
+        esc_armed = false;
+        esc_tm = millis();
+        PrevPress = false;
+        EscPress = true;
+    }
+    if (!r) NextPress = true;
+    if (!u) UpPress = true;
+    if (!d) DownPress = true;
+    if (!s) SelPress = true;
 }
 
 /*********************************************************************

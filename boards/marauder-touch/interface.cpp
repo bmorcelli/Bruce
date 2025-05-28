@@ -9,7 +9,11 @@ CYD28_TouchR touch(320, 240);
 ** Location: main.cpp
 ** Description:   initial setup for the device
 ***************************************************************************************/
-void _setup_gpio() { pinMode(TFT_BL, OUTPUT); }
+void _setup_gpio() {
+    bruceConfig.colorInverted = 0;
+    bruceConfig.rotation = 0; // portrait mode for Phantom
+    pinMode(TFT_BL, OUTPUT);
+}
 
 /***************************************************************************************
 ** Function name: _post_setup_gpio()
@@ -17,7 +21,7 @@ void _setup_gpio() { pinMode(TFT_BL, OUTPUT); }
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
-    if (!touch.begin(&SPI)) {
+    if (!touch.begin(&tft.getSPIinstance())) {
         Serial.println("Touch IC not Started");
         log_i("Touch IC not Started");
     } else Serial.println("Touch IC Started");
@@ -65,7 +69,7 @@ void InputHandler(void) {
                 t.x = t.y;
                 t.y = (tftHeight + 20) - tmp;
             }
-            // Serial.printf("Touched at x=%d, y=%d, rot=%d\n", t.x, t.y, rotation);
+            Serial.printf("Touched at x=%d, y=%d, rot=%d\n", t.x, t.y, bruceConfig.rotation);
 
             if (!wakeUpScreen()) AnyKeyPress = true;
             else return;

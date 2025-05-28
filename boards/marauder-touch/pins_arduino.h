@@ -51,8 +51,12 @@ static const uint8_t ADC2 = 8;
 
 #define RGB_LED 21
 
-#define BAD_TX GROVE_SDA
-#define BAD_RX GROVE_SCL
+#define BAD_TX 4
+#define BAD_RX 13
+
+// SERIAL (GPS) dedicated pins
+#define SERIAL_TX 4
+#define SERIAL_RX 13
 
 #define HAS_BTN 0
 #define BTN_ALIAS "\"Ok\""
@@ -63,14 +67,14 @@ static const uint8_t ADC2 = 8;
 #define LED_ON HIGH
 #define LED_OFF LOW
 
-#define CC1101_GDO0_PIN 3
-#define CC1101_SS_PIN 1
+#define CC1101_GDO0_PIN -1
+#define CC1101_SS_PIN -1
 #define CC1101_MOSI_PIN SPI_MOSI_PIN
 #define CC1101_SCK_PIN SPI_SCK_PIN
 #define CC1101_MISO_PIN SPI_MISO_PIN
 
-#define NRF24_CE_PIN 3
-#define NRF24_SS_PIN 1
+#define NRF24_CE_PIN -1
+#define NRF24_SS_PIN -1
 #define NRF24_MOSI_PIN SPI_MOSI_PIN
 #define NRF24_SCK_PIN SPI_SCK_PIN
 #define NRF24_MISO_PIN SPI_MISO_PIN
@@ -80,7 +84,7 @@ static const uint8_t ADC2 = 8;
 #define FG 3
 
 #define HAS_SCREEN 1
-#define ROTATION 0
+#define ROTATION 3
 #define MINBRIGHT 160
 
 #define USER_SETUP_LOADED 1
@@ -100,13 +104,13 @@ static const uint8_t ADC2 = 8;
 #define TOUCH_CS 21
 #define HAS_TOUCH 1
 
-#define SDCARD_CS 12
+// #define SDCARD_CS 12
 #define SDCARD_SCK 18
 #define SDCARD_MISO 19
 #define SDCARD_MOSI 23
 
-#define GROVE_SDA 3
-#define GROVE_SCL 1
+#define GROVE_SDA 33
+#define GROVE_SCL 22
 
 #define SPI_SCK_PIN 18
 #define SPI_MISO_PIN 19
