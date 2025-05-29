@@ -12,7 +12,7 @@ void _setup_gpio() {
     pinMode(DW_BTN, INPUT);
     pinMode(R_BTN, INPUT);
     pinMode(L_BTN, INPUT);
-    pinMode(TFT_BL, OUTPUT);
+
     bruceConfig.colorInverted = 0;
     bruceConfig.rotation = 0; // portrait mode for Phantom
 }
@@ -22,7 +22,7 @@ void _setup_gpio() {
 ** Location: main.cpp
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
-void _post_setup_gpio() {}
+void _post_setup_gpio() { pinMode(TFT_BL, OUTPUT); }
 
 /***************************************************************************************
 ** Function name: getBattery()
@@ -37,8 +37,14 @@ int getBattery() { return 0; }
 ** set brightness value
 **********************************************************************/
 void _setBrightness(uint8_t brightval) {
-    if (brightval > 5) digitalWrite(TFT_BL, HIGH);
-    else digitalWrite(TFT_BL, LOW);
+    pinMode(TFT_BL, OUTPUT);
+    if (brightval > 5) {
+        digitalWrite(TFT_BL, LOW);
+        digitalWrite(TFT_BL, HIGH);
+    } else {
+        digitalWrite(TFT_BL, HIGH);
+        digitalWrite(TFT_BL, LOW);
+    }
 }
 
 /*********************************************************************
@@ -49,8 +55,7 @@ void InputHandler(void) {
     static unsigned long tm = millis();
     static unsigned long esc_tm = millis();
     static bool esc_armed = false;
-    if (millis() - tm > 200 || LongPress) {
-    } else return;
+    if (!(millis() - tm > 200 || LongPress)) return;
 
     bool u = digitalRead(UP_BTN);
     bool d = digitalRead(DW_BTN);

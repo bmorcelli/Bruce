@@ -675,10 +675,10 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
     tft.setTextSize(selectedTextSize);
     tft.setTextColor(bruceConfig.priColor);
     tft.fillRect(
-        12,
-        67 + (tftHeight - 134) / 2 + ((FG - 1) % 2) * LH / 2,
-        tftWidth - 24,
-        8 * FG + 1,
+        6,
+        62 + (tftHeight - 134) / 2 + ((FG - 1) % 2) * LH / 2,
+        tftWidth - 12,
+        18 * FG + 1,
         bruceConfig.bgColor
     );
     tft.drawCentreString(
