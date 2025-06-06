@@ -1,6 +1,5 @@
 #include "display.h"
 #include "core/wifi/webInterface.h" // for server
-#include "core/wifi/wg.h"           //for isConnectedWireguard to print wireguard lock
 #include "mykeyboard.h"
 #include "settings.h" //for timeStr
 #include "utils.h"
@@ -739,10 +738,6 @@ void drawStatusBar() {
         drawBLESmall(tftWidth - (bat_margin + 20 * i), 7);
         i++;
     } // Draw BLE beside Wifi
-    if (isConnectedWireguard) {
-        drawWireguardStatus(tftWidth - (bat_margin + 21 * i), 7);
-        i++;
-    } // Draw Wg bedide BLE, if the others exist, if not, beside battery
 
     if (bruceConfig.theme.border) {
         tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
@@ -859,21 +854,6 @@ void drawBatteryStatus(uint8_t bat) {
     tft.fillRoundRect(tftWidth - 40, 9, 30 * bat / 100, 13, 2, barcolor);
     tft.drawLine(tftWidth - 30, 9, tftWidth - 30, 9 + 13, bruceConfig.bgColor);
     tft.drawLine(tftWidth - 20, 9, tftWidth - 20, 9 + 13, bruceConfig.bgColor);
-}
-/***************************************************************************************
-** Function name: drawWireguardStatus()
-** Description:   Draws a padlock when connected
-***************************************************************************************/
-void drawWireguardStatus(int x, int y) {
-    tft.fillRect(x, y, 20, 17, bruceConfig.bgColor);
-    if (isConnectedWireguard) {
-        tft.drawRoundRect(10 + x, 0 + y, 10, 16, 5, TFT_GREEN);
-        tft.fillRoundRect(10 + x, 12 + y, 10, 5, 0, TFT_GREEN);
-    } else {
-        tft.drawRoundRect(1 + x, 0 + y, 10, 16, 5, bruceConfig.priColor);
-        tft.fillRoundRect(0 + x, 12 + y, 10, 5, 0, bruceConfig.bgColor);
-        tft.fillRoundRect(10 + x, 12 + y, 10, 5, 0, bruceConfig.priColor);
-    }
 }
 
 /***************************************************************************************

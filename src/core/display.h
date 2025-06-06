@@ -173,8 +173,6 @@ void printCenterFootnote(String text);
 
 Opt_Coord listFiles(int index, std::vector<FileList> fileList);
 
-void drawWireguardStatus(int x, int y);
-
 void progressHandler(int progress, size_t total, String message = "Running, Wait");
 
 int getBattery() __attribute__((weak));
