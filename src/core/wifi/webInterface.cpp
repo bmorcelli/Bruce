@@ -267,7 +267,12 @@ void configureWebServer() {
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
     server->onNotFound(notFound);
 
-    // server->onFileUpload(handleUpload);
+    server->on(
+        "/upload",
+        HTTP_POST,
+        [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "File upload completed"); },
+        handleUpload
+    );
 
     server->on("/logout", HTTP_GET, [](AsyncWebServerRequest *request) {
         AsyncWebServerResponse *response = request->beginResponse_P(302, "text/html", "", 0);
@@ -365,6 +370,47 @@ void configureWebServer() {
         );
         request->send(200, "application/json", response_body);
     });
+
+    server->on("/getoptions", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", getOptionsJSON().c_str());
+    });
+
+    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", tft.getJSONLog().c_str());
+    });
+
+    server->on("/gettheme", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (bruceConfig.themePath == "") return request->send(400, "text/plain", "default theme set");
+        if (!bruceConfig.themeFS()->exists(bruceConfig.themePath))
+            return request->send(400, "text/plain", "Can't open file theme");
+
+        File file;
+        file = bruceConfig.themeFS()->open(bruceConfig.themePath, FILE_READ);
+        if (!file) return request->send(400, "text/plain", "Can't open file theme");
+
+        JsonDocument jsonDoc;
+        if (deserializeJson(jsonDoc, file))
+            return request->send(400, "text/plain", "Can't deserialize file theme");
+        file.close();
+
+        jsonDoc["_fs"] = bruceConfig.themeFS() == &SD ? "SD" : "LFS";
+        jsonDoc["_path"] = bruceConfig.themePath.substring(0, bruceConfig.themePath.lastIndexOf('/')) + "/";
+
+        AsyncResponseStream *response = request->beginResponseStream("application/json");
+        serializeJson(jsonDoc, *response);
+        request->send(response);
+        free(response);
+    });
+
+    server->serveStatic("/file/LFS", LittleFS, "/").setFilter([](AsyncWebServerRequest *request) {
+        return checkUserWebAuth(request);
+    });
+
+    if (sdcardMounted) {
+        server->serveStatic("/file/SD", SD, "/").setFilter([](AsyncWebServerRequest *request) {
+            return checkUserWebAuth(request);
+        });
+    }
 
     // Index page
     server->on("/Oc34N", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -599,6 +645,7 @@ void startWebUi(bool mode_ap) {
 
         isWebUIActive = true;
     }
+    tft.setLogging();
 
     drawWebUiScreen(mode_ap);
 
@@ -616,6 +663,7 @@ void startWebUi(bool mode_ap) {
     loopOptions(options);
 
     if (closeServer) {
+        tft.setLogging(false);
         stopWebUi();
 
         delay(100);
