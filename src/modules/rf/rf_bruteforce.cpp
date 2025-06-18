@@ -112,15 +112,23 @@ bool rf_brute_start() {
 
     for (int i = 0; i < (1 << bits); ++i) {
         for (int r = 0; r < brute_repeats; ++r) {
-            for (const auto &pulse : protocol->pilot_period) { sendPulse(pulse); }
+            for (int k = 0; k < c_rf_protocol::PULSE_PAIR_SIZE; ++k) {
+                int pulse = protocol->pilot_period[k];
+                if (pulse != 0) sendPulse(pulse); // sends only if different of zero
+            }
 
             for (int j = bits - 1; j >= 0; --j) {
                 bool bit = (i >> j) & 1;
-                const std::vector<int> &timings = protocol->transposition_table[bit ? '1' : '0'];
-                for (auto duration : timings) { sendPulse(duration); }
+                int bitIndex = bit ? 1 : 0;
+                for (int k = 0; k < c_rf_protocol::TRANS_TABLE_SIZE; ++k) {
+                    sendPulse(protocol->transposition_table[bitIndex][k]);
+                }
             }
 
-            for (const auto &pulse : protocol->stop_bit) { sendPulse(pulse); }
+            for (int k = 0; k < c_rf_protocol::PULSE_PAIR_SIZE; ++k) {
+                int pulse = protocol->stop_bit[k];
+                if (pulse != 0) sendPulse(pulse); // sends only if different of zero
+            }
         }
 
         if (check(EscPress)) break;

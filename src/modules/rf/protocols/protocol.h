@@ -1,15 +1,14 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-#include <map>
-#include <stdint.h>
-#include <vector>
-
 class c_rf_protocol {
 public:
-    std::map<char, std::vector<int>> transposition_table;
-    std::vector<int> pilot_period;
-    std::vector<int> stop_bit;
+    static const int TRANS_TABLE_SIZE = 2;
+    static const int PULSE_PAIR_SIZE = 2;
+
+    int transposition_table[TRANS_TABLE_SIZE][PULSE_PAIR_SIZE];
+    int pilot_period[PULSE_PAIR_SIZE];
+    int stop_bit[PULSE_PAIR_SIZE];
 
     c_rf_protocol() = default;
     virtual ~c_rf_protocol() = default;
