@@ -3,7 +3,6 @@
 
 #include "config.h"
 #include "configPins.h"
-#include <NTPClient.h>
 
 void _setBrightness(uint8_t brightval) __attribute__((weak));
 
@@ -27,7 +26,9 @@ void setCustomUIColorSettingMenuG(int colorType);
 
 void setCustomUIColorSettingMenuB(int colorType);
 
-void setCustomUIColorSettingMenu(int colorType, int rgb, std::function<uint16_t(uint16_t, int)> colorGenerator);
+void setCustomUIColorSettingMenu(
+    int colorType, int rgb, std::function<uint16_t(uint16_t, int)> colorGenerator
+);
 
 void addEvilWifiMenu();
 

@@ -700,6 +700,107 @@ String keyboard(String mytext, int maxSize, String msg) {
 
     return mytext;
 }
+/*********************************************************************
+** Function: numSelector
+** Edit numbers in a "row", or a single number, like editing only numbers in an IP or other series
+** location: mykeyboard.cpp
+** nvalues: Number of values to be handled
+** max: max value
+** min: min value
+** c: if nvalues>1, separe them with this charactere (IP value, for example)
+** initial: add a initial value to the function (ip value for example)
+** output: String with the value (or values)
+**********************************************************************/
+String
+numSelector(int nvalues, int32_t max, int32_t min, String msg, const char c, String initial, int step) {
+    if (nvalues <= 0) return "";
+
+    int32_t value[nvalues];
+    for (int i = 0; i < nvalues; i++) value[i] = min;
+
+    if (nvalues > 1 && c != '\0') {
+        String tmp = initial;
+        int i = 0, idx;
+        while ((idx = tmp.indexOf(c)) != -1 && i < nvalues - 1) {
+            value[i++] = tmp.substring(0, idx).toInt();
+            tmp = tmp.substring(idx + 1);
+        }
+        value[i] = tmp.toInt();
+    } else if (nvalues == 1) {
+        value[0] = initial.toInt();
+    }
+
+    int editting = 0;
+    bool redraw = true;
+
+    while (true) {
+        if (redraw) {
+            if (value[editting] > max) value[editting] = max;
+            else if (value[editting] < min) value[editting] = min;
+            drawMainBorder(true);
+            tft.setCursor(10, 30);
+            tft.setTextColor(bruceConfig.priColor);
+            tft.setTextSize(FM);
+            padprintln(msg);
+
+            for (int i = 0; i < nvalues; i++) {
+                if (i > 0) padprint(c);
+                tft.setTextColor(
+                    i == editting ? getComplementaryColor2(bruceConfig.priColor) : bruceConfig.priColor
+                );
+                padprint(value[i]);
+            }
+
+            tft.setTextColor(bruceConfig.priColor);
+            padprintln("");
+            padprintln("Prev(-)  Next(+)");
+            padprintln("Sel (Next value)");
+            redraw = false;
+        }
+
+        if (check(SelPress)) {
+            editting++;
+            redraw = true;
+            if (editting >= nvalues) break;
+        } else if (check(NextPress) || check(UpPress)) {
+            value[editting] += step;
+            redraw = true;
+        } else if (check(PrevPress) || check(DownPress)) {
+            value[editting] -= step;
+            redraw = true;
+        } else if (check(EscPress)) {
+            return initial;
+        }
+#if defined(HAS_KEYBOARD) // Cardputer and T-Deck
+        else if (KeyStroke.pressed) {
+            if (KeyStroke.enter) {
+                editting++;
+                if (editting >= nvalues) break;
+            } else if (KeyStroke.del) {
+                value[editting] = value[editting] / 10;
+            } else {
+                char n = '\0';
+                for (auto i : KeyStroke.word) { n = i; }
+                if (n == c) { // when typing an IP and press '.', go to next number
+                    editting++;
+                    if (editting >= nvalues) break;
+                } else if (isdigit(n)) { // check if the char pressed is a number
+                    int digit = n - '0';
+                    value[editting] = value[editting] * 10 + (int)n;
+                }
+            }
+            redraw = true;
+        }
+#endif
+    }
+
+    String output = "";
+    for (int i = 0; i < nvalues; i++) {
+        if (i > 0) output += c;
+        output += String(value[i]);
+    }
+    return output;
+}
 
 void powerOff() { displayWarning("Not available", true); }
 void goToDeepSleep() {

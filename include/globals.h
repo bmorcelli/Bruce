@@ -15,9 +15,7 @@
 #include <ArduinoJson.h>
 #include <ESP32Time.h>
 #include <LittleFS.h>
-#include <NTPClient.h>
 #include <SPI.h>
-#include <Timezone.h>
 #include <functional>
 #include <io_expander/io_expander.h> // ./lib/HAL
 #include <vector>
@@ -67,8 +65,6 @@ extern bool clock_set;
 extern time_t localTime;
 extern struct tm *timeInfo;
 extern ESP32Time rtc;
-extern NTPClient timeClient;
-extern Timezone myTZ;
 
 extern int prog_handler; // 0 - Flash, 1 - LittleFS, 2 - Download
 

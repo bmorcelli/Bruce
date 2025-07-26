@@ -3,7 +3,7 @@
 #include <Arduino.h>
 void backToMenu();
 void addOptionToMainMenu();
-void updateClockTimezone();
+bool updateClockTimezone(bool tmz = false, bool print = false);
 void updateTimeStr(struct tm timeInfo);
 void showDeviceInfo();
 String getOptionsJSON();

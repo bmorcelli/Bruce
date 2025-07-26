@@ -29,19 +29,34 @@ void addOptionToMainMenu() {
     options.push_back({"Main Menu", backToMenu});
 }
 
-void updateClockTimezone() {
-    timeClient.begin();
-    timeClient.update();
+bool updateClockTimezone(bool tmz, bool print) {
+    JsonDocument TimeNPlace = getLocationAndTimeJSON();
+    serializeJsonPretty(TimeNPlace, Serial);
+    if (TimeNPlace["epoch"].isNull()) {
+        Serial.println("updateClockTimezone: Fail getting Time/Date");
+        return false;
+    }
+    int offset = TimeNPlace["offset"].as<int>() | 0;
+    Serial.println(offset);
+    if (tmz) bruceConfig.setTmz(offset);
 
-    timeClient.setTimeOffset(bruceConfig.tmz * 3600);
-
-    localTime = myTZ.toLocal(timeClient.getEpochTime());
+    localTime = TimeNPlace["epoch"].as<time_t>() + bruceConfig.tmz;
 
 #if !defined(HAS_RTC)
-    rtc.setTime(timeClient.getEpochTime());
+    rtc.setTime(TimeNPlace["epoch"].as<time_t>());
     updateTimeStr(rtc.getTimeStruct());
     clock_set = true;
 #endif
+    if (print) {
+        drawMainBorderWithTitle("Time Information");
+        padprintln("");
+        padprintln("Country: " + TimeNPlace["country"].as<String>());
+        padprintln("Region: " + TimeNPlace["regionName"].as<String>());
+        padprintln("City: " + TimeNPlace["city"].as<String>());
+        padprintln("Offset(s): " + String(TimeNPlace["offset"].as<int>()));
+        padprintln("Time: " + TimeNPlace["datetime"].as<String>());
+    }
+    return true;
 }
 
 void updateTimeStr(struct tm timeInfo) {

@@ -619,17 +619,6 @@ void addMifareKeyMenu() {
 **  Function: setClock
 **  Handles Menu to set timezone to NTP
 **********************************************************************/
-const char *ntpServer = "pool.ntp.org";
-long selectedTimezone;
-const int daylightOffset_sec = 0;
-int timeHour;
-
-TimeChangeRule BRST = {"BRST", Last, Sun, Oct, 0, timeHour};
-Timezone myTZ(BRST, BRST);
-
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, ntpServer, selectedTimezone, daylightOffset_sec);
-
 void setClock() {
     bool auto_mode = true;
 
@@ -639,8 +628,24 @@ void setClock() {
 #endif
 
     options = {
-        {"NTP Timezone", [&]() { auto_mode = true; } },
+        {"Automatic",    [&]() { auto_mode = true; } },
         {"Manually set", [&]() { auto_mode = false; }},
+        {"Timezone set", [&]() {
+             if (bruceConfig.tmz > -13 && bruceConfig.tmz < 13) bruceConfig.tmz = bruceConfig.tmz * 3600;
+             time_t old_tmz = bruceConfig.tmz;
+             bruceConfig.setTmz(numSelector("Offset (GMT*3600)", 43200, -43200, bruceConfig.tmz, 1800));
+#if defined(HAS_RTC)
+             struct tm *timeinfo = localtime(&localTime);
+             TimeStruct.Hours = timeinfo->tm_hour;
+             TimeStruct.Minutes = timeinfo->tm_min;
+             TimeStruct.Seconds = timeinfo->tm_sec;
+             _rtc.SetTime(&TimeStruct);
+#else
+            time_t time = rtc.getEpoch() - old_tmz;
+            rtc.setTime(time + bruceConfig.tmz);
+#endif
+             returnToMenu = true;
+         }                   }
     };
     addOptionToMainMenu();
     loopOptions(options);
@@ -649,37 +654,11 @@ void setClock() {
 
     if (auto_mode) {
         if (!wifiConnected) wifiConnectMenu();
-
-        auto createTimezoneSetter = [&](int timezone) {
-            return [&, timezone]() { bruceConfig.setTmz(timezone); };
-        };
-
-        options = {
-            {"Los Angeles", createTimezoneSetter(-8), bruceConfig.tmz == -8},
-            {"Chicago",     createTimezoneSetter(-6), bruceConfig.tmz == -6},
-            {"New York",    createTimezoneSetter(-5), bruceConfig.tmz == -5},
-            {"Brasilia",    createTimezoneSetter(-3), bruceConfig.tmz == -3},
-            {"Pernambuco",  createTimezoneSetter(-2), bruceConfig.tmz == -2},
-            {"Lisbon",      createTimezoneSetter(0),  bruceConfig.tmz == 0 },
-            {"Paris",       createTimezoneSetter(1),  bruceConfig.tmz == 1 },
-            {"Athens",      createTimezoneSetter(2),  bruceConfig.tmz == 2 },
-            {"Moscow",      createTimezoneSetter(3),  bruceConfig.tmz == 3 },
-            {"Dubai",       createTimezoneSetter(4),  bruceConfig.tmz == 4 },
-            {"Jakarta",     createTimezoneSetter(7),  bruceConfig.tmz == 7 },
-            {"Hong Kong",   createTimezoneSetter(8),  bruceConfig.tmz == 8 },
-            {"Tokyo",       createTimezoneSetter(9),  bruceConfig.tmz == 9 },
-            {"Sydney",      createTimezoneSetter(10), bruceConfig.tmz == 10},
-        };
-        addOptionToMainMenu();
-
-        loopOptions(options);
-
         if (returnToMenu) return;
-
-        timeClient.setTimeOffset(bruceConfig.tmz * 3600);
-        timeClient.begin();
-        timeClient.update();
-        localTime = myTZ.toLocal(timeClient.getEpochTime());
+        if (!updateClockTimezone(true, true)) {
+            displayError("Fail getting Time/Date");
+            return;
+        }
 
 #if defined(HAS_RTC)
         struct tm *timeinfo = localtime(&localTime);
@@ -688,7 +667,7 @@ void setClock() {
         TimeStruct.Seconds = timeinfo->tm_sec;
         _rtc.SetTime(&TimeStruct);
 #else
-        rtc.setTime(timeClient.getEpochTime());
+        rtc.setTime(localTime);
 #endif
 
         clock_set = true;

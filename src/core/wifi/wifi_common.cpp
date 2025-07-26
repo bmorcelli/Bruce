@@ -127,8 +127,9 @@ bool wifiConnectMenu(wifi_mode_t mode) {
                         }
                         String optionText =
                             encryptionPrefix + ssid + "(" + String(rssi) + "|" + encryptionTypeStr + ")";
-                        options.push_back({optionText.c_str(), [=]() { _wifiConnect(ssid, encryptionType); }}
-                        );
+                        options.push_back({optionText.c_str(), [=]() {
+                                               _wifiConnect(ssid, encryptionType);
+                                           }});
                     }
                 }
                 options.push_back({"Hidden SSID", [=]() {
@@ -220,4 +221,60 @@ bool wifiConnecttoKnownNet(void) {
         updateClockTimezone();
     }
     return false;
+}
+
+JsonDocument getLocationAndTimeJSON() {
+    const char *url = "http://ip-api.com/json/?fields=status,country,regionName,city,offset,query";
+    JsonDocument doc;
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+        return doc;
+    }
+
+    HTTPClient http;
+    http.begin(url);
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    http.useHTTP10(true);
+    const char *headerKeys[] = {"Date"};
+    const size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
+    http.collectHeaders(headerKeys, headerKeysCount);
+    int httpCode = http.GET();
+
+    if (httpCode > 0 && httpCode == HTTP_CODE_OK) {
+        String dateStr = http.header("Date");
+        String payload = http.getString();
+        DeserializationError error = deserializeJson(doc, payload);
+        if (error) {
+            Serial.println("Error parsing JSON");
+            http.end();
+            return doc;
+        }
+
+        // Header Date → epoch → datetime
+        time_t epoch = 0;
+        char datetimeStr[32] = "";
+        struct tm tm;
+        if (strptime(dateStr.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm)) {
+            time_t gmt = mktime(&tm);
+            epoch = gmt;
+
+            struct timeval now = {.tv_sec = epoch, .tv_usec = 0};
+            settimeofday(&now, nullptr);
+
+            struct tm *lt = localtime(&epoch);
+            strftime(datetimeStr, sizeof(datetimeStr), "%Y-%m-%d %H:%M:%S", lt);
+        } else {
+            Serial.println("Fail reading Date Header");
+        }
+
+        // Add to JSON
+        doc["epoch"] = epoch;
+        doc["datetime"] = datetimeStr;
+    } else {
+        Serial.printf("HTTP GET failed: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+    return doc;
 }

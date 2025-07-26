@@ -23,7 +23,6 @@
 #include "core/sd_functions.h"
 #include "core/wifi/wifi_common.h"
 #include <Arduino.h>
-#include <TimeLib.h>
 #include <globals.h>
 #if defined(ESP32)
 #include "FS.h"
@@ -232,7 +231,7 @@ void sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
     wifi_pkt_rx_ctrl_t ctrl = (wifi_pkt_rx_ctrl_t)pkt->rx_ctrl;
 
     if (fileOpen && !_only_HS) {
-        uint32_t timestamp = now();                                         // current timestamp
+        uint32_t timestamp = rtc.getEpoch();                                // current timestamp
         uint32_t microseconds = (unsigned int)(micros() - millis() * 1000); // microseconds offset (0 - 999)
 
         uint32_t len = ctrl.sig_len;

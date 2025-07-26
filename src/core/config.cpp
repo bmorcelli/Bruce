@@ -513,7 +513,7 @@ void BruceConfig::setTmz(int value) {
 }
 
 void BruceConfig::validateTmzValue() {
-    if (tmz < -12 || tmz > 12) tmz = 0;
+    if (tmz < -43200 || tmz > 43200) tmz = 0;
 }
 
 void BruceConfig::setSoundEnabled(int value) {
