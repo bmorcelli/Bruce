@@ -1,3 +1,5 @@
+#include <esp_idf_version.h>
+#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)) // IDF 4.x
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -339,3 +341,4 @@ void openhaystack_setup() {
 
     openhaystack_loop();
 }
+#endif

@@ -25,10 +25,12 @@ void OthersMenu::optionsMenu() {
         {"Clicker",      clicker_setup                            },
 #endif
 #ifndef LITE_VERSION
+#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))  // IDF 4.x
         {"Openhaystack", openhaystack_setup                       },
-        {"Interpreter",  run_bjs_script                           },
 #endif
+        {"Interpreter",  run_bjs_script                           },
         {"iButton",      setup_ibutton                            },
+#endif
         {"Timer",        [=]() { Timer(); }                       },
     };
     addOptionToMainMenu();
