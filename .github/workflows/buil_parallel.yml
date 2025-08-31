@@ -417,41 +417,75 @@ jobs:
     needs: compile_sketch
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') || github.ref_type == 'tag'
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # Configura para garantir que todas as branches sejam buscadas
-          fetch-depth: 0
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ~/BruceArtifacts
-      - name: Clone Bruce repository and switch to WebPage branch
-        run: |
-          git fetch origin
-          git checkout WebPage || git checkout -b WebPage origin/WebPage
-      - name: Move artifacts to the correct folders
-        run: |
-          set -x
-          pwd
-          ls -all
-          tree
-          if [ "${{ github.ref_type }}" != "tag" ]; then
-            rm -f ./BetaRelease/*
-            mv -f ~/BruceArtifacts/*/*.bin ./BetaRelease
-          elif [ "${{ github.ref_type }}" == "tag" ]; then
-            rm -f ./LastRelease/*
-            mv -f ~/BruceArtifacts/*/*.bin ./LastRelease
-          fi
-          cp -f ~/BruceArtifacts/*/*.json ./LastRelease
-          cp -f ~/BruceArtifacts/*/*.json ./BetaRelease
 
-      - name: Commit and push changes
+      - name: Delete assets from betaRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "Update artifacts from build"
-          git push origin WebPage
+          assets=$(gh release view betaRelease --json assets --jq '.assets[].id' || echo "")
+          for asset in $assets; do
+            gh release delete-asset betaRelease "$asset" --yes
+          done
+
+      - name: Upload artifacts to betaRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload betaRelease ~/BruceArtifacts/*/*.bin ~/BruceArtifacts/*/*.json --clobber
+
+      - name: Delete assets from lastRelease
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=$(gh release view lastRelease --json assets --jq '.assets[].id' || echo "")
+          for asset in $assets; do
+            gh release delete-asset lastRelease "$asset" --yes
+          done
+
+      - name: Upload artifacts to lastRelease
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload lastRelease ~/BruceArtifacts/*/*.bin ~/BruceArtifacts/*/*.json --clobber
+
+      - name: Checkout WebPage branch
+        uses: actions/checkout@v4
+        with:
+          ref: WebPage
+          fetch-depth: 0
+
+      - name: Download release assets for website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf BetaRelease LastRelease
+          mkdir -p BetaRelease LastRelease
+          gh release download betaRelease --dir ./BetaRelease --clobber
+          gh release download lastRelease --dir ./LastRelease --clobber
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build website
+        run: npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: WebPage
+          publish_dir: ./build
 
   create_release:
     runs-on: ubuntu-latest
