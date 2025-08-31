@@ -40,7 +40,7 @@ jobs:
             }
           - {
               vendor: "LAUNCHER",
-              name: "M5StickCPlus 1.1",
+              name: "StickCPlus 1.1 (Launcher)",
               env: "LAUNCHER_m5stack-cplus1_1",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
@@ -110,35 +110,35 @@ jobs:
             }
           - {
               vendor: "CYD",
-              name: "CYD-2432W328R or 2432S024R",
+              name: "CYD-W328R or S024R",
               env: "CYD-2432W328R-or-S024R",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
             }
           - {
               vendor: "LAUNCHER",
-              name: "CYD-2432W328R or 2432S024R",
+              name: "CYD-W328R or S024R (Launcher)",
               env: "LAUNCHER_CYD-2432W328R-or-S024R",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
             }
           - {
               vendor: "LAUNCHER",
-              name: "CYD-2432S028",
+              name: "CYD-2432S028 (Launcher)",
               env: "LAUNCHER_CYD-2432S028",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
             }
           - {
               vendor: "LAUNCHER",
-              name: "CYD-2432S028 (2USB or Inverted Colors)",
+              name: "CYD-2432S028 (2USB) (Launcher)",
               env: "LAUNCHER_CYD-2USB",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
             }
           - {
               vendor: "LAUNCHER",
-              name: "CYD-2432W328C",
+              name: "CYD-2432W328C (Launcher)",
               env: "LAUNCHER_CYD-2432W328C",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
@@ -250,7 +250,7 @@ jobs:
             }
           - {
               vendor: "LAUNCHER",
-              name: "The Phantom (Rabbit Labs)",
+              name: "The Phantom (Launcher)",
               env: "LAUNCHER_Phantom_S024R",
               family: "ESP32",
               partitions: { bootloader_addr: "0x1000" },
@@ -417,41 +417,77 @@ jobs:
     needs: compile_sketch
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') || github.ref_type == 'tag'
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # Configura para garantir que todas as branches sejam buscadas
-          fetch-depth: 0
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ~/BruceArtifacts
-      - name: Clone Bruce repository and switch to WebPage branch
-        run: |
-          git fetch origin
-          git checkout WebPage || git checkout -b WebPage origin/WebPage
-      - name: Move artifacts to the correct folders
-        run: |
-          set -x
-          pwd
-          ls -all
-          tree
-          if [ "${{ github.ref_type }}" != "tag" ]; then
-            rm -f ./BetaRelease/*
-            mv -f ~/BruceArtifacts/*/*.bin ./BetaRelease
-          elif [ "${{ github.ref_type }}" == "tag" ]; then
-            rm -f ./LastRelease/*
-            mv -f ~/BruceArtifacts/*/*.bin ./LastRelease
-          fi
-          cp -f ~/BruceArtifacts/*/*.json ./LastRelease
-          cp -f ~/BruceArtifacts/*/*.json ./BetaRelease
 
-      - name: Commit and push changes
+      - name: Delete assets from betaRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "Update artifacts from build"
-          git push origin WebPage
+          assets=$(gh release view betaRelease --json assets --jq '.assets[].id' || echo "")
+          for asset in $assets; do
+            gh release delete-asset betaRelease "$asset" --yes
+          done
+
+      - name: Upload artifacts to betaRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload betaRelease ~/BruceArtifacts/*/*.bin ~/BruceArtifacts/*/*.json --clobber
+
+      - name: Delete assets from lastRelease
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=$(gh release view lastRelease --json assets --jq '.assets[].id' || echo "")
+          for asset in $assets; do
+            gh release delete-asset lastRelease "$asset" --yes
+          done
+
+      - name: Upload artifacts to lastRelease
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload lastRelease ~/BruceArtifacts/*/*.bin ~/BruceArtifacts/*/*.json --clobber
+
+      - name: Checkout WebPage branch
+        uses: actions/checkout@v4
+        with:
+          ref: WebPageLight
+          fetch-depth: 1
+
+      - name: Download release assets for website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf BetaRelease LastRelease
+          mkdir -p BetaRelease LastRelease
+          gh release download betaRelease --dir ./BetaRelease --clobber
+          gh release download lastRelease --dir ./LastRelease --clobber
+          echo "Files are now available on release tag [lastRelease](https://github.com/pr3y/Bruce/releases/tag/lastRelease)" > LastRelease/README.md
+          echo "Files are now available on release tag [betaRelease](https://github.com/pr3y/Bruce/releases/tag/betaRelease)" > BetaRelease/README.md
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build website
+        run: npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: WebPageLight
+          publish_dir: ./build
 
   create_release:
     runs-on: ubuntu-latest
