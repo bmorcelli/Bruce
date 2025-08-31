@@ -31,6 +31,8 @@ jobs:
         run: npm install
 
       - name: Download release assets for website
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           rm -rf BetaRelease LastRelease
           mkdir -p BetaRelease LastRelease
