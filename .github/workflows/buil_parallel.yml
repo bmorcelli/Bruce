@@ -151,6 +151,10 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: artifacts
 
       - name: Ensure releases exist and get IDs
         id: get_release
@@ -203,12 +207,12 @@ jobs:
             }
 
       - name: Upload new betaRelease asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: betaRelease commit (${{ github.sha }})
           tag_name: betaRelease
           prerelease: true
-          files: "*.*"
+          files: artifacts/**
           fail_on_unmatched_files: false
           make_latest: false
           generate_release_notes: false
@@ -233,13 +237,13 @@ jobs:
             }
 
       - name: Upload new lastRelease asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
           name: lastRelease commit (${{ github.sha }})
           tag_name: lastRelease
           prerelease: true
-          files: "*.*"
+          files: artifacts/**
           fail_on_unmatched_files: false
           make_latest: false
           generate_release_notes: false
