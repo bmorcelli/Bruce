@@ -14,7 +14,7 @@
         }
 
         li {
-            list-svelte:head-type: disc;
+            list-style-type: disc;
         }
         ul {
             list-style-type: disc;
