@@ -4,9 +4,8 @@ on:
   push:
     branches: [WebPage, WebPageLight, newWebPage]
   workflow_run:
-    workflows: [Build and Push Releases]
-    types:
-      - completed
+    workflows: ["Build and Push Releases", Build and Push Releases]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
