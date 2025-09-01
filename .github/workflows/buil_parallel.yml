@@ -284,11 +284,11 @@ jobs:
       - name: Build website
         run: npm run build
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Artifacts
+        uses: actions/upload-pages-artifact@v3
         with:
-          publish_branch: WebPageLight
-          publish_dir: ./build
+          # this should match the `pages` option in your adapter-static options
+          path: 'build/'
 
   deploy:
     needs: deploy_webpage
