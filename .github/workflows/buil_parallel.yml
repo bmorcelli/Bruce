@@ -208,7 +208,7 @@ jobs:
           name: betaRelease commit (${{ github.sha }})
           tag_name: betaRelease
           prerelease: true
-          files: artifacts/**
+          files: "*.*"
           fail_on_unmatched_files: false
           make_latest: false
           generate_release_notes: false
@@ -239,7 +239,7 @@ jobs:
           name: lastRelease commit (${{ github.sha }})
           tag_name: lastRelease
           prerelease: true
-          files: artifacts/**
+          files: "*.*"
           fail_on_unmatched_files: false
           make_latest: false
           generate_release_notes: false
