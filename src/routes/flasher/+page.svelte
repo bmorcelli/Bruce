@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { current_page, Page } from '$lib/store';
-	import manifests from '$lib/data/manifests.json';
-	import SectionBackground from '$lib/components/SectionBackground.svelte';
+        import { current_page, Page } from '$lib/store';
+        import manifests from '$lib/data/manifests.json';
+        import SectionBackground from '$lib/components/SectionBackground.svelte';
+        import { base } from '$app/paths';
 
 	$current_page = Page.Flasher;
 	let selectedVersion = $state('Last');
@@ -47,8 +48,8 @@
 </script>
 
 <svelte:head>
-	<script type="module" src="/esp-web-tools-8.0.1/dist/web/install-button.js?module"></script>
-</svelte:head>
+        <script type="module" src="{base}/esp-web-tools-8.0.1/dist/web/install-button.js?module"></script>
+        </svelte:head>
 
 <section class="relative flex h-[500px] w-full flex-col overflow-hidden pr-4 pl-4 md:flex-row">
 	<SectionBackground />
