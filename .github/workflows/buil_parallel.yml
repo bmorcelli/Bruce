@@ -147,6 +147,11 @@ jobs:
             core.setOutput('beta', String(betaId));
             core.setOutput('last', String(lastId));
 
+      - name: Get current sha
+        id: get_sha
+        run: |
+          echo "GITHUB_SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Delete old betaRelease assets
         uses: actions/github-script@v6
         with:
@@ -168,7 +173,7 @@ jobs:
       - name: Upload new betaRelease asset
         uses: softprops/action-gh-release@v2
         with:
-          name: lastRelease commit (${{ github.sha[0:7] }})
+          name: betaRelease commit (${{ steps.get_sha.outputs.GITHUB_SHA_SHORT }})
           tag_name: betaRelease
           prerelease: true
           files: artifacts/**
@@ -199,7 +204,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
-          name: lastRelease commit (${{ github.sha[0:7]}})
+          name: lastRelease commit (${{ steps.get_sha.outputs.GITHUB_SHA_SHORT }})
           tag_name: lastRelease
           prerelease: true
           files: artifacts/**
@@ -208,6 +213,10 @@ jobs:
           generate_release_notes: false
 
       - name: Trigger WebPage deploy
+        uses: actions/checkout@v4
+        with:
+          ref: WebPageLight
+          fetch-depth: 1
         if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
