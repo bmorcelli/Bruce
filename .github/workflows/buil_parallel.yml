@@ -168,7 +168,7 @@ jobs:
       - name: Upload new betaRelease asset
         uses: softprops/action-gh-release@v2
         with:
-          name: betaRelease commit (${GITHUB_SHA::7})
+          name: betaRelease commit (${{GITHUB_SHA::7}})
           tag_name: betaRelease
           prerelease: true
           files: artifacts/**
@@ -199,7 +199,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
-          name: lastRelease commit (${GITHUB_SHA::7})
+          name: lastRelease commit (${{GITHUB_SHA::7}})
           tag_name: lastRelease
           prerelease: true
           files: artifacts/**
