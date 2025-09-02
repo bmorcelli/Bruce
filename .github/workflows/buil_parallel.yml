@@ -102,6 +102,9 @@ jobs:
           if-no-files-found: error
 
   post_compile_steps:
+    permissions:
+      contents: read
+      actions: write
     name: Update Placeholders
     runs-on: ubuntu-latest
     environment: github_release
@@ -225,7 +228,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow list
-          gh workflow run .github/workflows/deploy.yaml --ref WebPageLight
+          gh workflow run .github/workflows/deploy.yml --ref WebPageLight
 
   create_release:
     runs-on: ubuntu-latest
