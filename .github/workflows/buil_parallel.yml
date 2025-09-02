@@ -102,9 +102,6 @@ jobs:
           if-no-files-found: error
 
   post_compile_steps:
-    permissions:
-      contents: read
-      actions: write
     name: Update Placeholders
     runs-on: ubuntu-latest
     environment: github_release
