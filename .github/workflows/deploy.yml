@@ -3,8 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [WebPage, WebPageLight, newWebPage]
-  repository_dispatch:
-    types: [deploy-to-gh-pages]
   workflow_dispatch:
 
 permissions:
