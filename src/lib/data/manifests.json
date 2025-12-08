@@ -55,7 +55,7 @@
 		{ "id": "LAUNCHER_Marauder-V4-V6", "name": "Marauder V4 or V6 (Launcher)", "family": "ESP32" },
 		{ "id": "LAUNCHER_Marauder-v61", "name": "Marauder V6.x (Launcher)", "family": "ESP32" },
 		{ "id": "LAUNCHER_Marauder-v7", "name": "Marauder v7 (Launcher)", "family": "ESP32" },
-		{ "id": "LAUNCHER-WaveSentry-R1", "name": "WaveSentry (Launcher)", "family": "ESP32" },
+		{ "id": "LAUNCHER_WaveSentry-R1", "name": "WaveSentry (Launcher)", "family": "ESP32" },
 		{ "id": "LAUNCHER_Phantom_S024R", "name": "The Phantom (Rabbit Labs)", "family": "ESP32" },
 		{ "id": "LAUNCHER_m5stack-cplus1_1", "name": "M5StickCPlus 1.1", "family": "ESP32" }
 	]
