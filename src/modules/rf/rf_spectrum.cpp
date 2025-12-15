@@ -156,12 +156,14 @@ void rf_CC1101_rssi() {
     int bar_size[sizeof(subghz_frequency_list) / sizeof(float)];
     int max_bar_size = tftHeight - 20 /*bottom margin*/ - 20 /*top margin*/;
     bool redraw = true;
+    const int min_value = map(-70, -95, -20, 0, max_bar_size);
     while (1) {
         if (redraw) {
             redraw = false;
             tft.drawPixel(0, 0, 0);
             tft.fillScreen(bruceConfig.bgColor);
             tft.setTextSize(1);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
             tft.setCursor(3, 2);
             // Fixed frequency sees a dot running grafic, showing RSSI over time
             if (bruceConfigPins.rfFxdFreq) {
@@ -193,7 +195,7 @@ void rf_CC1101_rssi() {
                 for (int i = 0; i < range; i++) {
                     tft.drawFastVLine(space * i, tftHeight - 20, 5, bruceConfig.priColor);
                 }
-                memset(signal, 0, sizeof(signal));
+                memset(bar_size, 0, sizeof(bar_size));
             }
         }
 
@@ -218,6 +220,7 @@ void rf_CC1101_rssi() {
                         range_limits[bruceConfigPins.rfScanRange][0] + 1;
 
             int space = tftWidth / range;
+            int max_idx = 0;
             for (int i = 0; i < range; i++) {
                 if (EscPress || SelPress) break;
                 setMHZ(subghz_frequency_list[range_limits[bruceConfigPins.rfScanRange][0] + i]);
@@ -227,10 +230,18 @@ void rf_CC1101_rssi() {
                 int size = map(rssi, -95, -20, 0, max_bar_size);
                 if (size > bar_size[i]) bar_size[i] = size;
                 else bar_size[i] = bar_size[i] - (bar_size[i] - size) / 2; // slow down decrease
-                tft.fillRect(i * space, tftHeight - 20, space - 2, bar_size[i], bruceConfig.priColor);
                 tft.fillRect(
-                    i * space, bar_size[i], space - 2, max_bar_size - bar_size[i], bruceConfig.bgColor
+                    i * space, tftHeight - 20 - bar_size[i], space - 2, bar_size[i], bruceConfig.priColor
                 );
+                tft.fillRect(i * space, 20, space, max_bar_size - bar_size[i], bruceConfig.bgColor);
+                if (bar_size[i] > bar_size[max_idx] && bar_size[i] > min_value) max_idx = i;
+            }
+            if (bar_size[max_idx] > min_value) {
+                char buf[7];
+                float var = subghz_frequency_list[range_limits[bruceConfigPins.rfScanRange][0] + max_idx];
+                snprintf(buf, sizeof(buf), "%.2f", var);
+                tft.drawCentreString("Max=      ", tftWidth / 2, tftHeight - 10);
+                tft.drawCentreString("Max=" + String(buf), tftWidth / 2, tftHeight - 10);
             }
         }
         if (check(EscPress)) { break; }
