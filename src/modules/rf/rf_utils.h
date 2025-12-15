@@ -2,7 +2,7 @@
 #define __RF_UTILS_H__
 
 #include "structs.h"
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+#include <RadioLib.h>
 // ESP-IDF 5.5 based framework determines the channels autommatically
 // you do not have the hability to choose the channel
 rmt_channel_handle_t setup_rf_rx();
@@ -17,10 +17,11 @@ extern const float subghz_frequency_list[57];
 extern const char *subghz_frequency_ranges[];
 extern const int range_limits[4][2];
 extern bool rmtInstalled;
+extern CC1101 cc1101;
 
-bool initRfModule(String mode = "", float frequency = 0);
+bool initRfModule(String mode = "", float frequency = 0, bool startDirect = true);
 void deinitRfModule();
-void initCC1101once(SPIClass *SSPI);
+void set_RF_SPI_Bus(SPIClass *SSPI);
 
 void setMHZ(float frequency);
 int find_pulse_index(const std::vector<int> &indexed_durations, int duration);
@@ -29,5 +30,5 @@ uint64_t crc64_ecma(const std::vector<int> &data);
 void addToRecentCodes(struct RfCodes rfcode);
 struct RfCodes selectRecentRfMenu();
 bool setMHZMenu();
-
+void rf_range_selection(float currentFrequency = 0.0);
 #endif

@@ -143,7 +143,7 @@ volatile int tftHeight = VECTOR_DISPLAY_DEFAULT_WIDTH;
 #include "core/wifi/wifi_common.h"
 #include "modules/bjs_interpreter/interpreter.h" // for JavaScript interpreter
 #include "modules/others/audio.h"                // for playAudioFile
-#include "modules/rf/rf_utils.h"                 // for initCC1101once
+#include "modules/rf/rf_utils.h"                 // for set_RF_SPI_Bus
 #include <Wire.h>
 
 /*********************************************************************
@@ -185,13 +185,13 @@ void setup_gpio() {
 
 #if TFT_MOSI > 0
     if (bruceConfigPins.CC1101_bus.mosi == (gpio_num_t)TFT_MOSI)
-        initCC1101once(&tft.getSPIinstance()); // (T_EMBED), CORE2 and others
+        set_RF_SPI_Bus(&tft.getSPIinstance()); // (T_EMBED), CORE2 and others
     else
 #endif
         if (bruceConfigPins.CC1101_bus.mosi == bruceConfigPins.SDCARD_bus.mosi)
-        initCC1101once(&sdcardSPI); // (ARDUINO_M5STACK_CARDPUTER) and (ESP32S3DEVKITC1) and devices that
+        set_RF_SPI_Bus(&sdcardSPI); // (ARDUINO_M5STACK_CARDPUTER) and (ESP32S3DEVKITC1) and devices that
                                     // share CC1101 pin with only SDCard
-    else initCC1101once(NULL);
+    else set_RF_SPI_Bus(NULL);
     // (ARDUINO_M5STICK_C_PLUS) || (ARDUINO_M5STICK_C_PLUS2) and others that doesn´t share SPI with
     // other devices (need to change it when Bruce board comes to shore)
 }

@@ -67,7 +67,6 @@ private:
     void save_signal(bool asRaw = false);
     void reset_signals();
     void set_threshold();
-    void set_range();
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Utils

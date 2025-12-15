@@ -65,7 +65,7 @@ bool rf_brute_start() {
 
     if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
         txpin = bruceConfigPins.CC1101_bus.io0;
-        if (!initRfModule("tx", brute_frequency)) return false;
+        if (!initRfModule("tx", brute_frequency, false)) return false;
     } else {
         txpin = bruceConfigPins.rfTx;
         if (!initRfModule("tx")) return false;
@@ -99,6 +99,14 @@ bool rf_brute_start() {
 
     pinMode(txpin, OUTPUT);
     setMHZ(brute_frequency);
+    if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
+        int16_t directState = cc1101.transmitDirectAsync();
+        if (directState != RADIOLIB_ERR_NONE) {
+            Serial.printf("cc1101 direct TX failed: %d\n", directState);
+            deinitRfModule();
+            return false;
+        }
+    }
 
     auto sendPulse = [&](int duration) {
         if (duration < 0) {

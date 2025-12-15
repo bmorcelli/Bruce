@@ -1,6 +1,6 @@
 #include "emit.h"
 #include "modules/rf/rf_utils.h" // for initRfModule
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+// #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 // Global variables for shared state

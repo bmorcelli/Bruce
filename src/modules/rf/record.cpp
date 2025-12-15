@@ -1,6 +1,6 @@
 #include "record.h"
 #include "rf_utils.h"
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+// #include <ELECHOUSE_CC1101_SRC_DRV.h>
 static bool
 record_rmt_rx_done_callback(rmt_channel_t *channel, const rmt_rx_done_event_data_t *edata, void *user_data) {
     BaseType_t high_task_wakeup = pdFALSE;
@@ -106,7 +106,7 @@ float rf_freq_scan() {
             setMHZ(checkFrequency);
             tft.drawPixel(0, 0, 0); // To make sure CC1101 shared with TFT works properly
             vTaskDelay(5 / portTICK_PERIOD_MS);
-            rssi = ELECHOUSE_cc1101.getRssi();
+            rssi = cc1101.getRSSI(); // ELECHOUSE_cc1101.getRssi();
             if (rssi > rssiThreshold) {
                 best_frequencies[attempt].freq = checkFrequency;
                 best_frequencies[attempt].rssi = rssi;
@@ -133,39 +133,6 @@ float rf_freq_scan() {
 }
 
 // TODO: replace frequency selection throughout rf.cpp with this unified function
-void rf_range_selection(float currentFrequency = 0.0) {
-    int option = 0;
-    options = {
-        {String("Fixed [" + String(bruceConfigPins.rfFreq) + "]").c_str(),
-         [=]() { bruceConfigPins.setRfFreq(bruceConfigPins.rfFreq, 2); }                                               },
-        {String("Choose Fixed").c_str(),                                   [&]() { option = 1; }                       },
-        {subghz_frequency_ranges[0],                                       [=]() { bruceConfigPins.setRfScanRange(0); }},
-        {subghz_frequency_ranges[1],                                       [=]() { bruceConfigPins.setRfScanRange(1); }},
-        {subghz_frequency_ranges[2],                                       [=]() { bruceConfigPins.setRfScanRange(2); }},
-        {subghz_frequency_ranges[3],                                       [=]() { bruceConfigPins.setRfScanRange(3); }},
-    };
-
-    loopOptions(options);
-    options.clear();
-
-    if (option == 1) { // Fixed Frequency Selector
-        options = {};
-        int ind = 0;
-        int arraySize = sizeof(subghz_frequency_list) / sizeof(subghz_frequency_list[0]);
-        for (int i = 0; i < arraySize; i++) {
-            String tmp = String(subghz_frequency_list[i], 2) + "Mhz";
-            options.push_back({tmp.c_str(), [=]() {
-                                   bruceConfigPins.setRfFreq(subghz_frequency_list[i], 2);
-                               }});
-            if (int(currentFrequency * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
-        }
-        loopOptions(options, ind);
-        options.clear();
-    }
-
-    if (bruceConfigPins.rfFxdFreq) displayTextLine("Scan freq set to " + String(bruceConfigPins.rfFreq));
-    else displayTextLine("Range set to " + String(subghz_frequency_ranges[bruceConfigPins.rfScanRange]));
-}
 
 void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
     RawRecordingStatus status;
@@ -184,9 +151,8 @@ void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
     rf_raw_record_draw(status);
 
     // Initialize RF module and update display
-    initRfModule(
-        "rx", 433.92
-    ); // Frequency scan doesnt work when initializing the module with a different frequency
+    initRfModule("rx", 433.92);
+    // Frequency scan doesnt work when initializing the module with a different frequency
     Serial.println("RF Module Initialized");
 
     // Set frequency if fixed frequency mode is enabled
@@ -276,7 +242,7 @@ void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
             else status.latestRssi = -90;
             fakeRssiPresent = false;
 
-            if (rssiFeature) status.latestRssi = ELECHOUSE_cc1101.getRssi();
+            if (rssiFeature) status.latestRssi = cc1101.getRSSI(); // ELECHOUSE_cc1101.getRssi();
 
             status.rssiCount++;
             status.lastRssiUpdate = millis();

@@ -222,25 +222,22 @@ void sendRfCommand(struct RfCodes rfcode, bool hideDefaultUI) {
     }
 
     // init transmitter
-    if (!initRfModule("", frequency / 1000000.0)) return;
+    if (!initRfModule("tx", frequency / 1000000.0, false)) return;
     if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) { // CC1101 in use
-        // derived from
-        // https://github.com/LSatan/SmartRC-CC1101-Driver-Lib/blob/master/examples/Rc-Switch%20examples%20cc1101/SendDemo_cc1101/SendDemo_cc1101.ino
-        ELECHOUSE_cc1101.setModulation(modulation);
-        if (deviation) ELECHOUSE_cc1101.setDeviation(deviation);
-        if (rxBW)
-            ELECHOUSE_cc1101.setRxBW(
-                rxBW
-            ); // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
-        if (dataRate) ELECHOUSE_cc1101.setDRate(dataRate);
+        if (deviation) cc1101.setFrequencyDeviation(deviation);
+        if (rxBW) cc1101.setRxBandwidth(rxBW);
+        if (dataRate) cc1101.setBitRate(dataRate);
         pinMode(bruceConfigPins.CC1101_bus.io0, OUTPUT);
-        ELECHOUSE_cc1101.setPA(
-            12
-        ); // set TxPower. The following settings are possible depending on the frequency band.  (-30  -20 -15
-        // -10  -6    0    5    7    10   11   12)   Default is max!
+        cc1101.setOutputPower(10);
         ioExpander.turnPinOnOff(IO_EXP_CC_RX, LOW);
         ioExpander.turnPinOnOff(IO_EXP_CC_TX, HIGH);
-        ELECHOUSE_cc1101.SetTx();
+        cc1101.mod->setRfSwitchState(Module::MODE_TX);
+        int16_t directState = cc1101.transmitDirectAsync();
+        if (directState != RADIOLIB_ERR_NONE) {
+            Serial.printf("cc1101 direct TX failed: %d\n", directState);
+            displayError("CC1101 TX failed!", true);
+            return;
+        }
     } else {
         // other single-pinned modules in use
         if (modulation != 2) {
@@ -248,7 +245,6 @@ void sendRfCommand(struct RfCodes rfcode, bool hideDefaultUI) {
             Serial.println(modulation);
             return;
         }
-        initRfModule("tx", frequency / 1000000.0);
     }
 
     if (protocol == "RAW") {

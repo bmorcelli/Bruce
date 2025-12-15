@@ -10,12 +10,12 @@ void rf_waterfall() {
         displayError("Waterfall needs a CC1101!", true);
         return;
     }
-    if (!initRfModule("rx", m_rf_waterfall_start_freq)) {
+    // RSSI-only sweep: keep CC1101 out of direct mode so frequency hopping stays stable
+    if (!initRfModule("rx", m_rf_waterfall_start_freq, false)) {
         displayError("CC1101 not found!", true);
         return;
     }
-
-    ELECHOUSE_cc1101.setRxBW(200);
+    cc1101.setRxBandwidth(232);
 
 select:
 
@@ -136,8 +136,9 @@ void rf_waterfall_run() {
                 delayMicroseconds(150); // T-Embed case, need more time to process
             } else delayMicroseconds(100);
 
-            int i_rssi = ELECHOUSE_cc1101.getRssi();
-            // To make sure CC1101 shared with TFT works properly on T-Embed
+            int i_rssi = cc1101.getRSSI();
+            // int i_rssi = ELECHOUSE_cc1101.getRssi();
+            //  To make sure CC1101 shared with TFT works properly on T-Embed
             if (bruceConfigPins.CC1101_bus.mosi == TFT_MOSI) tft.drawPixel(0, 0, 0);
             if (i_rssi > temp_max_rssi) {
                 temp_max_rssi = i_rssi;

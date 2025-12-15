@@ -93,7 +93,7 @@ bool RFScan::fast_scan() {
     setMHZ(checkFrequency);
     tft.drawPixel(0, 0, 0); // To make sure CC1101 shared with TFT works properly
     vTaskDelay(5 / portTICK_PERIOD_MS);
-    rssi = ELECHOUSE_cc1101.getRssi();
+    rssi = cc1101.getRSSI();
     if (rssi > rssiThreshold) {
         _freqs[_try].freq = checkFrequency;
         _freqs[_try].rssi = rssi;
@@ -293,7 +293,7 @@ void RFScan::set_option(RFMenuOption option) {
         case SAVE:
         case SAVE_RAW: save_signal(option == SAVE_RAW); break;
 
-        case RANGE: set_range(); break;
+        case RANGE: rf_range_selection(); break; // using function from rf_utils, outside class
         case RESET: reset_signals(); break;
         case THRESHOLD: set_threshold(); break;
 
@@ -342,39 +342,6 @@ void RFScan::set_threshold() {
         {"(-80) Less Accurate", [&]() { rssiThreshold = -80; }},
     };
     loopOptions(options);
-}
-
-void RFScan::set_range() {
-    bool chooseFixedOpt = false;
-
-    options = {
-        {String("Fxd [" + String(bruceConfigPins.rfFreq) + "]").c_str(),
-         [=]() { bruceConfigPins.setRfScanRange(bruceConfigPins.rfScanRange, 1); }                                   },
-        {"Choose Fxd",                                                   [&]() { chooseFixedOpt = true; }            },
-        {subghz_frequency_ranges[0],                                     [=]() { bruceConfigPins.setRfScanRange(0); }},
-        {subghz_frequency_ranges[1],                                     [=]() { bruceConfigPins.setRfScanRange(1); }},
-        {subghz_frequency_ranges[2],                                     [=]() { bruceConfigPins.setRfScanRange(2); }},
-        {subghz_frequency_ranges[3],                                     [=]() { bruceConfigPins.setRfScanRange(3); }},
-    };
-
-    loopOptions(options);
-
-    if (chooseFixedOpt) { // Range
-        options.clear();
-        int ind = 0;
-        int arraySize = sizeof(subghz_frequency_list) / sizeof(subghz_frequency_list[0]);
-        for (int i = 0; i < arraySize; i++) {
-            String tmp = String(subghz_frequency_list[i], 2) + "Mhz";
-            options.emplace_back(tmp.c_str(), [=]() { bruceConfigPins.rfFreq = subghz_frequency_list[i]; });
-            if (int(frequency * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
-        }
-        loopOptions(options, ind);
-        options.clear();
-        bruceConfigPins.setRfScanRange(bruceConfigPins.rfScanRange, 1);
-    }
-
-    if (bruceConfigPins.rfFxdFreq) displayTextLine("Scan freq set to " + String(bruceConfigPins.rfFreq));
-    else displayTextLine("Range set to " + String(subghz_frequency_ranges[bruceConfigPins.rfScanRange]));
 }
 
 void display_info(RfCodes received, int signals, bool ReadRAW, bool codesOnly, bool autoSave, String title) {
@@ -510,15 +477,13 @@ bool RCSwitch_SaveSignal(float frequency, RfCodes codes, bool raw, char *key, bo
 }
 
 String rf_scan(float start_freq, float stop_freq, int max_loops) {
-    // derived from https://github.com/mcore1976/cc1101-tool/blob/main/cc1101-tool-esp32.ino#L480
-
     if (bruceConfigPins.rfModule != CC1101_SPI_MODULE) {
         displayError("rf scanning is available with CC1101 only", true);
         return ""; // only CC1101 is supported for this
     }
     if (!initRfModule("rx", start_freq)) return "";
 
-    ELECHOUSE_cc1101.setRxBW(256);
+    cc1101.setRxBandwidth(232);
 
     float settingf1 = start_freq;
     float settingf2 = stop_freq;
@@ -535,7 +500,8 @@ String rf_scan(float start_freq, float stop_freq, int max_loops) {
 
         setMHZ(freq);
 
-        rssi = ELECHOUSE_cc1101.getRssi();
+        // rssi = ELECHOUSE_cc1101.getRssi();
+        rssi = cc1101.getRSSI();
         if (rssi > -75) {
             if (rssi > mark_rssi) {
                 mark_rssi = rssi;

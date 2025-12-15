@@ -10,7 +10,7 @@
 #include "sd_functions.h"
 #include "settingsColor.h"
 #include "utils.h"
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+// #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <globals.h>
 
 int currentScreenBrightness = -1;

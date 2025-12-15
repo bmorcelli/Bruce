@@ -57,9 +57,8 @@ void rf_listen() {
         return;
     }
 
-    ELECHOUSE_cc1101.setRxBW(58);
-    ELECHOUSE_cc1101.setModulation(2);
-    ELECHOUSE_cc1101.setDcFilterOff(true);
+    cc1101.setRxBandwidth(102);
+    cc1101.setOOK(true);
     attachInterrupt(digitalPinToInterrupt(bruceConfigPins.CC1101_bus.io0), onPulse, CHANGE);
     displayRedStripe("Listening...", getComplementaryColor2(bruceConfig.priColor), bruceConfig.priColor);
 
@@ -92,6 +91,7 @@ void rf_listen() {
 
         if (check(EscPress)) break;
         if (check(SelPress)) break;
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 
     detachInterrupt(digitalPinToInterrupt(bruceConfigPins.CC1101_bus.io0));

@@ -216,8 +216,8 @@ void powerDownNFC() {
 
 void powerDownCC1101() {
     if (!initRfModule("rx", bruceConfigPins.rfFreq)) { Serial.println("Can't init CC1101"); }
-
-    ELECHOUSE_cc1101.goSleep();
+    cc1101.sleep();
+    // ELECHOUSE_cc1101.goSleep();
 }
 
 void checkReboot() {

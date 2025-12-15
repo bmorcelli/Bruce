@@ -1,6 +1,10 @@
 #include "rf_utils.h"
 #include "core/settings.h"
 
+CC1101 cc1101 = new Module(
+    (uint32_t)bruceConfigPins.CC1101_bus.cs, (uint32_t)bruceConfigPins.CC1101_bus.io0, RADIOLIB_NC,
+    RADIOLIB_NC, CC_NRF_SPI
+);
 // CRC-64-ECMA constants
 const uint64_t CRC64_ECMA_POLY = 0x42F0E1EBA9EA3693; // Polynomial for CRC-64-ECMA
 const uint64_t CRC64_ECMA_INIT = 0xFFFFFFFFFFFFFFFF; // Initial value
@@ -82,7 +86,11 @@ int recent_rfcodes_last_used = 0; // TODO: save/load in EEPROM
 bool rmtInstalled = true;
 static bool cc1101_spi_ready = false;
 
-bool initRfModule(String mode, float frequency) {
+static float mapFloat(float x, float in_min, float in_max, float out_min, float out_max) {
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+bool initRfModule(String mode, float frequency, bool startDirect) {
 
     // use default frequency if no one is passed
     if (!frequency) frequency = bruceConfigPins.rfFreq;
@@ -91,14 +99,14 @@ bool initRfModule(String mode, float frequency) {
         if (bruceConfigPins.CC1101_bus.mosi == (gpio_num_t)TFT_MOSI &&
             bruceConfigPins.CC1101_bus.mosi != GPIO_NUM_NC) { // (T_EMBED), CORE2 and others
 #if TFT_MOSI > 0
-            initCC1101once(&tft.getSPIinstance());
+            set_RF_SPI_Bus(&tft.getSPIinstance());
 #else
             yield();
 #endif
         } else if (bruceConfigPins.CC1101_bus.mosi ==
                    bruceConfigPins.SDCARD_bus.mosi) { // (CARDPUTER) and (ESP32S3DEVKITC1) and devices that
                                                       // share CC1101 pin with only SDCard
-            initCC1101once(&sdcardSPI);
+            set_RF_SPI_Bus(&sdcardSPI);
         } else if (bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.CC1101_bus.mosi &&
                    bruceConfigPins.CC1101_bus.mosi !=
                        bruceConfigPins.SDCARD_bus
@@ -109,29 +117,13 @@ bool initRfModule(String mode, float frequency) {
                 bruceConfigPins.CC1101_bus.miso,
                 bruceConfigPins.CC1101_bus.mosi
             );
-            initCC1101once(&CC_NRF_SPI);
+            set_RF_SPI_Bus(&CC_NRF_SPI);
         } else {
             // (STICK_C_PLUS) || (STICK_C_PLUS2) and others that doesn´t share SPI with other devices (need to
             // change it when Bruce board comes to shore)
             // make sure to use BeginEndLogic for StickCs in the shared pins (not bus) config
-            ELECHOUSE_cc1101.setBeginEndLogic(true);
-            initCC1101once(NULL);
+            set_RF_SPI_Bus(NULL);
         }
-        ELECHOUSE_cc1101.Init();
-        if (ELECHOUSE_cc1101.getCC1101()) { // Check the CC1101 Spi connection.
-            Serial.println("cc1101 Connection OK");
-        } else {
-            displayError("CC1101 not found");
-            Serial.println("cc1101 Connection Error");
-            return false;
-        }
-
-        // make sure it is in idle state when changing frequency and other parameters
-        // "If any frequency programming register is altered when the frequency synthesizer is running, the
-        // synthesizer may give an undesired response. Hence, the frequency programming should only be updated
-        // when the radio is in the IDLE state." https://github.com/LSatan/SmartRC-CC1101-Driver-Lib/issues/65
-        // ELECHOUSE_cc1101.setSidle();
-        // Serial.println("cc1101 setSidle();");
 
         if (!((frequency >= 280 && frequency <= 350) || (frequency >= 387 && frequency <= 468) ||
               (frequency >= 779 && frequency <= 928))) {
@@ -139,40 +131,70 @@ bool initRfModule(String mode, float frequency) {
             frequency = 433.92;
             displayWarning("Wrong freq, set to 433.92", true);
         }
-        // else
-        // ELECHOUSE_cc1101.setRxBW(812.50);  // reset to default
-        ELECHOUSE_cc1101.setRxBW(256);      // narrow band for better accuracy
-        ELECHOUSE_cc1101.setClb(1, 13, 15); // Calibration Offset
-        ELECHOUSE_cc1101.setClb(2, 16, 19); // Calibration Offset
-        // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-        ELECHOUSE_cc1101.setModulation(2);
-        // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-        ELECHOUSE_cc1101.setDRate(50);
-        // Format of RX and TX data.
-        //   0 = Normal mode, use FIFOs for RX and TX.
-        //   1 = Synchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins.
-        //   2 = Random TX mode; sends random data using PN9 generator. Used for test. Works as normal mode,
-        // setting 0 (00), in RX.
-        //.  3 = Asynchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins.
-        ELECHOUSE_cc1101.setPktFormat(3);
+        int err_code = cc1101.begin(
+            frequency, /*br*/ 50.0f, /*freqDev*/ 10.0f, /*rxBw*/ 232.0f, /*pwr*/ 10, /*preambleLenght*/ 16
+        );
+        if (err_code == RADIOLIB_ERR_NONE) { // Check the CC1101 Spi connection.
+            Serial.println("cc1101 Connection OK");
+        } else {
+            displayError("CC1101 not found");
+            Serial.printf("cc1101 Connection Error: %d", err_code);
+            return false;
+        }
+        // Apply baseline register setup similar to ELECHOUSE RegConfigSettings
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCTRL1, 0x06);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_MDMCFG1, 0x02);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_MDMCFG0, 0xF8);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_CHANNR, 0x00);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_DEVIATN, 0x47);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FREND1, 0x56);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_MCSM0, 0x18);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FOCCFG, 0x16);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_BSCFG, 0x1C);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_AGCCTRL2, 0xC7); // 07 long range, big noise
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_AGCCTRL1, 0x00);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL3, 0xE9);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL2, 0x2A);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL1, 0x00);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL0, 0x1F);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSTEST, 0x59);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST2, 0x81);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST1, 0x35);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x09);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_PKTCTRL1, 0x04);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_ADDR, 0x00);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_PKTLEN, 0x00);
+
+        cc1101.setOOK(true);      // Enables ASK/OOK modulation
+        cc1101.directMode(false); // in asyncronous mode
         setMHZ(frequency);
-        Serial.println("cc1101 setMHZ(frequency);");
 
         /* MEMO: cannot change other params after this is executed */
+        // remove GDO0 from RadioLib interruption, we don't use it
+        detachInterrupt(bruceConfigPins.CC1101_bus.io0);
         if (mode == "tx") {
             ioExpander.turnPinOnOff(IO_EXP_CC_RX, LOW);
             ioExpander.turnPinOnOff(IO_EXP_CC_TX, HIGH);
             pinMode(bruceConfigPins.CC1101_bus.io0, OUTPUT);
-            ELECHOUSE_cc1101.setPA(12); // set TxPower. The following settings are possible depending
-            Serial.println("cc1101 setPA();");
-            ELECHOUSE_cc1101.SetTx();
-            Serial.println("cc1101 SetTx();");
+            if (startDirect) {
+                int16_t directState = cc1101.transmitDirectAsync();
+                if (directState != RADIOLIB_ERR_NONE) {
+                    Serial.printf("cc1101 direct TX failed: %d\n", directState);
+                    return false;
+                }
+            }
         } else if (mode == "rx") {
             ioExpander.turnPinOnOff(IO_EXP_CC_RX, HIGH);
             ioExpander.turnPinOnOff(IO_EXP_CC_TX, LOW);
             pinMode(bruceConfigPins.CC1101_bus.io0, INPUT);
-            ELECHOUSE_cc1101.SetRx();
-            Serial.println("cc1101 SetRx();");
+            cc1101.mod->setRfSwitchState(Module::MODE_RX);
+            if (startDirect) {
+                int16_t directState = cc1101.receiveDirectAsync(); // async = raw demodulated signal on GDO0
+                if (directState != RADIOLIB_ERR_NONE) {
+                    Serial.printf("cc1101 direct RX failed: %d\n", directState);
+                    return false;
+                }
+            }
         }
         // else if mode is unspecified wont start TX/RX mode here -> done by the caller
         cc1101_spi_ready = true;
@@ -205,7 +227,7 @@ bool initRfModule(String mode, float frequency) {
 void deinitRfModule() {
     if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
         if (cc1101_spi_ready) {
-            ELECHOUSE_cc1101.setSidle();
+            cc1101.sleep();
             cc1101_spi_ready = false;
         }
         digitalWrite(bruceConfigPins.CC1101_bus.io0, LOW);
@@ -215,22 +237,30 @@ void deinitRfModule() {
     } else digitalWrite(bruceConfigPins.rfTx, LED_OFF);
 }
 
-void initCC1101once(SPIClass *SSPI) {
-    // the init (); command may only be executed once in the entire program sequence. Otherwise problems can
-    // arise.  https://github.com/LSatan/SmartRC-CC1101-Driver-Lib/issues/65
-
-    // derived from
-    // https://github.com/LSatan/SmartRC-CC1101-Driver-Lib/blob/master/examples/Rc-Switch%20examples%20cc1101/ReceiveDemo_Advanced_cc1101/ReceiveDemo_Advanced_cc1101.ino
-    if (SSPI != NULL) ELECHOUSE_cc1101.setSPIinstance(SSPI); // New, to use the SPI instance we want.
-    else ELECHOUSE_cc1101.setSPIinstance(nullptr);
-    ELECHOUSE_cc1101.setSpiPin(
-        bruceConfigPins.CC1101_bus.sck,
-        bruceConfigPins.CC1101_bus.miso,
-        bruceConfigPins.CC1101_bus.mosi,
-        bruceConfigPins.CC1101_bus.cs
-    );
-    ELECHOUSE_cc1101.setGDO0(bruceConfigPins.CC1101_bus.io0); // use Gdo0 for both Tx and Rx
-
+void set_RF_SPI_Bus(SPIClass *SSPI) {
+    if (SSPI != NULL) {
+        cc1101 = new Module(
+            (uint32_t)bruceConfigPins.CC1101_bus.cs,
+            (uint32_t)bruceConfigPins.CC1101_bus.io0,
+            RADIOLIB_NC,
+            RADIOLIB_NC,
+            *SSPI
+        );
+    } else {
+        CC_NRF_SPI.begin(
+            bruceConfigPins.CC1101_bus.sck,
+            bruceConfigPins.CC1101_bus.miso,
+            bruceConfigPins.CC1101_bus.mosi,
+            bruceConfigPins.CC1101_bus.cs
+        );
+        cc1101 = new Module(
+            (uint32_t)bruceConfigPins.CC1101_bus.cs,
+            (uint32_t)bruceConfigPins.CC1101_bus.io0,
+            RADIOLIB_NC,
+            RADIOLIB_NC,
+            CC_NRF_SPI
+        );
+    }
     return;
 }
 
@@ -239,39 +269,89 @@ void setMHZ(float frequency) {
         frequency = 433.92;
         Serial.println("Frequency out of band");
     }
-    if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
+    if (bruceConfigPins.rfModule != CC1101_SPI_MODULE) return;
+
 #if defined(T_EMBED)
-        static uint8_t antenna =
-            200; // 0=(<300), 1=(350-468), 2=(>778), 200=start to settle at the fisrt time
-        bool change = true;
+    static uint8_t antenna = 200; // 0=(<300), 1=(350-468), 2=(>778), 200=start to settle at the fisrt time
+    bool change = true;
 #if !defined(T_EMBED_1101)
-        // there's one version of T-Embed (White whith orange wheel) that has CC1101
-        // which antenna has the same circuit as the new CC1101 version with different pinouts
-        // this device uses 17 for CS
-        if (bruceConfigPins.CC1101_bus.cs != 17) change = false;
+    // there's one version of T-Embed (White whith orange wheel) that has CC1101
+    // which antenna has the same circuit as the new CC1101 version with different pinouts
+    // this device uses 17 for CS
+    if (bruceConfigPins.CC1101_bus.cs != 17) change = false;
 #endif
 
-        // SW1:1  SW0:0 --- 315MHz
-        // SW1:0  SW0:1 --- 868/915MHz
-        // SW1:1  SW0:1 --- 434MHz
-        if (frequency <= 350 && antenna != 0 && change) {
-            digitalWrite(CC1101_SW1_PIN, HIGH);
-            digitalWrite(CC1101_SW0_PIN, LOW);
-            antenna = 0;
-            vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
-        } else if (frequency > 350 && frequency < 468 && antenna != 1 && change) {
-            digitalWrite(CC1101_SW1_PIN, HIGH);
-            digitalWrite(CC1101_SW0_PIN, HIGH);
-            antenna = 1;
-            vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
-        } else if (frequency > 778 && antenna != 2 && change) {
-            digitalWrite(CC1101_SW1_PIN, LOW);
-            digitalWrite(CC1101_SW0_PIN, HIGH);
-            antenna = 2;
-            vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
-        }
+    // SW1:1  SW0:0 --- 315MHz
+    // SW1:0  SW0:1 --- 868/915MHz
+    // SW1:1  SW0:1 --- 434MHz
+    if (frequency <= 350 && antenna != 0 && change) {
+        digitalWrite(CC1101_SW1_PIN, HIGH);
+        digitalWrite(CC1101_SW0_PIN, LOW);
+        antenna = 0;
+        vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
+    } else if (frequency > 350 && frequency < 468 && antenna != 1 && change) {
+        digitalWrite(CC1101_SW1_PIN, HIGH);
+        digitalWrite(CC1101_SW0_PIN, HIGH);
+        antenna = 1;
+        vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
+    } else if (frequency > 778 && antenna != 2 && change) {
+        digitalWrite(CC1101_SW1_PIN, LOW);
+        digitalWrite(CC1101_SW0_PIN, HIGH);
+        antenna = 2;
+        vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
+    }
 #endif
-        ELECHOUSE_cc1101.setMHZ(frequency);
+    // Compute and write freq registers exactly like ELECHOUSE setMHZ
+    // Different from RadioLib, do not set to Idle!
+    // set carrier frequency
+    static uint8_t last_pa = 0;
+    uint32_t base = 1;
+    uint32_t FRF = (frequency * (base << 16)) / 26.0f;
+    cc1101.SPIsetRegValue(RADIOLIB_CC1101_REG_FREQ2, (FRF & 0xFF0000) >> 16, 7, 0);
+    cc1101.SPIsetRegValue(RADIOLIB_CC1101_REG_FREQ1, (FRF & 0x00FF00) >> 8, 7, 0);
+    cc1101.SPIsetRegValue(RADIOLIB_CC1101_REG_FREQ0, FRF & 0x0000FF, 7, 0);
+
+    // Calibrate steps emulating ELECHOUSE Calibrate()
+    if (frequency >= 280 && frequency <= 348) {
+        uint8_t fsctrl0 = (uint8_t)mapFloat(frequency, 280, 348, 24, 28);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCTRL0, fsctrl0);
+        if (frequency < 322.88f) {
+            cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x0B);
+        } else {
+            cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x09);
+            int s = cc1101.SPIgetRegValue(RADIOLIB_CC1101_REG_FSCAL2);
+            if (s < 32) cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL2, s + 32);
+        }
+        if (last_pa != 1) cc1101.setOutputPower(10);
+        last_pa = 1;
+    } else if (frequency >= 378 && frequency <= 464) {
+        uint8_t fsctrl0 = (uint8_t)mapFloat(frequency, 378, 464, 31, 38);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCTRL0, fsctrl0);
+        if (frequency < 430.5f) {
+            cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x0B);
+        } else {
+            cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x09);
+            int s = cc1101.SPIgetRegValue(RADIOLIB_CC1101_REG_FSCAL2);
+            if (s < 32) cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL2, s + 32);
+        }
+        if (last_pa != 2) cc1101.setOutputPower(10);
+        last_pa = 2;
+    } else if (frequency >= 779 && frequency <= 899) {
+        uint8_t fsctrl0 = (uint8_t)mapFloat(frequency, 779, 899, 65, 76);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCTRL0, fsctrl0);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x09);
+        int s = cc1101.SPIgetRegValue(RADIOLIB_CC1101_REG_FSCAL2);
+        if (s < 32) cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL2, s + 32);
+        if (last_pa != 3) cc1101.setOutputPower(10);
+        last_pa = 3;
+    } else if (frequency >= 900 && frequency <= 928) {
+        uint8_t fsctrl0 = (uint8_t)mapFloat(frequency, 900, 928, 77, 79);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCTRL0, fsctrl0);
+        cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_TEST0, 0x09);
+        int s = cc1101.SPIgetRegValue(RADIOLIB_CC1101_REG_FSCAL2);
+        if (s < 32) cc1101.SPIwriteRegister(RADIOLIB_CC1101_REG_FSCAL2, s + 32);
+        if (last_pa != 4) cc1101.setOutputPower(10);
+        last_pa = 4;
     }
 }
 
@@ -342,8 +422,11 @@ struct RfCodes selectRecentRfMenu() {
     return selected_code;
 }
 rmt_channel_handle_t setup_rf_rx() {
+    // delay starting raw direct mode until the RMT channel is ready
     if (!initRfModule("rx", bruceConfigPins.rfFreq)) return NULL;
     setMHZ(bruceConfigPins.rfFreq);
+    // remove GDO0 from RadioLib interruption, we don't use it
+    if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) detachInterrupt(bruceConfigPins.CC1101_bus.io0);
     rmt_rx_channel_config_t rx_channel_cfg = {};
     rx_channel_cfg.gpio_num = bruceConfigPins.rfModule == CC1101_SPI_MODULE
                                   ? gpio_num_t(bruceConfigPins.CC1101_bus.io0)
@@ -379,4 +462,39 @@ bool setMHZMenu() {
         return true;
     }
     return false;
+}
+
+void rf_range_selection(float currentFrequency) {
+    int option = 0;
+    options = {
+        {String("Fixed [" + String(bruceConfigPins.rfFreq) + "]").c_str(),
+         [=]() { bruceConfigPins.setRfFreq(bruceConfigPins.rfFreq, 2); }                                               },
+        {String("Choose Fixed").c_str(),                                   [&]() { option = 1; }                       },
+        {subghz_frequency_ranges[0],                                       [=]() { bruceConfigPins.setRfScanRange(0); }},
+        {subghz_frequency_ranges[1],                                       [=]() { bruceConfigPins.setRfScanRange(1); }},
+        {subghz_frequency_ranges[2],                                       [=]() { bruceConfigPins.setRfScanRange(2); }},
+        {subghz_frequency_ranges[3],                                       [=]() { bruceConfigPins.setRfScanRange(3); }},
+    };
+
+    loopOptions(options);
+    options.clear();
+
+    if (option == 1) { // Fixed Frequency Selector
+        options = {};
+        int ind = 0;
+        int arraySize = sizeof(subghz_frequency_list) / sizeof(subghz_frequency_list[0]);
+        for (int i = 0; i < arraySize; i++) {
+            if (subghz_frequency_list[i] - bruceConfigPins.rfFreq < 0.1) ind = i;
+            String tmp = String(subghz_frequency_list[i], 2) + "Mhz";
+            options.push_back({tmp.c_str(), [=]() {
+                                   bruceConfigPins.setRfFreq(subghz_frequency_list[i], 2);
+                               }});
+            if (int(currentFrequency * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
+        }
+        loopOptions(options, ind);
+        options.clear();
+    }
+
+    if (bruceConfigPins.rfFxdFreq) displayTextLine("Scan freq set to " + String(bruceConfigPins.rfFreq));
+    else displayTextLine("Range set to " + String(subghz_frequency_ranges[bruceConfigPins.rfScanRange]));
 }
