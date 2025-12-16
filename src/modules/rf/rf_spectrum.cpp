@@ -2,6 +2,7 @@
 #include "rf_utils.h"
 #include "structs.h"
 #include <RCSwitch.h>
+#include <vector>
 
 static bool spectrum_rmt_rx_done_callback(
     rmt_channel_t *channel, const rmt_rx_done_event_data_t *edata, void *user_data
@@ -152,8 +153,9 @@ void rf_CC1101_rssi() {
     }
     if (!initRfModule("rx", bruceConfigPins.rfFreq)) return;
     int graph_size = tftWidth - 20;
-    int signal[graph_size];
-    int bar_size[sizeof(subghz_frequency_list) / sizeof(float)];
+    std::vector<int> signal(graph_size, -95);
+    const size_t freq_count = sizeof(subghz_frequency_list) / sizeof(float);
+    std::vector<int> bar_size(freq_count, 0);
     int max_bar_size = tftHeight - 20 /*bottom margin*/ - 20 /*top margin*/;
     bool redraw = true;
     const int min_value = map(-70, -95, -20, 0, max_bar_size);
@@ -176,7 +178,7 @@ void rf_CC1101_rssi() {
                 tft.drawString("-35", 0, (tftHeight - 120) + 35);
                 tft.drawString("-20", 0, (tftHeight - 120) + 20);
                 // resets signal array
-                memset(signal, -95, sizeof(signal));
+                std::fill(signal.begin(), signal.end(), -95);
             }
             // Range Scan Sees a bargraph simillar to NRF24 grafic, using RSSI across frequencies
             else {
@@ -195,7 +197,7 @@ void rf_CC1101_rssi() {
                 for (int i = 0; i < range; i++) {
                     tft.drawFastVLine(space * i, tftHeight - 20, 5, bruceConfig.priColor);
                 }
-                memset(bar_size, 0, sizeof(bar_size));
+                std::fill(bar_size.begin(), bar_size.end(), 0);
             }
         }
 

@@ -202,7 +202,7 @@ bool copyToFs(FS from, FS to, String path, bool draw) {
         return false;
     }
     const int bufSize = 1024;
-    uint8_t buff[1024] = {0};
+    static uint8_t buff[bufSize] = {0}; // static to keep this buffer off the task stack
     // tft.drawRect(5,tftHeight-12, (tftWidth-10), 9, bruceConfig.priColor);
     while ((bytesRead = source.read(buff, bufSize)) > 0) {
         if (dest.write(buff, bytesRead) != bytesRead) {
