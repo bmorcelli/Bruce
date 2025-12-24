@@ -16326,7 +16326,7 @@ const version = "dev";
 
 console.log(`ESP Web Tools ${version} by Open Home Foundation; https://esphome.github.io/esp-web-tools/`);
 const ERROR_ICON = "⚠️";
-const OK_ICON = "🎉";
+const OK_ICON = "🦈🎉";
 class EwtInstallDialog extends i$2 {
   constructor() {
     super(...arguments);

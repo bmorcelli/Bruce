@@ -46,7 +46,7 @@ console.log(
 );
 
 const ERROR_ICON = "⚠️";
-const OK_ICON = "🎉";
+const OK_ICON = "🦈🎉";
 
 export class EwtInstallDialog extends LitElement {
   public port!: SerialPort;

@@ -26,7 +26,7 @@ import { dialogStyles } from "./styles";
 import { version } from "./version";
 console.log(`ESP Web Tools ${version} by Open Home Foundation; https://esphome.github.io/esp-web-tools/`);
 const ERROR_ICON = "⚠️";
-const OK_ICON = "🎉";
+const OK_ICON = "🦈🎉";
 export class EwtInstallDialog extends LitElement {
     constructor() {
         super(...arguments);
