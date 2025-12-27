@@ -74,7 +74,14 @@ bool setupSdCard() {
             (int8_t)bruceConfigPins.SDCARD_bus.cs
         ); // start SPI communications
         delay(10);
-        if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs, sdcardSPI)) result = false;
+        if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs, sdcardSPI)) {
+            result = false;
+#if defined(ARDUINO_M5STICK_C_PLUS) || defined(ARDUINO_M5STICK_C_PLUS2)
+            // If using Shared SPI, do not stop the bus if SDCard is not present
+            // If using Legacy, release the pins from this SPI Bus
+            if (bruceConfigPins.SDCARD_bus.miso != bruceConfigPins.CC1101_bus.miso) sdcardSPI.end();
+#endif
+        }
         Serial.println("SDCard in a different Bus, using sdcardSPI instance");
     }
 #endif
@@ -896,7 +903,8 @@ bool checkLittleFsSizeNM() { return (LittleFS.totalBytes() - LittleFS.usedBytes(
 **  and LittleFS otherwise. If LittleFS is full it wil return false.
 **********************************************************************/
 bool getFsStorage(FS *&fs) {
-    if (setupSdCard()) fs = &SD;
+    // don't try to mount SD Card if not previously mounted
+    if (sdcardMounted) fs = &SD;
     else if (checkLittleFsSize()) fs = &LittleFS;
     else return false;
 

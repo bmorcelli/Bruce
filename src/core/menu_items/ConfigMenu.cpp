@@ -53,7 +53,11 @@ void ConfigMenu::optionsMenu() {
         {"BadUSB/BLE", setBadUSBBLEMenu},
         {"Clock", setClock},
         {"Sleep", setSleepMode},
-        {"Factory Reset", [=]() { bruceConfig.factoryReset(); }},
+        {"Factory Reset",
+         [=]() {
+             bruceConfigPins.factoryReset(); // this one doesnt restart ESP
+             bruceConfig.factoryReset();     // after this one, it restarts
+         }},
         {"Restart", [=]() { ESP.restart(); }},
     };
 
