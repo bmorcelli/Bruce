@@ -91,14 +91,15 @@ void ARPScanner::readArpTableETH(netif *iface) {
 bool wait_ping = true;
 
 static void ping_cb(esp_ping_handle_t hdl, void *args) {
-    Serial.println("Ping done");
+    // Turn on just for debug
+    //Serial.println("Ping done");
     wait_ping = false;
     esp_ping_stop(hdl);
     esp_ping_delete_session(hdl);
 }
 
 static void ping_cb_fail(esp_ping_handle_t hdl, void *args) {
-    Serial.println("Ping Fail");
+    //Serial.println("Ping Fail");
     wait_ping = false;
     esp_ping_stop(hdl);
     esp_ping_delete_session(hdl);
@@ -129,6 +130,7 @@ void ARPScanner::setup() {
     LOCK_TCPIP_CORE();
     hostslist_eth.clear();
 
+    options.clear();
     // IPAddress uint32_t op returns number in big-endian
     // for simplicity of iteration and arithmetics convert to little-endian
 
@@ -235,13 +237,6 @@ ScanHostMenu:
         return;
     }
 
-    options = {
-#if !defined(LITE_VERSION)
-        {"ARP Poisoning",   [this]() { ARPoisoner{gateway}; }},
-        {"DHCP Starvation", [=]() { DHCPStarvation(); }      },
-        {"MAC Flooding",    [=]() { MACFlooding(); }         },
-#endif
-    };
     for (auto host : hostslist_eth) {
         Serial.println(host.ip.toString());
         String result = host.ip.toString();
@@ -321,7 +316,11 @@ void ARPScanner::afterScanOptions(const Host &host) {
                  ESP_LOGE("MAC Address", "Failed to get MAC address: %s", esp_err_to_name(err));
              }
          }},
+#if !defined(LITE_VERSION)
         {"ARP Poisoning", [this]() { ARPoisoner{gateway}; }},
+        {"DHCP Starvation", [=]() { DHCPStarvation(); }      },
+        {"MAC Flooding",    [=]() { MACFlooding(); }         },
+#endif
     };
     // if(sdcardMounted && bruceConfig.devMode) options.push_back({"ARP MITM (WIP)",  [&](){ opt=5;  }});
     loopOptions(options);

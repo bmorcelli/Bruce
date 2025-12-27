@@ -7,6 +7,7 @@
 #include "esp_netif_net_stack.h"
 #include "modules/wifi/tcp_utils.h"
 #include "modules/wifi/sniffer.h"
+//#include "modules/wifi/responder.h"
 
 uint32_t wifiCallback(cmd *c) {
     Command cmd(c);
@@ -90,6 +91,16 @@ uint32_t listenTCPCallback(cmd *c) {
     return true;
 }
 
+/*
+uint32_t responderCallback(cmd *c) {
+    if (!wifiConnected) Serial.println("Connect to a WiFi first."); return false;
+
+    responder();
+
+    return true;
+}
+*/
+
 void createWifiCommands(SimpleCLI *cli) {
     Command webuiCmd = cli->addCommand("webui", webuiCallback);
     webuiCmd.addFlagArg("noAp");
@@ -99,9 +110,14 @@ void createWifiCommands(SimpleCLI *cli) {
     wifiCmd.addPosArg("ssid", "");
     wifiCmd.addPosArg("pwd", "");
 
-    Command ScanHostsCmd = cli->addCommand("scanhosts", scanHostsCallback);
+    #if !defined(LITE_VERSION)
+
+    Command ScanHostsCmd = cli->addCommand("arp", scanHostsCallback);
 
     Command listenTCPCmd = cli->addCommand("listen", listenTCPCallback); //TODO: make possible to select port to open via Serial
     
     Command snifferCmd = cli->addCommand("sniffer", snifferCallback); //TODO: be able to exit from it from Serial
+    
+    #endif
+    //Command responderCmd = cli->addCommand("responder", responderCallback); TODO
 }
