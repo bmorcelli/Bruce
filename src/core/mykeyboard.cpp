@@ -438,11 +438,9 @@ String generalKeyboard(
 
     tft.fillScreen(bruceConfig.bgColor); // reset the screen
 
-#if defined(HAS_3_BUTTONS) // StickCs and Core for long press detection logic
     uint8_t longNextPress = 0;
     uint8_t longPrevPress = 0;
     unsigned long LongPressTmp = millis();
-#endif
 
     // main loop
     while (1) {
@@ -630,324 +628,327 @@ String generalKeyboard(
             cursor_y = KBLH + LH + 6;
             cursor_x = 5 + current_text.length() * LW * FM;
         }
+        // Prioritize Serial Input for navigation
+        if (SerialCmdPress) { // only for Remote Control, if no type of input was detected on device
+            if (check(SelPress)) {
+                selection_made = true;
+            }
+            /* Next-Prev Btns to move in X axis (right-left) */
+            else if (check(NextPress)) {
+                NextPress = false;
+                longNextPress = false;
+                x++;
+                if ((y < 0 && x >= buttons_number) || x >= KeyboardWidth) x = 0;
+                redraw = true;
+            }
+            /* Down-Up Btns to move in Y axis */
+            else if (check(PrevPress)) {
+                PrevPress = false;
+                longPrevPress = false;
+                x--;
+                if (y < 0 && x >= buttons_number) x = buttons_number - 1;
+                else if (x < 0) x = KeyboardWidth - 1;
+                redraw = true;
+            }
+            /* Down-Up Btns to move in Y axis */
+            else if (check(DownPress)) {
+                y++;
+                if (y >= KeyboardHeight) { y = -1; }
+                redraw = true;
+            } else if (check(UpPress)) {
+                y--;
+                if (y < -1) y = KeyboardHeight - 1;
+                redraw = true;
+            }
+        }
+        last_input_time = millis() + 100;
+    }
 
-        if (millis() - last_input_time > 250) { // INPUT DEBOUCING
-            // waits at least 250ms before accepting another input, to prevent rapid involuntary repeats
+    if (millis() - last_input_time > 250) { // INPUT DEBOUCING
+        // waits at least 250ms before accepting another input, to prevent rapid involuntary repeats
 
 #if defined(HAS_TOUCH) // CYD, Core2, CoreS3
 #if defined(USE_TFT_eSPI_TOUCH)
-            check(AnyKeyPress);
+        check(AnyKeyPress);
 #endif
-            if (touchPoint.pressed) {
-                // If using touchscreen and buttons_strings, reset the navigation states to avoid inconsistent
-                // behavior, and reset the navigation coords to the OK button.
-                SelPress = false;
-                EscPress = false;
-                NextPress = false;
-                PrevPress = false;
-                UpPress = false;
-                DownPress = false;
-                x = 0;
-                y = -1;
+        if (touchPoint.pressed) {
+            // If using touchscreen and buttons_strings, reset the navigation states to avoid inconsistent
+            // behavior, and reset the navigation coords to the OK button.
+            SelPress = false;
+            EscPress = false;
+            NextPress = false;
+            PrevPress = false;
+            UpPress = false;
+            DownPress = false;
+            x = 0;
+            y = -1;
 
-                bool touchHandled = false;
+            bool touchHandled = false;
 
-                if (box_list[buttons_start_index].contain(touchPoint.x, touchPoint.y)) { // OK btn
-                    break;
-                }
-                if (box_list[buttons_start_index + 1].contain(touchPoint.x, touchPoint.y)) { // CAPS btn
-                    caps = !caps;
-                    tft.fillRect(0, 54, tftWidth, tftHeight - 54, bruceConfig.bgColor);
+            if (box_list[buttons_start_index].contain(touchPoint.x, touchPoint.y)) { // OK btn
+                break;
+            }
+            if (box_list[buttons_start_index + 1].contain(touchPoint.x, touchPoint.y)) { // CAPS btn
+                caps = !caps;
+                tft.fillRect(0, 54, tftWidth, tftHeight - 54, bruceConfig.bgColor);
+                touchHandled = true;
+            }
+            if (box_list[buttons_start_index + 2].contain(touchPoint.x, touchPoint.y)) { // DEL btn
+                if (current_text.length() > 0) {
+                    handleDelete(current_text, cursor_x, cursor_y);
                     touchHandled = true;
                 }
-                if (box_list[buttons_start_index + 2].contain(touchPoint.x, touchPoint.y)) { // DEL btn
-                    if (current_text.length() > 0) {
-                        handleDelete(current_text, cursor_x, cursor_y);
-                        touchHandled = true;
-                    }
-                }
-                if (box_list[buttons_start_index + 3].contain(touchPoint.x, touchPoint.y)) { // SPACE btn
-                    if (current_text.length() < max_size) {
-                        handleSpaceAdd(current_text, max_size);
-                        touchHandled = true;
-                    }
-                }
-#if FM > 1
-                if (box_list[buttons_start_index + 4].contain(touchPoint.x, touchPoint.y)) { // BACK btn
-                    current_text = "\x1B"; // ASCII ESC CHARACTER
-                    break;
-                }
-#endif
-                for (k = 0; k < keyboard_boxes; k++) {
-                    if (box_list[k].contain(touchPoint.x, touchPoint.y)) {
-                        if (caps)
-                            handleCharacterAdd(
-                                current_text, box_list[k].key_sh, cursor_x, cursor_y, max_size
-                            );
-                        else handleCharacterAdd(current_text, box_list[k].key, cursor_x, cursor_y, max_size);
-                        touchHandled = true;
-                        break;
-                    }
-                }
-
-                if (touchHandled) {
-                    wakeUpScreen();
-                    touchPoint.Clear();
-                    redraw = true;
+            }
+            if (box_list[buttons_start_index + 3].contain(touchPoint.x, touchPoint.y)) { // SPACE btn
+                if (current_text.length() < max_size) {
+                    handleSpaceAdd(current_text, max_size);
+                    touchHandled = true;
                 }
             }
+#if FM > 1
+            if (box_list[buttons_start_index + 4].contain(touchPoint.x, touchPoint.y)) { // BACK btn
+                current_text = "\x1B"; // ASCII ESC CHARACTER
+                break;
+            }
+#endif
+            for (k = 0; k < keyboard_boxes; k++) {
+                if (box_list[k].contain(touchPoint.x, touchPoint.y)) {
+                    if (caps)
+                        handleCharacterAdd(current_text, box_list[k].key_sh, cursor_x, cursor_y, max_size);
+                    else handleCharacterAdd(current_text, box_list[k].key, cursor_x, cursor_y, max_size);
+                    touchHandled = true;
+                    break;
+                }
+            }
+
+            if (touchHandled) {
+                wakeUpScreen();
+                touchPoint.Clear();
+                redraw = true;
+            }
+        }
 #endif
 
 #if defined(HAS_3_BUTTONS) // StickCs and Core
-            if (check(SelPress)) {
-                selection_made = true;
-            } else {
-                /* Down Btn to move in X axis (to the right) */
-                if (longNextPress || NextPress) {
-                    unsigned long now = millis();
-                    if (!longNextPress) {
-                        longNextPress = 1;
-                        LongPress = true;
-                        LongPressTmp = now;
-                    }
-                    delay(1); // does not work without it
-                    // Check if the button is held long enough (long press)
-                    if (now - LongPressTmp > 300) {
-                        x--; // Long press action
-                        longNextPress = 2;
-                        LongPress = false;
-                        check(NextPress);
-                        LongPressTmp = now;
-                    } else if (!NextPress) {
-                        if (longNextPress != 2) x++; // Short press action
-                        longNextPress = 0;
-                    } else {
-                        continue;
-                    }
-                    LongPress = false;
-                    // delay(10);
-                    if (y < 0 && x >= buttons_number) x = 0;
-                    if (x >= KeyboardWidth) x = 0;
-                    else if (x < 0) x = KeyboardWidth - 1;
-                    redraw = true;
+        if (check(SelPress)) {
+            selection_made = true;
+        } else {
+            /* Down Btn to move in X axis (to the right) */
+            if (longNextPress || NextPress) {
+                unsigned long now = millis();
+                if (!longNextPress) {
+                    longNextPress = 1;
+                    LongPress = true;
+                    LongPressTmp = now;
                 }
-                /* UP Btn to move in Y axis (Downwards) */
-                if (longPrevPress || PrevPress) {
-                    unsigned long now = millis();
-                    if (!longPrevPress) {
-                        longPrevPress = 1;
-                        LongPress = true;
-                        LongPressTmp = now;
-                    }
-                    delay(1); // does not work without it
-                    // Check if the button is held long enough (long press)
-                    if (now - LongPressTmp > 300) {
-                        y--; // Long press action
-                        longPrevPress = 2;
-                        LongPress = false;
-                        check(PrevPress);
-                        LongPressTmp = now;
-                    } else if (!PrevPress) {
-                        if (longPrevPress != 2) y++; // Short press action
-                        longPrevPress = 0;
-                    } else {
-                        continue;
-                    }
+                delay(1); // does not work without it
+                // Check if the button is held long enough (long press)
+                if (now - LongPressTmp > 300) {
+                    x--; // Long press action
+                    longNextPress = 2;
                     LongPress = false;
-                    if (y >= KeyboardHeight) {
-                        y = -1;
-                    } else if (y < -1) y = KeyboardHeight - 1;
-                    redraw = true;
+                    check(NextPress);
+                    LongPressTmp = now;
+                } else if (!NextPress) {
+                    if (longNextPress != 2) x++; // Short press action
+                    longNextPress = 0;
+                } else {
+                    continue;
                 }
+                LongPress = false;
+                // delay(10);
+                if (y < 0 && x >= buttons_number) x = 0;
+                if (x >= KeyboardWidth) x = 0;
+                else if (x < 0) x = KeyboardWidth - 1;
+                redraw = true;
             }
+            /* UP Btn to move in Y axis (Downwards) */
+            if (longPrevPress || PrevPress) {
+                unsigned long now = millis();
+                if (!longPrevPress) {
+                    longPrevPress = 1;
+                    LongPress = true;
+                    LongPressTmp = now;
+                }
+                delay(1); // does not work without it
+                // Check if the button is held long enough (long press)
+                if (now - LongPressTmp > 300) {
+                    y--; // Long press action
+                    longPrevPress = 2;
+                    LongPress = false;
+                    check(PrevPress);
+                    LongPressTmp = now;
+                } else if (!PrevPress) {
+                    if (longPrevPress != 2) y++; // Short press action
+                    longPrevPress = 0;
+                } else {
+                    continue;
+                }
+                LongPress = false;
+                if (y >= KeyboardHeight) {
+                    y = -1;
+                } else if (y < -1) y = KeyboardHeight - 1;
+                redraw = true;
+            }
+        }
 #elif defined(HAS_5_BUTTONS) // Smoochie and Marauder-Mini
-            if (check(SelPress)) {
-                selection_made = true;
-            } else {
-                /* Down Btn to move in X axis (to the right) */
-                if (check(NextPress)) {
-                    x++;
-                    if ((y < 0 && x >= buttons_number) || x >= KeyboardWidth) x = 0;
-                    redraw = true;
-                }
-                if (check(PrevPress)) {
-                    x--;
-                    if (y < 0 && x >= buttons_number) x = buttons_number - 1;
-                    else if (x < 0) x = KeyboardWidth - 1;
-                    redraw = true;
-                }
-                /* UP Btn to move in Y axis (Downwards) */
-                if (check(DownPress)) {
-                    y++;
-                    if (y > KeyboardHeight - 1) { y = -1; }
-                    redraw = true;
-                }
-                if (check(UpPress)) {
-                    y--;
-                    if (y < -1) y = KeyboardHeight - 1;
-                    redraw = true;
-                }
+        if (check(SelPress)) {
+            selection_made = true;
+        } else {
+            /* Down Btn to move in X axis (to the right) */
+            if (check(NextPress)) {
+                x++;
+                if ((y < 0 && x >= buttons_number) || x >= KeyboardWidth) x = 0;
+                redraw = true;
             }
+            if (check(PrevPress)) {
+                x--;
+                if (y < 0 && x >= buttons_number) x = buttons_number - 1;
+                else if (x < 0) x = KeyboardWidth - 1;
+                redraw = true;
+            }
+            /* UP Btn to move in Y axis (Downwards) */
+            if (check(DownPress)) {
+                y++;
+                if (y > KeyboardHeight - 1) { y = -1; }
+                redraw = true;
+            }
+            if (check(UpPress)) {
+                y--;
+                if (y < -1) y = KeyboardHeight - 1;
+                redraw = true;
+            }
+        }
 #elif defined(HAS_KEYBOARD)  // Cardputer, T-Deck and T-LoRa-Pager
-            if (KeyStroke.pressed) {
-                wakeUpScreen();
-                tft.setCursor(cursor_x, cursor_y);
-                String keyStr = "";
-                for (auto i : KeyStroke.word) {
-                    if (keyStr != "") {
-                        keyStr = keyStr + "+" + i;
-                    } else {
-                        keyStr += i;
-                    }
+        if (KeyStroke.pressed) {
+            wakeUpScreen();
+            tft.setCursor(cursor_x, cursor_y);
+            String keyStr = "";
+            for (auto i : KeyStroke.word) {
+                if (keyStr != "") {
+                    keyStr = keyStr + "+" + i;
+                } else {
+                    keyStr += i;
                 }
-
-                if (current_text.length() < max_size && !KeyStroke.enter && !KeyStroke.del) {
-                    current_text += keyStr;
-                    if (current_text.length() != (max_FM_size + 1) &&
-                        current_text.length() != (max_FM_size + 1))
-                        tft.print(keyStr.c_str());
-                    cursor_x = tft.getCursorX();
-                    cursor_y = tft.getCursorY();
-                    if (current_text.length() == (max_FM_size + 1)) redraw = true;
-                    if (current_text.length() == (max_FP_size + 1)) redraw = true;
-                }
-                if (KeyStroke.del && current_text.length() > 0) { // delete 0x08
-                    // Handle backspace key
-                    current_text.remove(current_text.length() - 1);
-                    int fontSize = FM;
-                    if (current_text.length() > max_FP_size) {
-                        tft.setTextSize(FP);
-                        fontSize = FP;
-                    } else tft.setTextSize(FM);
-                    tft.setCursor((cursor_x - fontSize * LW), cursor_y);
-                    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-                    tft.print(" ");
-                    tft.setTextColor(getComplementaryColor2(bruceConfig.bgColor), 0x5AAB);
-                    tft.setCursor(cursor_x - fontSize * LW, cursor_y);
-                    cursor_x = tft.getCursorX();
-                    cursor_y = tft.getCursorY();
-                    if (current_text.length() == max_FM_size) redraw = true;
-                    if (current_text.length() == max_FP_size) redraw = true;
-                }
-                if (KeyStroke.enter) { break; }
-                KeyStroke.Clear();
             }
+
+            if (current_text.length() < max_size && !KeyStroke.enter && !KeyStroke.del) {
+                current_text += keyStr;
+                if (current_text.length() != (max_FM_size + 1) && current_text.length() != (max_FM_size + 1))
+                    tft.print(keyStr.c_str());
+                cursor_x = tft.getCursorX();
+                cursor_y = tft.getCursorY();
+                if (current_text.length() == (max_FM_size + 1)) redraw = true;
+                if (current_text.length() == (max_FP_size + 1)) redraw = true;
+            }
+            if (KeyStroke.del && current_text.length() > 0) { // delete 0x08
+                // Handle backspace key
+                current_text.remove(current_text.length() - 1);
+                int fontSize = FM;
+                if (current_text.length() > max_FP_size) {
+                    tft.setTextSize(FP);
+                    fontSize = FP;
+                } else tft.setTextSize(FM);
+                tft.setCursor((cursor_x - fontSize * LW), cursor_y);
+                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+                tft.print(" ");
+                tft.setTextColor(getComplementaryColor2(bruceConfig.bgColor), 0x5AAB);
+                tft.setCursor(cursor_x - fontSize * LW, cursor_y);
+                cursor_x = tft.getCursorX();
+                cursor_y = tft.getCursorY();
+                if (current_text.length() == max_FM_size) redraw = true;
+                if (current_text.length() == max_FP_size) redraw = true;
+            }
+            if (KeyStroke.enter) { break; }
+            KeyStroke.Clear();
+        }
 #if !defined(T_LORA_PAGER)   // T-LoRa-Pager does not have a select button
-            if (check(SelPress)) break;
+        if (check(SelPress)) break;
 #endif
 #endif
 
 #if defined(HAS_ENCODER) // T-Embed and T-LoRa-Pager and WaveSentry
-            // WaveSentry has Touchscreen and Encoder, but the touchscreen is prioritized
-            // if touchscreen is pressed, ignore the encoder input
-            if ((check(SelPress) || selection_made) && touchPoint.pressed == false) {
-                selection_made = true;
-            } else {
-                /* NEXT "Btn" to move forward on th X axis (to the right) */
-                // if ESC is pressed while NEXT or PREV is received, then we navigate on the Y axis instead
-                if (check(NextPress) && touchPoint.pressed == false) {
-                    if (EscPress) {
-                        y++;
-                    } else if ((x >= buttons_number - 1 && y <= -1) || (x >= KeyboardWidth - 1 && y >= 0)) {
-                        // if we are at the end of the current line
-                        y++;   // next line
-                        x = 0; // reset to first key
-                    } else x++;
-
-                    if (y >= KeyboardHeight)
-                        y = -1; // if we are at the end of the keyboard, then return to the top
-
-                    // If we move to a new line using the ESC-press navigation and the previous x coordinate
-                    // is greater than the number of available buttons_strings on the new line, reset x to
-                    // avoid out-of-bounds behavior, this can only happen when switching to the first line, as
-                    // the others have all the same number of keys
-                    if (y == -1 && x >= buttons_number) x = 0;
-
-                    redraw = true;
-                }
-                /* PREV "Btn" to move backwards on th X axis (to the left) */
-                if (check(PrevPress) && touchPoint.pressed == false) {
-                    if (EscPress) {
-                        y--;
-                    } else if (x <= 0) {
-                        y--;
-                        if (y == -1) x = buttons_number - 1;
-                        else x = KeyboardWidth - 1;
-                    } else x--;
-
-                    if (y < -1) { // go back to the bottom right of the keyboard
-                        y = KeyboardHeight - 1;
-                        x = KeyboardWidth - 1;
-                    }
-                    // else if (y == -1 && x >= buttons_number) x = buttons_number - 1;
-                    // else if (x < 0) x = KeyboardWidth - 1;
-
-                    redraw = true;
-                }
-            }
+                         // WaveSentry has Touchscreen and Encoder, but the touchscreen is prioritized
+                         // if touchscreen is pressed, ignore the encoder input
+#if !defined(HAS_TOUCH)
+        LongPress = true;
 #endif
-        } // end of physical input detection
-
-        if (SerialCmdPress) { // only for Remote Control, if no type of input was detected on device
-            if (check(SelPress)) {
-                selection_made = true;
-            } else {
-                /* Next-Prev Btns to move in X axis (right-left) */
-                if (check(NextPress)) {
-                    x++;
-                    if ((y < 0 && x >= buttons_number) || x >= KeyboardWidth) x = 0;
-                    redraw = true;
-                }
-                /* Down-Up Btns to move in Y axis */
-                if (check(PrevPress)) {
-                    x--;
-                    if (y < 0 && x >= buttons_number) x = buttons_number - 1;
-                    else if (x < 0) x = KeyboardWidth - 1;
-                    redraw = true;
-                }
-                /* Down-Up Btns to move in Y axis */
-                if (check(DownPress)) {
+        if ((check(SelPress) || selection_made) && touchPoint.pressed == false) {
+            LongPress = false;
+            selection_made = true;
+        } else {
+            /* NEXT "Btn" to move forward on th X axis (to the right) */
+            // if ESC is pressed while NEXT or PREV is received, then we navigate on the Y axis instead
+            if (check(NextPress) && touchPoint.pressed == false) {
+                if (EscPress) {
                     y++;
-                    if (y >= KeyboardHeight) { y = -1; }
-                    redraw = true;
-                }
-                if (check(UpPress)) {
-                    y--;
-                    if (y < -1) y = KeyboardHeight - 1;
-                    redraw = true;
-                }
-            }
-        }
+                } else if ((x >= buttons_number - 1 && y <= -1) || (x >= KeyboardWidth - 1 && y >= 0)) {
+                    // if we are at the end of the current line
+                    y++;   // next line
+                    x = 0; // reset to first key
+                } else x++;
 
-        if (selection_made) { // if something was selected then handle it
-            selection_made = false;
+                if (y >= KeyboardHeight)
+                    y = -1; // if we are at the end of the keyboard, then return to the top
 
-            char selected_char = (y == -1) ? ' ' : keys[y][x][caps];
+                // If we move to a new line using the ESC-press navigation and the previous x coordinate
+                // is greater than the number of available buttons_strings on the new line, reset x to
+                // avoid out-of-bounds behavior, this can only happen when switching to the first line, as
+                // the others have all the same number of keys
+                if (y == -1 && x >= buttons_number) x = 0;
 
-            if (selected_char == '\0') { continue; } // if we selected a key which have the value of
-
-            KeyboardAction action = handleKeyboardSelection(
-                x, y, current_text, caps, cursor_x, cursor_y, max_size, selected_char
-            );
-
-            if (action == KEYBOARD_OK) { // OK BTN
-                break;
-            } else if (action == KEYBOARD_CANCEL) { // BACK BTN
-                current_text = "\x1B";              // ASCII ESC CHARACTER
-                break;
-            } else if (action == KEYBOARD_REDRAW) {
                 redraw = true;
             }
+            /* PREV "Btn" to move backwards on th X axis (to the left) */
+            if (check(PrevPress) && touchPoint.pressed == false) {
+                if (EscPress) {
+                    y--;
+                } else if (x <= 0) {
+                    y--;
+                    if (y == -1) x = buttons_number - 1;
+                    else x = KeyboardWidth - 1;
+                } else x--;
 
-            last_input_time = millis();
+                if (y < -1) { // go back to the bottom right of the keyboard
+                    y = KeyboardHeight - 1;
+                    x = KeyboardWidth - 1;
+                }
+                // else if (y == -1 && x >= buttons_number) x = buttons_number - 1;
+                // else if (x < 0) x = KeyboardWidth - 1;
+
+                redraw = true;
+            }
         }
+#endif
+    } // end of physical input detection
+    if (selection_made) { // if something was selected then handle it
+        selection_made = false;
+
+        char selected_char = (y == -1) ? ' ' : keys[y][x][caps];
+
+        if (selected_char == '\0') { continue; } // if we selected a key which have the value of
+
+        KeyboardAction action =
+            handleKeyboardSelection(x, y, current_text, caps, cursor_x, cursor_y, max_size, selected_char);
+
+        if (action == KEYBOARD_OK) { // OK BTN
+            break;
+        } else if (action == KEYBOARD_CANCEL) { // BACK BTN
+            current_text = "\x1B";              // ASCII ESC CHARACTER
+            break;
+        } else if (action == KEYBOARD_REDRAW) {
+            redraw = true;
+        }
+
+        last_input_time = millis();
     }
+}
 
-    // Resets screen when finished writing
-    tft.fillScreen(bruceConfig.bgColor);
-    resetTftDisplay();
+// Resets screen when finished writing
+tft.fillScreen(bruceConfig.bgColor);
+resetTftDisplay();
 
-    return current_text;
+return current_text;
 }
 
 /// This calls the QUERTY keyboard. Returns the user typed strings, return the ASCII ESC character

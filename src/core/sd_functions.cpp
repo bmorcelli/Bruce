@@ -604,9 +604,14 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
         }
         displayScrollingText(fileList[index].filename, coord);
 
+        // !PrevPress enables EscPress on 3Btn devices to be used in Serial Navigation
+        // This condition is important for StickCPlus, Core and other 3 Btn devices
+        if (EscPress && PrevPress) EscPress = false;
+        char pressed_letter;
+        if (check(EscPress)) goto BACK_FOLDER;
+
 #ifdef HAS_KEYBOARD
-        char pressed_letter = checkLetterShortcutPress();
-        if (check(EscPress)) goto BACK_FOLDER; // quit
+        pressed_letter = checkLetterShortcutPress();
 
         // check letter shortcuts
         if (pressed_letter > 0) {
@@ -629,8 +634,6 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                 }
             }
         }
-#elif defined(T_EMBED) || defined(HAS_TOUCH) || !defined(HAS_SCREEN)
-        if (check(EscPress)) goto BACK_FOLDER;
 #endif
 
         if (check(PrevPress) || check(UpPress)) {
