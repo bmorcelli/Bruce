@@ -610,7 +610,7 @@
 		else if (event.key === 'Backspace') dir = 'esc';
 		else if (event.key === 'PageUp') dir = 'nextpage';
 		else if (event.key === 'PageDown') dir = 'prevpage';
-		else if (event.key.toLowerCase() === 'm') dir = 'menu';
+		else if (event.key.toLowerCase() === 'h') dir = 'sel 700';
 		else if (event.key.toLowerCase() === 'r') {
 			event.preventDefault();
 			await triggerDump();
@@ -769,19 +769,19 @@
 										class="nav-btn"
 										onclick={() => void sendNavigatorCommand('nav prevpage')}
 									>
-										PgUp
+										Pg↑
 									</button>
-									<button class="nav-btn" onclick={() => void sendNavigatorCommand('nav up')}>Up</button>
+									<button class="nav-btn" onclick={() => void sendNavigatorCommand('nav up')}>▲</button>
 									<button
 										class="nav-btn"
 										onclick={() => void sendNavigatorCommand('nav sel 700')}
 									>
-										LP
+										H
 									</button>
 								</div>
 								<div class="grid grid-cols-3 gap-2">
 									<button class="nav-btn" onclick={() => void sendNavigatorCommand('nav prev')}>
-										Left
+										◀
 									</button>
 									<button
 										class="nav-btn nav-ok"
@@ -790,7 +790,7 @@
 										OK
 									</button>
 									<button class="nav-btn" onclick={() => void sendNavigatorCommand('nav next')}>
-										Right
+										▶
 									</button>
 								</div>
 								<div class="grid grid-cols-3 gap-2">
@@ -798,16 +798,16 @@
 										class="nav-btn"
 										onclick={() => void sendNavigatorCommand('nav nextpage')}
 									>
-										PgDn
+										Pg↓
 									</button>
 									<button
 										class="nav-btn"
 										onclick={() => void sendNavigatorCommand('nav down')}
 									>
-										Down
+										▼
 									</button>
 									<button class="nav-btn" onclick={() => void sendNavigatorCommand('nav esc')}>
-										Back
+										⟲
 									</button>
 								</div>
 							</div>
@@ -816,7 +816,10 @@
 						<div class="rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-white/70">
 							<p class="mb-2 font-semibold text-white">Shortcuts</p>
 							<p>Arrows = Navigation, Enter = OK, Backspace = Back</p>
-							<p>PageUp/PageDown = PgUp/PgDn, M = Menu, R = Reload</p>
+							<p>PageUp/PageDown = PgUp/PgDn, H = Sel hold, R = Reload</p>
+							<br>
+							<p class="mb-2 font-semibold text-white">Limitations</p>
+							<p>Images are not rendered in the Serial Navigator.</p>
 						</div>
 					</div>
 				</div>
