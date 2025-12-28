@@ -24,7 +24,7 @@ export async function readSerialPort(port: SerialPort, callback: Function) {
 						break;
 					}
 				}
-			}, 5000);
+			}, 2500);
 		} catch (error) {
 			alert('Error during communication with device');
 		}
