@@ -8,9 +8,6 @@ void changeusername();
 void chfreq();
 
 class LoRaMenu : public MenuItemInterface {
-private:
-    void configMenu(void);
-
 public:
     LoRaMenu() : MenuItemInterface("LoRa") {}
 
@@ -18,6 +15,9 @@ public:
     void drawIcon(float scale);
     void drawIconImg();
     bool getTheme() { return bruceConfig.theme.lora; }
+
+private:
+    void configMenu(void);
 };
 
 #endif
