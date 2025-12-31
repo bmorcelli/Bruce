@@ -111,7 +111,7 @@ void RFJammer::run_itmt_jammer() {
     digitalWrite(nTransmitterPin, LOW);
 }
 
-void RFJammer::send_optimized_pulse(uint32_t width) {
+void RFJammer::send_optimized_pulse(int width) {
     digitalWrite(nTransmitterPin, HIGH);
     
     for (uint32_t i = 0; i < width; i += 10) {
@@ -136,10 +136,10 @@ void RFJammer::send_optimized_pulse(uint32_t width) {
     }
 }
 
-void RFJammer::send_random_pattern(uint32_t numPulses) {
+void RFJammer::send_random_pattern(int numPulses) {
     uint32_t startTime = millis();
     
-    for (uint32_t i = 0; i < numPulses && sendRF; i++) {
+    for (int i = 0; i < numPulses && sendRF; i++) {
         uint32_t pulseWidth = 5 + (millis() % 46);
         
         digitalWrite(nTransmitterPin, HIGH);
