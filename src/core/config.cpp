@@ -382,6 +382,7 @@ void BruceConfig::fromFile(bool checkFS) {
     if (count > 0) saveFile();
 
     log_i("Using config from file");
+    jsonDoc.clear();
 }
 
 void BruceConfig::saveFile() {
@@ -402,6 +403,7 @@ void BruceConfig::saveFile() {
     else log_i("config file written successfully");
 
     file.close();
+    jsonDoc.clear();
     // don't try to mount SD Card if not previously mounted
     if (sdcardMounted) copyToFs(LittleFS, SD, filepath, false);
 }
