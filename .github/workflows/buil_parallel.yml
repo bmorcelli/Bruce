@@ -20,7 +20,7 @@ jobs:
           - { env: "m5stack-cardputer",               family: "ESP32-S3",}
           - { env: "m5stack-cplus2",                  family: "ESP32",}
           - { env: "m5stack-cplus1_1",                family: "ESP32",}
-          # - { env: "LAUNCHER_m5stack-cplus1_1",       family: "ESP32",}
+          - { env: "LAUNCHER_m5stack-cplus1_1",       family: "ESP32",}
           - { env: "m5stack-core2",                   family: "ESP32",}
           - { env: "m5stack-core16mb",                family: "ESP32",}
           - { env: "m5stack-core4mb",                 family: "ESP32",}
@@ -63,6 +63,8 @@ jobs:
           - { env: "LAUNCHER_Marauder-V4-V6",         family: "ESP32",}
           - { env: "LAUNCHER_Marauder-v61",           family: "ESP32",}
           - { env: "Awok-Touch",                      family: "ESP32",}
+          - { env: "WaveSentry-R1",                   family: "ESP32",}
+          - { env: "LAUNCHER_WaveSentry-R1",          family: "ESP32",}
 
     steps:
       - uses: actions/checkout@v4
@@ -77,34 +79,38 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
           restore-keys: |
+            ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: |
-          pip install requests esptool intelhex
-
-      - name: Cache PlatformIO
+      - name: Cache PlatformIO Framework
         uses: actions/cache@v4
         with:
           path: |
             ~/.platformio
-          key: Bruce-platformio-${{ hashFiles('**/platformio.ini') }}
-          restore-keys: Bruce-platformio-
+          key: ${{ runner.os }}-platformio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-${{ hashFiles('platformio.ini') }}
+            ${{ runner.os }}-platformio-
 
-      - name: Restore PIO
-        uses: actions/cache/restore@v4
+      - name: PIO libraries cache
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/.pio
-          key: Bruce-pio-${{ matrix.board.env }}-${{ github.run_id }}-${{ github.run_attempt }}
+            .pio/libdeps
+          key: ${{ runner.os }}-pio-${{ matrix.board.env }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
-            Bruce-pio-${{ matrix.board.env }}-
+            ${{ runner.os }}-pio-${{ matrix.board.env }}-${{ hashFiles('platformio.ini') }}
+            ${{ runner.os }}-pio-${{ matrix.board.env }}-
 
-      - name: Install PlatformIO Core
+      - name: Install dependencies
         run: |
+          pip install requests esptool intelhex
           pip install platformio
+
+      - name: Prepare PlatformIO file
+        run: |
 
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             version=${{ github.ref_name }}
@@ -119,26 +125,24 @@ jobs:
 
       - name: Run Compile
         run: |
-          platformio run -e ${{ matrix.board.env }}
+          set -o pipefail
+          platformio run -e ${{ matrix.board.env }} | tee build-${{ matrix.board.env }}.log
 
-      - name: Cache PIO
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/.pio
-          key: Bruce-pio-${{ matrix.board.env }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Merge files
+      - name: Build summary
         run: |
-          # pio run -e ${{ matrix.board.env }} -t build-firmware
-          # Files are merged after build
+          if [[ -f build-${{ matrix.board.env }}.log ]]; then
+            echo "Last 75 lines of build-${{ matrix.board.env }}.log:"
+            tail -n 75 build-${{ matrix.board.env }}.log
+          else
+            echo "Build log not found; nothing to show."
+          fi
 
       - name: Upload ${{ matrix.board.env }}
         uses: actions/upload-artifact@v4
         with:
           name: Bruce-${{ matrix.board.env }}
           path: Bruce-*.*
-          retention-days: 5
+          retention-days: 1
           if-no-files-found: error
 
   post_compile_steps:

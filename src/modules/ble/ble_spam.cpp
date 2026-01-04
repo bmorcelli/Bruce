@@ -521,7 +521,11 @@ void executeSpam(EBLEPayloadType type) {
 
     pAdvertising->stop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    esp_bt_controller_deinit();
+#else
     BLEDevice::deinit();
+#endif
 }
 
 void executeCustomSpam(String spamName) {
@@ -566,7 +570,11 @@ void executeCustomSpam(String spamName) {
     // Stop and clean up
     pAdvertising->stop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    esp_bt_controller_deinit();
+#else
     BLEDevice::deinit();
+#endif
 }
 
 void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId) {
@@ -645,7 +653,11 @@ void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId
         Serial.println("Advertizing stop");
     }
 
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    esp_bt_controller_deinit();
+#else
     BLEDevice::deinit();
+#endif
 }
 
 void aj_adv(int ble_choice) { // customSet defaults to false
@@ -708,5 +720,9 @@ void aj_adv(int ble_choice) { // customSet defaults to false
     vTaskDelay(100 / portTICK_PERIOD_MS);
     pAdvertising = nullptr;
     vTaskDelay(100 / portTICK_PERIOD_MS);
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    esp_bt_controller_deinit();
+#else
     BLEDevice::deinit();
+#endif
 }

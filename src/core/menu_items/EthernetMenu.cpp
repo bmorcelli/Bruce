@@ -1,4 +1,3 @@
-
 #include "EthernetMenu.h"
 #if !defined(LITE_VERSION)
 #include "core/display.h"

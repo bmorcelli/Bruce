@@ -10,8 +10,15 @@
 #include "AudioOutputI2SNoDAC.h"
 #include <ESP8266Audio.h>
 #include <ESP8266SAM.h>
+
+void _setup_codec_speaker(bool enable) __attribute__((weak));
+void _setup_codec_speaker(bool enable) {}
+
 bool playAudioFile(FS *fs, String filepath) {
     if (!bruceConfig.soundEnabled) return false;
+
+    // Enable codec, if exists
+    _setup_codec_speaker(true);
 
     AudioFileSource *source = new AudioFileSourceFS(*fs, filepath.c_str());
     if (!source) return false;
@@ -63,15 +70,20 @@ bool playAudioFile(FS *fs, String filepath) {
         delete generator;
         delete source;
         delete audioout;
-
+        // Disable codec, if exists
+        _setup_codec_speaker(false);
         return true;
     }
     // else
+    // Disable codec, if exists
+    _setup_codec_speaker(false);
     return false; // init error
 }
 
 bool playAudioRTTTLString(String song) {
     if (!bruceConfig.soundEnabled) return false;
+    // Enable codec, if exists
+    _setup_codec_speaker(true);
 
     // derived from
     // https://github.com/earlephilhower/ESP8266Audio/blob/master/examples/PlayRTTTLToI2SDAC/PlayRTTTLToI2SDAC.ino
@@ -99,15 +111,21 @@ bool playAudioRTTTLString(String song) {
         delete generator;
         delete source;
         delete audioout;
-
+        // Disable codec, if exists
+        _setup_codec_speaker(false);
         return true;
     }
     // else
+    // Disable codec, if exists
+    _setup_codec_speaker(false);
     return false; // init error
 }
 
 bool tts(String text) {
     if (!bruceConfig.soundEnabled) return false;
+
+    // Enable codec, if exists
+    _setup_codec_speaker(true);
 
     text.trim();
     if (text == "") return false;
@@ -121,6 +139,8 @@ bool tts(String text) {
     sam->Say(audioout, text.c_str());
     delete sam;
     delete audioout;
+    // Disable codec, if exists
+    _setup_codec_speaker(false);
     return true;
 }
 
@@ -132,6 +152,9 @@ bool isAudioFile(String filepath) {
 
 void playTone(unsigned int frequency, unsigned long duration, short waveType) {
     if (!bruceConfig.soundEnabled) return;
+
+    // Enable codec, if exists
+    _setup_codec_speaker(true);
 
     // derived from
     // https://github.com/earlephilhower/ESP8266Audio/blob/master/examples/PlayWAVFromFunction/PlayWAVFromFunction.ino
@@ -188,6 +211,8 @@ void playTone(unsigned int frequency, unsigned long duration, short waveType) {
     delete file;
     delete wav;
     delete out;
+    // Disable codec, if exists
+    _setup_codec_speaker(false);
 }
 
 #endif

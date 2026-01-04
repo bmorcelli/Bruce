@@ -32,7 +32,7 @@ static const uint8_t SCK = 18;
 #define BTN_ACT LOW
 
 #define RXLED 4
-#define LED 5
+#define TXLED 5
 #define LED_ON HIGH
 #define LED_OFF LOW
 
@@ -106,7 +106,6 @@ static const uint8_t SCK = 18;
 
 // USE BOOST ENABLE PMIC 5V OUTPUT
 #define USE_BOOST
-
 
 // Mic#
 #define PIN_CLK 1

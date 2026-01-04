@@ -41,15 +41,15 @@ void RFIDMenu::optionsMenu() {
     vTaskDelay(pdMS_TO_TICKS(200));
 
     String txt = "RFID";
-    if (bruceConfig.rfidModule == M5_RFID2_MODULE) txt += " (RFID2)";
+    if (bruceConfigPins.rfidModule == M5_RFID2_MODULE) txt += " (RFID2)";
 #ifdef M5STICK
-    else if (bruceConfig.rfidModule == PN532_I2C_MODULE) txt += " (PN532-G33)";
-    else if (bruceConfig.rfidModule == PN532_I2C_SPI_MODULE) txt += " (PN532-G36)";
+    else if (bruceConfigPins.rfidModule == PN532_I2C_MODULE) txt += " (PN532-G33)";
+    else if (bruceConfigPins.rfidModule == PN532_I2C_SPI_MODULE) txt += " (PN532-G36)";
 #else
-    else if (bruceConfig.rfidModule == PN532_I2C_MODULE) txt += " (PN532-I2C)";
+    else if (bruceConfigPins.rfidModule == PN532_I2C_MODULE) txt += " (PN532-I2C)";
 #endif
-    else if (bruceConfig.rfidModule == PN532_SPI_MODULE) txt += " (PN532-SPI)";
-    else if (bruceConfig.rfidModule == RC522_SPI_MODULE) txt += " (RC522-SPI)";
+    else if (bruceConfigPins.rfidModule == PN532_SPI_MODULE) txt += " (PN532-SPI)";
+    else if (bruceConfigPins.rfidModule == RC522_SPI_MODULE) txt += " (RC522-SPI)";
     loopOptions(options, MENU_TYPE_SUBMENU, txt.c_str());
 }
 

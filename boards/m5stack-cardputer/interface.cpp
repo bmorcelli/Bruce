@@ -1,4 +1,5 @@
 #include "core/powerSave.h"
+#include "core/utils.h"
 #include <Adafruit_TCA8418.h>
 #include <Keyboard.h>
 #include <Wire.h>
@@ -80,7 +81,6 @@ inline void mapRawKeyToPhysical(uint8_t keyvalue, uint8_t &row, uint8_t &col) {
 void _setup_gpio() {
     //    Keyboard.begin();
     pinMode(0, INPUT);
-    pinMode(10, INPUT); // Pin that reads the Battery voltage
     pinMode(5, OUTPUT);
     // Set GPIO5 HIGH for SD card compatibility (thx for the tip @bmorcelli & 7h30th3r0n3)
     digitalWrite(5, HIGH);
@@ -125,29 +125,13 @@ void _post_setup_gpio() {
     }
     bruceConfigPins.gps_bus.rx = (gpio_num_t)15;
     bruceConfigPins.gps_bus.tx = (gpio_num_t)13;
-    bruceConfig.gpsBaudrate = 115200;
+    bruceConfigPins.gpsBaudrate = 115200;
 
     tca.matrix(7, 8);
     tca.flush();
     pinMode(11, INPUT);
     attachInterruptArg(digitalPinToInterrupt(11), gpio_isr_handler, &kb_interrupt, CHANGE);
     tca.enableInterrupts();
-}
-
-/***************************************************************************************
-** Function name: getBattery()
-** location: display.cpp
-** Description:   Delivers the battery value from 1-100
-***************************************************************************************/
-int getBattery() {
-    pinMode(GPIO_NUM_10, INPUT);
-    uint8_t percent;
-    uint32_t volt = analogReadMilliVolts(GPIO_NUM_10);
-
-    float mv = volt;
-    percent = (mv - 3300) * 100 / (float)(4150 - 3350);
-
-    return (percent >= 100) ? 100 : percent;
 }
 
 /*********************************************************************
@@ -409,3 +393,64 @@ void powerOff() {}
 ** Btn logic to tornoff the device (name is odd btw)
 **********************************************************************/
 void checkReboot() {}
+
+/*********************************************************************
+** Function: _setup_codec_speaker
+** location: modules/others/audio.cpp
+** Handles audio CODEC to enable/disable speaker
+**********************************************************************/
+void _setup_codec_speaker(bool enable) {
+    if (!UseTCA8418) return;
+
+    static constexpr const uint8_t enabled_bulk_data[] = {
+        2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON
+        2, 0x01, 0xB5, // 0x01 CLOCK_MANAGER/ MCLK=BCLK
+        2, 0x02, 0x18, // 0x02 CLOCK_MANAGER/ MULT_PRE=3
+        2, 0x0D, 0x01, // 0x0D SYSTEM/ Power up analog circuitry
+        2, 0x12, 0x00, // 0x12 SYSTEM/ power-up DAC - NOT default
+        2, 0x13, 0x10, // 0x13 SYSTEM/ Enable output to HP drive - NOT default
+        2, 0x32, 0xBF, // 0x32 DAC/ DAC volume (0xBF == ±0 dB )
+        2, 0x37, 0x08, // 0x37 DAC/ Bypass DAC equalizer - NOT default
+        0
+    };
+    static constexpr const uint8_t disabled_bulk_data[] = {0};
+
+    i2c_bulk_write(&Wire1, ES8311_ADDR, enable ? enabled_bulk_data : disabled_bulk_data);
+}
+
+/*********************************************************************
+** Function: _setup_codec_mic
+** location: modules/others/mic.cpp
+** Handles audio CODEC to enable/disable microphone
+**********************************************************************/
+void _setup_codec_mic(bool enable) {
+    if (!UseTCA8418) return;
+    // Set microfone pin for ADV
+    mic_bclk_pin = (gpio_num_t)41;
+
+    static constexpr const uint8_t enabled_bulk_data[] = {
+        2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON
+        2, 0x01, 0xBA, // 0x01 CLOCK_MANAGER/ MCLK=BCLK
+        2, 0x02, 0x18, // 0x02 CLOCK_MANAGER/ MULT_PRE=3
+        2, 0x0D, 0x01, // 0x0D SYSTEM/ Power up analog circuitry
+        2, 0x0E, 0x02, // 0x0E SYSTEM/ : Enable analog PGA, enable ADC modulator
+        2, 0x14, 0x10, // ES8311_ADC_REG14 : select Mic1p-Mic1n / PGA GAIN (minimum)
+        2, 0x17, 0xBF, // ES8311_ADC_REG17 : ADC_VOLUME 0xBF == ± 0 dB
+        2, 0x1C, 0x6A, // ES8311_ADC_REG1C : ADC Equalizer bypass, cancel DC offset in digital domain
+        0
+    };
+    static constexpr const uint8_t disabled_bulk_data[] = {
+        2,
+        0x0D,
+        0xFC, // 0x0D SYSTEM/ Power down analog circuitry
+        2,
+        0x0E,
+        0x6A, // 0x0E SYSTEM
+        2,
+        0x00,
+        0x00, // 0x00 RESET/  CSM POWER DOWN
+        0
+    };
+
+    i2c_bulk_write(&Wire1, ES8311_ADDR, enable ? enabled_bulk_data : disabled_bulk_data);
+}

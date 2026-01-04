@@ -15,7 +15,7 @@ public:
     String getName() const { return _name; }
 
     void draw(float scale = 1) {
-        if (rotation != bruceConfig.rotation) resetCoordinates();
+        if (rotation != bruceConfigPins.rotation) resetCoordinates();
         if (!getTheme()) {
             if (bruceConfig.themePath != "") {
                 // Image is not available for active theme, clear larger area
@@ -144,7 +144,7 @@ protected:
         arrowAreaX = BORDER_PAD_X;
         arrowAreaW = iconAreaX - arrowAreaX;
 
-        rotation = bruceConfig.rotation;
+        rotation = bruceConfigPins.rotation;
     }
 };
 

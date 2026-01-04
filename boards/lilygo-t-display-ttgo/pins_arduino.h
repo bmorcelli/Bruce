@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define ADC_EN 14 // ADC_EN is the ADC detection enable port
-#define ADC_PIN 34
+#define ANALOG_BAT_PIN 34
 
 // Lite Version
 // #define LITE_VERSION 1
@@ -94,7 +94,7 @@ static const uint8_t SCL = GROVE_SCL;
 #define BTN_ACT LOW
 
 // IR pins
-#define LED 2
+#define TXLED 2
 #define RXLED 15
 
 #define LED_ON HIGH

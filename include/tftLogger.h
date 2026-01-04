@@ -48,6 +48,7 @@ private:
     char images[MAX_LOG_IMAGES][MAX_LOG_IMG_PATH];
     uint8_t logWriteIndex = 0;
     uint8_t logCount = 0;
+    bool isSleeping = false;
     bool logging = false;
     bool _logging = false;
     void clearLog();
@@ -61,6 +62,11 @@ public:
     virtual ~tft_logger();
     void setLogging(bool _log = true);
     bool inline getLogging(void) { return logging; };
+
+    // Disables tft writings on the display,
+    // Commands wont be passed to the display if isSleeping==true
+    // display will still be logged, in order to keep WebUI Navigator working
+    void inline setSleepMode(bool mode) { isSleeping = mode; }
 
     void getBinLog(uint8_t *outBuffer, size_t &outSize);
     bool removeLogEntriesInsideRect(int rx, int ry, int rw, int rh);
@@ -140,6 +146,7 @@ protected:
         tftLog l;
         memcpy(l.data, buffer, pos);
         pushLogIfUnique(l);
+        if (isSleeping) return;
         logging = false;
     }
     void restoreLogger();

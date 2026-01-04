@@ -7,10 +7,10 @@ RFJammer::RFJammer(bool full) : fullJammer(full) { setup(); }
 RFJammer::~RFJammer() { deinitRfModule(); }
 
 void RFJammer::setup() {
-    nTransmitterPin = bruceConfig.rfTx;
+    nTransmitterPin = bruceConfigPins.rfTx;
     if (!initRfModule("tx")) return;
 
-    if (bruceConfig.rfModule == CC1101_SPI_MODULE) { // CC1101 in use
+    if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) { // CC1101 in use
         nTransmitterPin = bruceConfigPins.CC1101_bus.io0;
     }
 

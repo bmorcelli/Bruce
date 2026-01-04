@@ -1,27 +1,27 @@
 /*
   Not perfect just improve it.
 */
-#include <set>
-#include <vector>
-#include "esp_wifi.h"
-#include "freertos/FreeRTOS.h"
-#include "esp_event.h"
-#include "esp_system.h"
-#include "lwip/err.h"
-#include "driver/gpio.h"
-#include "nvs_flash.h"
 #include "FS.h"
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
 #include "core/wifi/wifi_common.h"
+#include "driver/gpio.h"
+#include "esp_event.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "lwip/err.h"
 #include "modules/wifi/evil_portal.h"
+#include "nvs_flash.h"
+#include <set>
+#include <vector>
 
+#include "karma_attack.h"
+#include "sniffer.h" // Channel list
 #include <Arduino.h>
 #include <TimeLib.h>
 #include <globals.h>
-#include "karma_attack.h"
-
 #if defined(ESP32)
 #include "FS.h"
 #else
@@ -30,23 +30,21 @@
 #endif
 
 //===== SETTINGS =====//
-#define CHANNEL 1
 #define FILENAME "probe_capture_"
 #define SAVE_INTERVAL 10     // save new file every 30s
 #define CHANNEL_HOPPING true // if true it will scan on all channels
 #define MAX_CHANNEL 11       //(only necessary if channelHopping is true)
 #define FAST_HOP_INTERVAL 500
-#define DEFAULT_HOP_INTERVAL 10000  // Normal mode (10s)
-
+#define DEFAULT_HOP_INTERVAL 10000 // Normal mode (10s)
 
 //===== Run-Time variables =====//
 unsigned long last_time = 0;
 unsigned long last_ChannelChange = 0;
-uint8_t channl = CHANNEL;
+uint8_t channl = 0;
 bool flOpen = false;
 bool is_LittleFS = true;
 uint32_t pkt_counter = 0;
-bool auto_hopping = true;  // Enable/disable flag
+bool auto_hopping = true; // Enable/disable flag
 unsigned long hop_interval = DEFAULT_HOP_INTERVAL;
 
 File _probe_file;
@@ -62,10 +60,8 @@ String generateUniqueFilename(FS &fs) {
     String basePath = "/ProbeData/";
     String baseName = FILENAME;
     String extension = ".txt";
-    
-    if (!fs.exists(basePath)) {
-        fs.mkdir(basePath);
-    }
+
+    if (!fs.exists(basePath)) { fs.mkdir(basePath); }
 
     int counter = 1;
     String filename;
@@ -76,7 +72,6 @@ String generateUniqueFilename(FS &fs) {
 
     return filename;
 }
-
 
 // Check if packet is a probe request with SSID
 bool isProbeRequestWithSSID(const wifi_promiscuous_pkt_t *packet) {
@@ -123,13 +118,21 @@ String extractSSID(const wifi_promiscuous_pkt_t *packet) {
     return "";
 }
 
-
 // Extract MAC address from probe request
 String extractMAC(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *frame = packet->payload;
     char mac[18];
-    snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
-             frame[10], frame[11], frame[12], frame[13], frame[14], frame[15]);
+    snprintf(
+        mac,
+        sizeof(mac),
+        "%02X:%02X:%02X:%02X:%02X:%02X",
+        frame[10],
+        frame[11],
+        frame[12],
+        frame[13],
+        frame[14],
+        frame[15]
+    );
     return String(mac);
 }
 
@@ -138,15 +141,15 @@ std::vector<ProbeRequest> getUniqueProbes() {
     std::vector<ProbeRequest> unique;
     std::set<String> seenSSIDs;
     for (auto it = probeRequests.rbegin(); it != probeRequests.rend(); ++it) {
-        const auto& probe = *it;
+        const auto &probe = *it;
         if (seenSSIDs.find(probe.ssid) == seenSSIDs.end()) {
             seenSSIDs.insert(probe.ssid);
             unique.push_back(probe);
         }
     }
-    
+
     std::reverse(unique.begin(), unique.end());
-    
+
     return unique;
 }
 
@@ -170,19 +173,18 @@ void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
         String key = mac + ssid;
         if (uniqueProbes.find(key) == uniqueProbes.end()) {
             uniqueProbes.insert(key);
-            
+
             ProbeRequest probe;
             probe.mac = mac;
             probe.ssid = ssid;
             probe.rssi = ctrl.rssi;
             probe.timestamp = millis();
-            probe.channel = channl;  // <-- Current channel
-            
+            probe.channel = all_wifi_channels[channl]; // <-- Current channel
+
             probeRequests.push_back(probe);
             pkt_counter++;
             // Print to serial for debugging
-            Serial.printf("[PROBE] MAC: %s, SSID: %s, RSSI: %d\n", 
-                         mac.c_str(), ssid.c_str(), ctrl.rssi);
+            Serial.printf("[PROBE] MAC: %s, SSID: %s, RSSI: %d\n", mac.c_str(), ssid.c_str(), ctrl.rssi);
         }
     }
 }
@@ -198,9 +200,7 @@ void safe_wifi_deinit() {
 
 void karma_setup() {
     // Clean shutdown if previous WiFi was active
-    if(esp_wifi_stop() == ESP_OK) {
-        safe_wifi_deinit();
-    }
+    if (esp_wifi_stop() == ESP_OK) { safe_wifi_deinit(); }
 
     delay(200);
 
@@ -233,7 +233,7 @@ void karma_setup() {
     ESP_ERROR_CHECK(esp_netif_init());
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 
-    cfg.rx_ba_win = 16;  // Increased from default 6
+    cfg.rx_ba_win = 16;     // Increased from default 6
     cfg.nvs_enable = false; // Disable NVS for monitor mode
 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -245,7 +245,7 @@ void karma_setup() {
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
     wifi_second_chan_t secondCh = (wifi_second_chan_t)NULL;
-    esp_wifi_set_channel(channl, secondCh);
+    esp_wifi_set_channel(all_wifi_channels[channl], secondCh);
 
     Serial.println("Probe sniffer started!");
     vTaskDelay(1000 / portTICK_RATE_MS);
@@ -266,15 +266,15 @@ void karma_setup() {
         if (auto_hopping && (currentTime - last_ChannelChange >= hop_interval)) {
             esp_wifi_set_promiscuous(false);
             esp_wifi_set_promiscuous_rx_cb(nullptr);
-            
+
             channl++;
-            if (channl > MAX_CHANNEL) channl = 1;
-            
+            if (channl >= sizeof(all_wifi_channels)) channl = 0;
+
             wifi_second_chan_t secondCh = (wifi_second_chan_t)NULL;
-            esp_wifi_set_channel(channl, secondCh);
+            esp_wifi_set_channel(all_wifi_channels[channl], secondCh);
             last_ChannelChange = currentTime;
             redraw = true;
-            
+
             esp_wifi_set_promiscuous(true);
             esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
         }
@@ -284,9 +284,9 @@ void karma_setup() {
             esp_wifi_set_promiscuous(false);
             esp_wifi_set_promiscuous_rx_cb(nullptr);
             channl++; // increase channel
-            if (channl > MAX_CHANNEL) channl = 1;
+            if (channl >= sizeof(all_wifi_channels)) channl = 0;
             wifi_second_chan_t secondCh = (wifi_second_chan_t)NULL;
-            esp_wifi_set_channel(channl, secondCh);
+            esp_wifi_set_channel(all_wifi_channels[channl], secondCh);
             redraw = true;
             vTaskDelay(50 / portTICK_RATE_MS);
             esp_wifi_set_promiscuous(true);
@@ -320,18 +320,15 @@ void karma_setup() {
             check(PrevPress);
             esp_wifi_set_promiscuous(false);
             esp_wifi_set_promiscuous_rx_cb(nullptr);
-            channl--; // decrease channel
-            if (channl < 1) channl = MAX_CHANNEL;
+            if (channl > 0) channl--; // decrease channel
+            else channl = sizeof(all_wifi_channels) - 1;
             wifi_second_chan_t secondCh = (wifi_second_chan_t)NULL;
-            esp_wifi_set_channel(channl, secondCh);
+            esp_wifi_set_channel(all_wifi_channels[channl], secondCh);
             redraw = true;
             vTaskDelay(50 / portTICK_PERIOD_MS);
             esp_wifi_set_promiscuous(true);
             esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
         }
-
-        
-
 
 #if defined(HAS_KEYBOARD) || defined(T_EMBED)
         if (check(EscPress)) { // Power or Esc button
@@ -346,63 +343,62 @@ void karma_setup() {
                 options = {
                     {"Karma atk",
                      [=]() {
-
                          // Get unique probe requests
                          std::vector<ProbeRequest> uniqueProbes = getUniqueProbes();
                          std::vector<Option> karmaOptions;
                          for (const auto &probe : uniqueProbes) {
-                             String itemText = probe.ssid + " (" + probe.rssi + "|ch " + String(probe.channel) + ")";
-                             karmaOptions.push_back({
-                                 itemText.c_str(),
-                                 [=]() {
-                                     esp_wifi_set_promiscuous(false);
-                                     esp_wifi_stop();
-                                     esp_wifi_deinit();  // Critical for clean restart
-                                     delay(500);
-                                     EvilPortal(probe.ssid, probe.channel, false, false);
-                                     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-                                     esp_wifi_init(&cfg);
-                                     esp_wifi_set_mode(WIFI_MODE_NULL);
-                                     esp_wifi_start();
-                                     esp_wifi_set_promiscuous(true);
-                                     esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
-                                 }
-                             });
+                             String itemText =
+                                 probe.ssid + " (" + probe.rssi + "|ch " + String(probe.channel) + ")";
+                             karmaOptions.push_back({itemText.c_str(), [=]() {
+                                                         esp_wifi_set_promiscuous(false);
+                                                         esp_wifi_stop();
+                                                         esp_wifi_deinit(); // Critical for clean restart
+                                                         delay(500);
+                                                         EvilPortal(probe.ssid, probe.channel, false, false);
+                                                         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+                                                         esp_wifi_init(&cfg);
+                                                         esp_wifi_set_mode(WIFI_MODE_NULL);
+                                                         esp_wifi_start();
+                                                         esp_wifi_set_promiscuous(true);
+                                                         esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
+                                                     }});
                          }
 
                          karmaOptions.push_back({"Back", [=]() {}});
                          loopOptions(karmaOptions);
-                     }},
+                     }                                                                                              },
 
-                     {"Save Probes",
+                    {"Save Probes",
                      [=]() {
-
                          if (is_LittleFS) saveProbesToFile(LittleFS);
                          else saveProbesToFile(SD);
                          displayTextLine("Probes saved!");
-                     }},
+                     }                                                                                              },
 
                     {"Clear Probes",
                      [=]() {
                          clearProbes();
                          displayTextLine("Probes cleared!");
-                     }},
-                     {
-                         auto_hopping ? "* Auto Hop" : "- Auto Hop",[=]() { 
-                         auto_hopping = !auto_hopping; 
+                     }                                                                                              },
+                    {auto_hopping ? "* Auto Hop" : "- Auto Hop",
+                     [=]() {
+                         auto_hopping = !auto_hopping;
                          displayTextLine(auto_hopping ? "Auto Hop: ON" : "Auto Hop: OFF");
-                     }},
-                     {
-                         hop_interval == FAST_HOP_INTERVAL ? "* Fast Hop" : "- Fast Hop",[=]() {
-                         hop_interval = (hop_interval == FAST_HOP_INTERVAL) ? DEFAULT_HOP_INTERVAL : FAST_HOP_INTERVAL;
-                         displayTextLine(hop_interval == FAST_HOP_INTERVAL ? "Fast Hop: ON" : "Fast Hop: OFF");
-                     }},
+                     }                                                                                              },
+                    {hop_interval == FAST_HOP_INTERVAL ? "* Fast Hop" : "- Fast Hop",
+                     [=]() {
+                         hop_interval =
+                             (hop_interval == FAST_HOP_INTERVAL) ? DEFAULT_HOP_INTERVAL : FAST_HOP_INTERVAL;
+                         displayTextLine(
+                             hop_interval == FAST_HOP_INTERVAL ? "Fast Hop: ON" : "Fast Hop: OFF"
+                         );
+                     }                                                                                              },
 
-                    {"Exit Sniffer", [=]() { returnToMenu = true; }},
+                    {"Exit Sniffer",                                                  [=]() { returnToMenu = true; }},
                 };
                 loopOptions(options);
             }
-        
+
             if (returnToMenu) goto Exit;
             redraw = false;
             tft.drawPixel(0, 0, 0);
@@ -413,7 +409,16 @@ void karma_setup() {
             padprintln("Sniffing ssids from probes...");
             padprintln(String(BTN_ALIAS) + ": Options Menu");
             tft.drawRightString(
-                "Ch." + String(channl < 10 ? "0" : "") + String(channl) + "(Next)", tftWidth - 10, tftHeight - 18, 1
+                "Ch." +
+                    String(
+                        all_wifi_channels[channl] < 10    ? "  "
+                        : all_wifi_channels[channl] < 100 ? " "
+                                                          : ""
+                    ) +
+                    String(all_wifi_channels[channl]) + "(Next)",
+                tftWidth - 10,
+                tftHeight - 18,
+                1
             );
         }
 
@@ -430,9 +435,7 @@ void karma_setup() {
             if (!probeRequests.empty()) {
                 ProbeRequest latest = probeRequests.back();
                 String displayText = latest.ssid + " -> " + latest.mac;
-                if (displayText.length() > 55) {
-                    displayText = displayText.substring(0, 52) + "...";
-                }
+                if (displayText.length() > 55) { displayText = displayText.substring(0, 52) + "..."; }
                 padprint(displayText);
             }
         }
@@ -450,18 +453,16 @@ Exit:
 
 void saveProbesToFile(FS &fs) {
     if (!fs.exists("/ProbeData")) fs.mkdir("/ProbeData");
-    
+
     File file = fs.open(filen, FILE_WRITE);
     if (file) {
         file.println("Timestamp,MAC,RSSI,SSID");
         for (const auto &probe : probeRequests) {
             // Double check we only save probes with SSID (shouldn't be needed but just in case)
             if (probe.ssid.length() > 0) {
-                file.printf("%lu,%s,%d,\"%s\"\n", 
-                           probe.timestamp, 
-                           probe.mac.c_str(), 
-                           probe.rssi, 
-                           probe.ssid.c_str());
+                file.printf(
+                    "%lu,%s,%d,\"%s\"\n", probe.timestamp, probe.mac.c_str(), probe.rssi, probe.ssid.c_str()
+                );
             }
         }
         file.close();

@@ -57,7 +57,8 @@ bool BruceTheme::openThemeFile(FS *fs, String filepath, bool overwriteConfigSett
         {"connect",     &theme.connect,     theme.paths.connect    },
         {"config",      &theme.config,      theme.paths.config     },
         {"boot_img",    &theme.boot_img,    theme.paths.boot_img   },
-        {"boot_sound",  &theme.boot_sound,  theme.paths.boot_sound }
+        {"boot_sound",  &theme.boot_sound,  theme.paths.boot_sound },
+        {"lora",        &theme.lora,        theme.paths.lora       }
     };
 
     JsonObject _th = jsonDoc.as<JsonObject>();
@@ -67,6 +68,8 @@ bool BruceTheme::openThemeFile(FS *fs, String filepath, bool overwriteConfigSett
             if (fs->exists(path)) {
                 *entry.flag = true;
                 entry.path = _th[entry.key].as<String>();
+                // Pre-cache PNGs into BIN files to avoid runtime decoding and allocations
+                if (path.endsWith(".png") || path.endsWith(".PNG")) { preparePngBin(*fs, path); }
             } else {
                 log_w("THEME: file not found: %s", entry.key);
             }

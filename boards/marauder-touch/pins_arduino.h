@@ -63,7 +63,7 @@ static const uint8_t ADC2 = 8;
 #define BTN_PIN 0
 #define BTN_ACT LOW
 
-#define LED -1
+#define TXLED -1
 #define LED_ON HIGH
 #define LED_OFF LOW
 

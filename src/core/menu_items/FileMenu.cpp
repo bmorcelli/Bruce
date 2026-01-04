@@ -11,7 +11,7 @@ void FileMenu::optionsMenu() {
     options.push_back({"LittleFS", [=]() { loopSD(LittleFS); }});
     options.push_back({"WebUI", loopOptionsWebUi});
 
-#if defined(SOC_USB_OTG_SUPPORTED) && !defined(USE_SD_MMC)
+#if defined(SOC_USB_OTG_SUPPORTED)
     options.push_back({"Mass Storage", [=]() { MassStorage(); }});
 #endif
     addOptionToMainMenu();

@@ -7,8 +7,8 @@
 #include "sd_functions.h"
 #include <ArduinoJson.h>
 
-const int max_FM_size = tftWidth / (LW * FM) - 1;
-const int max_FP_size = tftWidth / (LW)-2;
+int max_FM_size = tftWidth / (LW * FM) - 1;
+int max_FP_size = tftWidth / (LW)-2;
 
 // QWERTY KEYSET
 const int qwerty_keyboard_width = 12;
@@ -311,6 +311,8 @@ template <int KeyboardHeight, int KeyboardWidth>
 String generalKeyboard(
     String current_text, int max_size, String textbox_title, char keys[KeyboardHeight][KeyboardWidth][2]
 ) {
+    max_FM_size = tftWidth / (LW * FM) - 1;
+    max_FP_size = tftWidth / (LW)-2;
     resetTftDisplay();
     touchPoint.Clear();
 
@@ -835,14 +837,16 @@ String generalKeyboard(
 #endif
 #endif
 
-#if defined(HAS_ENCODER) // T-Embed and T-LoRa-Pager
-            if (check(SelPress) || selection_made) {
+#if defined(HAS_ENCODER) // T-Embed and T-LoRa-Pager and WaveSentry
+            // WaveSentry has Touchscreen and Encoder, but the touchscreen is prioritized
+            // if touchscreen is pressed, ignore the encoder input
+            if ((check(SelPress) || selection_made) && touchPoint.pressed == false) {
                 selection_made = true;
             } else {
                 /* NEXT "Btn" to move forward on th X axis (to the right) */
                 // if ESC is pressed while NEXT or PREV is received, then we navigate on the Y axis instead
-                if (check(NextPress)) {
-                    if (check(EscPress)) {
+                if (check(NextPress) && touchPoint.pressed == false) {
+                    if (EscPress) {
                         y++;
                     } else if ((x >= buttons_number - 1 && y <= -1) || (x >= KeyboardWidth - 1 && y >= 0)) {
                         // if we are at the end of the current line
@@ -862,8 +866,8 @@ String generalKeyboard(
                     redraw = true;
                 }
                 /* PREV "Btn" to move backwards on th X axis (to the left) */
-                if (check(PrevPress)) {
-                    if (check(EscPress)) {
+                if (check(PrevPress) && touchPoint.pressed == false) {
+                    if (EscPress) {
                         y--;
                     } else if (x <= 0) {
                         y--;

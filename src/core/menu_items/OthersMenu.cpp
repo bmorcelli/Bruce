@@ -14,7 +14,7 @@ void OthersMenu::optionsMenu() {
     options = {
         {"QRCodes",      qrcode_menu                              },
         {"Megalodon",    shark_setup                              },
-#ifdef MIC_SPM1423
+#if defined(MIC_SPM1423) || defined(MIC_INMP441)
         {"Mic Spectrum", mic_test                                 },
         {"Mic Record",   mic_record                               }, //@deveclipse
 #endif

@@ -46,7 +46,9 @@ void ConfigMenu::optionsMenu() {
         {"Startup WiFi", setWifiStartupConfig},
         {"Startup App", setStartupApp},
         {"Hide/Show Apps", []() { mainMenu.hideAppsMenu(); }},
+#if !defined(LITE_VERSION)
         {"Toggle BLE API", []() { enableBLEAPI(); }},
+#endif
         {"Network Creds", setNetworkCredsMenu},
         {"BadUSB/BLE", setBadUSBBLEMenu},
         {"Clock", setClock},
@@ -71,6 +73,10 @@ void ConfigMenu::devMenu() {
         {"I2C Finder",      find_i2c_addresses                                   },
         {"CC1101 Pins",     [=]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); }},
         {"NRF24  Pins",     [=]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); } },
+#if !defined(LITE_VERSION)
+        {"LoRa Pins",       [=]() { setSPIPinsMenu(bruceConfigPins.LoRa_bus); }  },
+        {"W5500 Pins",      [=]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); } },
+#endif
         {"SDCard Pins",     [=]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); }},
         //{"SYSI2C Pins", [=]() { setI2CPinsMenu(bruceConfigPins.sys_i2c); }   },
         {"I2C Pins",        [=]() { setI2CPinsMenu(bruceConfigPins.i2c_bus); }   },

@@ -20,8 +20,8 @@ void IRMenu::optionsMenu() {
     addOptionToMainMenu();
 
     String txt = "Infrared";
-    txt += " Tx: " + String(bruceConfig.irTx) + " Rx: " + String(bruceConfig.irRx) +
-           " Rpts: " + String(bruceConfig.irTxRepeats);
+    txt += " Tx: " + String(bruceConfigPins.irTx) + " Rx: " + String(bruceConfigPins.irRx) +
+           " Rpts: " + String(bruceConfigPins.irTxRepeats);
     loopOptions(options, MENU_TYPE_SUBMENU, txt.c_str());
 }
 

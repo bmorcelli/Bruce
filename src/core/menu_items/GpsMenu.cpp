@@ -14,7 +14,7 @@ void GpsMenu::optionsMenu() {
     };
     addOptionToMainMenu();
 
-    String txt = "GPS (" + String(bruceConfig.gpsBaudrate) + " bps)";
+    String txt = "GPS (" + String(bruceConfigPins.gpsBaudrate) + " bps)";
     loopOptions(options, MENU_TYPE_SUBMENU, txt.c_str());
 }
 

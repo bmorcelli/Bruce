@@ -11,7 +11,6 @@ JsonDocument BruceConfig::toJson() const {
     setting["themeFile"] = themePath;
     setting["themeOnSd"] = theme.fs;
 
-    setting["rot"] = rotation;
     setting["dimmerSet"] = dimmerSet;
     setting["bright"] = bright;
     setting["tmz"] = tmz;
@@ -52,30 +51,11 @@ JsonDocument BruceConfig::toJson() const {
 
     setting["evilWifiPasswordMode"] = evilPortalPasswordMode;
 
-    setting["bleName"] = bleName;
-
     JsonObject _wifi = setting["wifi"].to<JsonObject>();
     for (const auto &pair : wifi) { _wifi[pair.first] = pair.second; }
 
-    setting["irTx"] = irTx;
-    setting["irTxRepeats"] = irTxRepeats;
-    setting["irRx"] = irRx;
-
-    setting["rfTx"] = rfTx;
-    setting["rfRx"] = rfRx;
-    setting["rfModule"] = rfModule;
-    setting["rfFreq"] = rfFreq;
-    setting["rfFxdFreq"] = rfFxdFreq;
-    setting["rfScanRange"] = rfScanRange;
-
-    setting["rfidModule"] = rfidModule;
-
-    setting["iButton"] = iButton;
-
     JsonArray _mifareKeys = setting["mifareKeys"].to<JsonArray>();
     for (auto key : mifareKeys) _mifareKeys.add(key);
-
-    setting["gpsBaudrate"] = gpsBaudrate;
 
     setting["startupApp"] = startupApp;
     setting["wigleBasicToken"] = wigleBasicToken;
@@ -165,12 +145,6 @@ void BruceConfig::fromFile(bool checkFS) {
         log_e("Fail");
     }
 
-    if (!setting["rot"].isNull()) {
-        rotation = setting["rot"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
     if (!setting["dimmerSet"].isNull()) {
         dimmerSet = setting["dimmerSet"].as<int>();
     } else {
@@ -264,9 +238,8 @@ void BruceConfig::fromFile(bool checkFS) {
 
     if (!setting["webUISessions"].isNull()) {
         webUISessions.clear();
-        for (JsonPair kv : setting["webUISessions"].as<JsonObject>()) {
-            webUISessions.push_back(kv.value().as<String>());
-        }
+        JsonObject webUISessionsObj = setting["webUISessions"].as<JsonObject>();
+        for (JsonPair kv : webUISessionsObj) { webUISessions.push_back(kv.value().as<String>()); }
     } else {
         count++;
         log_e("Fail");
@@ -293,7 +266,8 @@ void BruceConfig::fromFile(bool checkFS) {
     // Wifi List
     if (!setting["wifi"].isNull()) {
         wifi.clear();
-        for (JsonPair kv : setting["wifi"].as<JsonObject>()) wifi[kv.key().c_str()] = kv.value().as<String>();
+        JsonObject wifiObj = setting["wifi"].as<JsonObject>();
+        for (JsonPair kv : wifiObj) wifi[kv.key().c_str()] = kv.value().as<String>();
     } else {
         count++;
         log_e("Fail");
@@ -333,96 +307,10 @@ void BruceConfig::fromFile(bool checkFS) {
         log_e("Fail");
     }
 
-    if (!setting["bleName"].isNull()) {
-        bleName = setting["bleName"].as<String>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
-    if (!setting["irTx"].isNull()) {
-        irTx = setting["irTx"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["irTxRepeats"].isNull()) {
-        irTxRepeats = setting["irTxRepeats"].as<uint8_t>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["irRx"].isNull()) {
-        irRx = setting["irRx"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
-    if (!setting["rfTx"].isNull()) {
-        rfTx = setting["rfTx"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["rfRx"].isNull()) {
-        rfRx = setting["rfRx"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["rfModule"].isNull()) {
-        rfModule = setting["rfModule"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["rfFreq"].isNull()) {
-        rfFreq = setting["rfFreq"].as<float>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["rfFxdFreq"].isNull()) {
-        rfFxdFreq = setting["rfFxdFreq"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-    if (!setting["rfScanRange"].isNull()) {
-        rfScanRange = setting["rfScanRange"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
-    if (!setting["rfidModule"].isNull()) {
-        rfidModule = setting["rfidModule"].as<int>();
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
-    if (!setting["iButton"].isNull()) {
-        int val = setting["iButton"].as<int>();
-        if (val < GPIO_NUM_MAX) iButton = val;
-        else log_w("iButton pin not set");
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
     if (!setting["mifareKeys"].isNull()) {
         mifareKeys.clear();
         JsonArray _mifareKeys = setting["mifareKeys"].as<JsonArray>();
         for (JsonVariant key : _mifareKeys) mifareKeys.insert(key.as<String>());
-    } else {
-        count++;
-        log_e("Fail");
-    }
-
-    if (!setting["gpsBaudrate"].isNull()) {
-        gpsBaudrate = setting["gpsBaudrate"].as<int>();
     } else {
         count++;
         log_e("Fail");
@@ -525,7 +413,6 @@ void BruceConfig::factoryReset() {
 }
 
 void BruceConfig::validateConfig() {
-    validateRotationValue();
     validateDimmerValue();
     validateBrightValue();
     validateTmzValue();
@@ -540,11 +427,7 @@ void BruceConfig::validateConfig() {
     validateLedEffectSpeedValue();
     validateLedEffectDirectionValue();
 #endif
-    validateRfScanRangeValue();
-    validateRfModuleValue();
-    validateRfidModuleValue();
     validateMifareKeysItems();
-    validateGpsBaudrateValue();
     validateDevModeValue();
     validateColorInverted();
     validateBadUSBBLEKeyboardLayout();
@@ -557,16 +440,6 @@ void BruceConfig::validateConfig() {
 void BruceConfig::setUiColor(uint16_t primary, uint16_t *secondary, uint16_t *background) {
     BruceTheme::_setUiColor(primary, secondary, background);
     saveFile();
-}
-
-void BruceConfig::setRotation(int value) {
-    rotation = value;
-    validateRotationValue();
-    saveFile();
-}
-
-void BruceConfig::validateRotationValue() {
-    if (rotation < 0 || rotation > 3) rotation = 1;
 }
 
 void BruceConfig::setDimmer(int value) {
@@ -785,88 +658,6 @@ void BruceConfig::validateEvilPasswordMode() {
     if (evilPortalPasswordMode < 0 || evilPortalPasswordMode > 2) evilPortalPasswordMode = FULL_PASSWORD;
 }
 
-void BruceConfig::setBleName(String value) {
-    bleName = value;
-    saveFile();
-}
-
-void BruceConfig::setIrTxPin(int value) {
-    irTx = value;
-    saveFile();
-}
-
-void BruceConfig::setIrTxRepeats(uint8_t value) {
-    irTxRepeats = value;
-    saveFile();
-}
-
-void BruceConfig::setIrRxPin(int value) {
-    irRx = value;
-    saveFile();
-}
-
-void BruceConfig::setRfTxPin(int value) {
-    rfTx = value;
-    saveFile();
-}
-
-void BruceConfig::setRfRxPin(int value) {
-    rfRx = value;
-    saveFile();
-}
-
-void BruceConfig::setRfModule(RFModules value) {
-    rfModule = value;
-    validateRfModuleValue();
-    saveFile();
-}
-
-void BruceConfig::validateRfModuleValue() {
-    if (rfModule != M5_RF_MODULE && rfModule != CC1101_SPI_MODULE) { rfModule = M5_RF_MODULE; }
-}
-
-void BruceConfig::setRfFreq(float value, int fxdFreq) {
-    rfFreq = value;
-    if (fxdFreq > 1) rfFxdFreq = fxdFreq;
-    saveFile();
-}
-
-void BruceConfig::setRfFxdFreq(float value) {
-    rfFxdFreq = value;
-    saveFile();
-}
-
-void BruceConfig::setRfScanRange(int value, int fxdFreq) {
-    rfScanRange = value;
-    rfFxdFreq = fxdFreq;
-    validateRfScanRangeValue();
-    saveFile();
-}
-
-void BruceConfig::validateRfScanRangeValue() {
-    if (rfScanRange < 0 || rfScanRange > 3) rfScanRange = 3;
-}
-
-void BruceConfig::setRfidModule(RFIDModules value) {
-    rfidModule = value;
-    validateRfidModuleValue();
-    saveFile();
-}
-
-void BruceConfig::validateRfidModuleValue() {
-    if (rfidModule != M5_RFID2_MODULE && rfidModule != PN532_I2C_MODULE && rfidModule != PN532_SPI_MODULE &&
-        rfidModule != RC522_SPI_MODULE && rfidModule != PN532_I2C_SPI_MODULE) {
-        rfidModule = M5_RFID2_MODULE;
-    }
-}
-
-void BruceConfig::setiButtonPin(int value) {
-    if (value < GPIO_NUM_MAX) {
-        iButton = value;
-        saveFile();
-    } else log_e("iButton: Gpio pin not set, incompatible with this device\n");
-}
-
 void BruceConfig::addMifareKey(String value) {
     if (value.length() != 12) return;
     mifareKeys.insert(value);
@@ -879,18 +670,6 @@ void BruceConfig::validateMifareKeysItems() {
         if (key->length() != 12) key = mifareKeys.erase(key);
         else ++key;
     }
-}
-
-void BruceConfig::setGpsBaudrate(int value) {
-    gpsBaudrate = value;
-    validateGpsBaudrateValue();
-    saveFile();
-}
-
-void BruceConfig::validateGpsBaudrateValue() {
-    if (gpsBaudrate != 9600 && gpsBaudrate != 19200 && gpsBaudrate != 57600 && gpsBaudrate != 38400 &&
-        gpsBaudrate != 115200)
-        gpsBaudrate = 9600;
 }
 
 void BruceConfig::setStartupApp(String value) {
