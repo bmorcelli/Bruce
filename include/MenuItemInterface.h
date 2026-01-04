@@ -11,7 +11,7 @@ public:
     virtual void drawIcon(float scale = 1) = 0;
     virtual void drawIconImg() { drawImg(*bruceConfig.themeFS(), themePath(), 0, imgCenterY, true); }
     virtual bool hasTheme() = 0;
-    virtual String themePath() = "";
+    virtual String themePath() = 0;
 
     bool checkTheme() { return hasTheme() && themePath() != ""; }
     String getName() const { return _name; }
