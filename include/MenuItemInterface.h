@@ -9,7 +9,9 @@ public:
     virtual ~MenuItemInterface() = default;
     virtual void optionsMenu(void) = 0;
     virtual void drawIcon(float scale = 1) = 0;
-    virtual void drawIconImg() { drawImg(*bruceConfig.themeFS(), themePath(), 0, imgCenterY, true); }
+    virtual void drawIconImg() {
+        drawImg(*bruceConfig.themeFS(), bruceConfig.getThemeItemImg(themePath()), 0, imgCenterY, true);
+    }
     virtual bool hasTheme() = 0;
     virtual String themePath() = 0;
 
