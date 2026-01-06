@@ -35,7 +35,7 @@ public:
 
     const char *filepath = "/bruce.conf";
 
-    // Settings
+    //  Settings
     int dimmerSet = 10;
     int bright = 100;
     float tmz = 0;
