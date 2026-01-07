@@ -359,12 +359,18 @@ def run_platformio(env_name: str, action: str, port: str = "") -> Tuple[bool, st
     user_profile = os.environ.get("USERPROFILE") or os.environ.get("HOME")
     
     # 1. Environment Setup (Modify PATH)
-    # $env:Path += ";$env:USERPROFILE\.platformio\penv\Scripts"
+    # Windows: .platformio\penv\Scripts
+    # Linux/Termux/Mac: .platformio/penv/bin
     if user_profile:
-        penv_scripts = os.path.join(user_profile, ".platformio", "penv", "Scripts")
-        if os.path.exists(penv_scripts) and penv_scripts not in os.environ["PATH"]:
-            os.environ["PATH"] += os.pathsep + penv_scripts
-            print(f"  {color_text('ℹ added to PATH:', Colors.DIM)} {penv_scripts}")
+        # Check for Windows Scripts folder
+        penv_scripts_win = os.path.join(user_profile, ".platformio", "penv", "Scripts")
+        if os.path.exists(penv_scripts_win) and penv_scripts_win not in os.environ["PATH"]:
+            os.environ["PATH"] += os.pathsep + penv_scripts_win
+            
+        # Check for Unix/Termux bin folder
+        penv_bin_unix = os.path.join(user_profile, ".platformio", "penv", "bin")
+        if os.path.exists(penv_bin_unix) and penv_bin_unix not in os.environ["PATH"]:
+            os.environ["PATH"] += os.pathsep + penv_bin_unix
 
     # 2. Cleanup (Remove-Item...)
     # Only do this heavy cleanup if we are building/uploading to ensure clean state as requested
@@ -554,9 +560,16 @@ def main():
             print(color_text("    If the device doesn't respond, try pressing the reset button.", Colors.DIM))
         elif action == 'build':
             # Find the output binary
-            bin_path = script_dir / f"Bruce-{selected_env}.bin"
+            # Updated to check build_output folder
+            bin_path = script_dir / "build_output" / selected_env / f"Bruce-{selected_env}.bin"
+            if not bin_path.exists():
+                # Fallback to old location just in case
+                bin_path = script_dir / f"Bruce-{selected_env}.bin"
+
             if bin_path.exists():
                 print(f"    Firmware binary: {color_text(str(bin_path), Colors.CYAN)}")
+                print(color_text(f"    Location: {bin_path.parent}", Colors.DIM))
+            
             print(color_text("    Use 'Flash Only' option to upload to your device.", Colors.DIM))
     else:
         print(color_text("\n  ✗ FAILED!", Colors.RED + Colors.BOLD))
