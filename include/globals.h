@@ -35,10 +35,11 @@ extern RTC_DateTypeDef _date;
 
 // Declaração dos objetos TFT
 #if defined(HAS_SCREEN)
+#include <display/tft.h>
 #include <tftLogger.h>
 extern tft_logger tft;
-extern TFT_eSprite sprite;
-extern TFT_eSprite draw;
+extern tft_sprite sprite;
+extern tft_sprite draw;
 #else
 #include <tftLogger.h>
 extern tft_logger tft;
