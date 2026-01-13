@@ -14,8 +14,8 @@ char *scriptName = NULL;
 // Code interpreter, must be called in the loop() function to work
 void interpreterHandler(void *pvParameters) {
     Serial.printf(
-        "init interpreter:\nPSRAM: [Free: %d, max alloc: %d],\nRAM: [Free: %d, "
-        "max alloc: %d]\n",
+        "init interpreter:\nPSRAM: [Free: %ld, max alloc: %ld],\nRAM: [Free: %ld, "
+        "max alloc: %ld]\n",
         ESP.getFreePsram(),
         ESP.getMaxAllocPsram(),
         ESP.getFreeHeap(),
@@ -77,8 +77,8 @@ void interpreterHandler(void *pvParameters) {
     // registerWiFi(ctx);
 
     Serial.printf(
-        "global populated:\nPSRAM: [Free: %d, max alloc: %d],\nRAM: [Free: %d, "
-        "max alloc: %d]\n",
+        "global populated:\nPSRAM: [Free: %ld, max alloc: %ld],\nRAM: [Free: %ld, "
+        "max alloc: %ld]\n",
         ESP.getFreePsram(),
         ESP.getMaxAllocPsram(),
         ESP.getFreeHeap(),

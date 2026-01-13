@@ -1,8 +1,8 @@
-#ifndef LIB_HAL_LOVYAN_H
-#define LIB_HAL_LOVYAN_H
-#if defined(USE_LOVYANGFX)
+#ifndef LIB_HAL_M5GFX_H
+#define LIB_HAL_M5GFX_H
+#if defined(USE_M5GFX)
 
-#include <LovyanGFX.hpp>
+#include <M5Unified.h>
 #include <SPI.h>
 #include <algorithm>
 #include <cmath>
@@ -10,9 +10,8 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
-#define LOVYAN_PANEL Panel_ST7789
-#define LOVYAN_BUS Bus_SPI
-class tft_display : private lgfx::LGFX_Device {
+
+class tft_display {
 public:
     explicit tft_display(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);
     friend class tft_sprite;
@@ -78,8 +77,8 @@ public:
 
     size_t write(uint8_t c);
     size_t write(const uint8_t *buffer, size_t size);
-    template <typename T> size_t print(const T &val) { return lgfx::LGFX_Device::print(val); }
-    template <typename T> size_t println(const T &val) { return lgfx::LGFX_Device::println(val); }
+    template <typename T> size_t print(const T &val) { return M5.Display.print(val); }
+    template <typename T> size_t println(const T &val) { return M5.Display.println(val); }
     size_t println();
 
     size_t printf(const char *fmt, ...);
@@ -103,15 +102,13 @@ private:
             for (int32_t col = 0; col < w; ++col) {
                 uint16_t color = data[row * w + col];
                 if (_swapBytes) color = static_cast<uint16_t>((color >> 8) | (color << 8));
-                lgfx::LGFX_Device::drawPixel(x + col, y + row, color);
+                M5.Display.drawPixel(x + col, y + row, color);
             }
         }
     }
 
     int16_t drawAlignedString(const String &s, int32_t x, int32_t y, uint8_t datum);
 
-    lgfx::LOVYAN_PANEL _panel_instance;
-    lgfx::LOVYAN_BUS _bus_instance;
     uint16_t _height = TFT_HEIGHT;
     uint16_t _width = TFT_WIDTH;
     bool _swapBytes = false;
