@@ -57,7 +57,7 @@ uint32_t webuiCallback(cmd *c) {
     Argument arg = cmd.getArgument("noAp");
     bool noAp = arg.isSet();
 
-    serialDevice->println("Starting Web UI " + !noAp ? "AP" : "STA");
+    serialDevice->println(String("Starting Web UI ") + !noAp ? "AP" : "STA");
     serialDevice->println("Press ESC to quit");
     startWebUi(!noAp); // MEMO: will quit when check(EscPress)
 
@@ -95,7 +95,10 @@ uint32_t listenTCPCallback(cmd *c) {
 
 /*
 uint32_t responderCallback(cmd *c) {
-    if (!wifiConnected) Serial.println("Connect to a WiFi first."); return false;
+    if (!wifiConnected) {
+        Serial.println("Connect to a WiFi first.");
+        return false;
+    }
 
     responder();
 
