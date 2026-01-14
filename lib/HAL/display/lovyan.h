@@ -94,6 +94,7 @@ public:
     void
     pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *data, bool bpp8, uint16_t *cmap);
     void invertDisplay(bool i);
+    void sleep(bool value);
     void setSwapBytes(bool swap);
     bool getSwapBytes() const;
     uint16_t color565(uint8_t r, uint8_t g, uint8_t b) const;

@@ -277,6 +277,16 @@ void tft_display::invertDisplay(bool i) {
     if (_gfx) _gfx->invertDisplay(i);
 }
 
+void tft_display::sleep(bool value) {
+    if (value) {
+        writecommand(0x10);
+        delay(5);
+    } else {
+        writecommand(0x11);
+        delay(120);
+    }
+}
+
 void tft_display::setSwapBytes(bool swap) { _swapBytes = swap; }
 
 bool tft_display::getSwapBytes() const { return _swapBytes; }

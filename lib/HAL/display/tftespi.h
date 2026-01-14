@@ -53,6 +53,7 @@ public:
     using TFT_eSPI::setTextFont;
     using TFT_eSPI::setTextSize;
     using TFT_eSPI::setTextWrap;
+    using TFT_eSPI::sleep;
     using TFT_eSPI::textWidth;
     using TFT_eSPI::width;
     using TFT_eSPI::write;
