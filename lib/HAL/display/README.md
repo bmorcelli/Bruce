@@ -5,6 +5,13 @@ in your `pins_arduino.h` (or board header). Use only the macros that match the b
 
 All examples below are complete and can be copied into `pins_arduino.h` and edited with your board values.
 
+Add the one of the following libs to your env:
+```
+	;moononournation/GFX Library for Arduino @ ^1.5.5
+	;lovyan03/LovyanGFX @ ^1.2.0
+	;m5stack/M5Unified @ ^0.2.11
+	;m5stack/M5gfx @ ^0.2.18
+```
 ## LovyanGFX (USE_LOVYANGFX)
 
 LovyanGFX here supports SPI, I2C, and Parallel 8-bit. You must define:
