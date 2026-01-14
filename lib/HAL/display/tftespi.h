@@ -1,6 +1,6 @@
 #ifndef LIB_HAL_TFTESPI_H
 #define LIB_HAL_TFTESPI_H
-
+#include <pins_arduino.h>
 #ifdef USE_TFT_ESPI
 #include <TFT_eSPI.h>
 class tft_display : private TFT_eSPI {

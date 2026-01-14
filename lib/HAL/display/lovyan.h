@@ -1,6 +1,47 @@
 #ifndef LIB_HAL_LOVYAN_H
 #define LIB_HAL_LOVYAN_H
+#include <pins_arduino.h>
 #if defined(USE_LOVYANGFX)
+
+#if !defined(LOVYAN_PANEL)
+#error "You must define LOVYAN_PANEL:\n \
+- Panel_ST7789\n \
+- Panel_GC9A01\n \
+- Panel_GDEW0154M09\n \
+- Panel_HX8357B \n \
+- Panel_HX8357D \n \
+- Panel_ILI9163 \n \
+- Panel_ILI9341 \n \
+- Panel_ILI9342 \n \
+- Panel_ILI9481 \n \
+- Panel_ILI9486 \n \
+- Panel_ILI9488 \n \
+- Panel_IT8951  \n \
+- Panel_RA8875  \n \
+- Panel_SH1106  \n \
+- Panel_SH1107  \n \
+- Panel_SSD1306 \n \
+- Panel_SSD1327 \n \
+- Panel_SSD1331 \n \
+- Panel_SSD1351 \n \
+- Panel_SSD1357 \n \
+- Panel_SSD1963 \n \
+- Panel_ST7735  \n \
+- Panel_ST7735S \n \
+- Panel_ST7789  \n \
+- Panel_ST7796"
+#endif
+
+#if !defined(LOVYAN_BUS)
+#error "You must define LOVYAN_BUS: \n\
+    - Bus_SPI\n \
+    - Bus_Parallel8\n \
+    - Bus_I2C "
+#endif
+
+#if !defined(LOVYAN_SPI_BUS) && !defined(LOVYAN_I2C_BUS) && !defined(LOVYAN_8PARALLEL_BUS)
+#error "You must define the bus macro: LOVYAN_SPI_BUS or LOVYAN_I2C_BUS or LOVYAN_8PARALLEL_BUS\n"
+#endif
 
 #include <LovyanGFX.hpp>
 #include <SPI.h>
@@ -10,8 +51,6 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
-#define LOVYAN_PANEL Panel_ST7789
-#define LOVYAN_BUS Bus_SPI
 class tft_display : private lgfx::LGFX_Device {
 public:
     explicit tft_display(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);

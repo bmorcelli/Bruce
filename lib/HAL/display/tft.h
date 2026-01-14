@@ -48,7 +48,7 @@ class TFT_eSPI;
 class tft_sprite;
 class tft_logger;
 
-#ifdef USE_TFT_ESPI
+#if defined(USE_TFT_ESPI)
 #include "tftespi.h"
 
 #elif defined(USE_ARDUINO_GFX)

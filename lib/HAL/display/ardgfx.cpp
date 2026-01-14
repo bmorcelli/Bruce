@@ -3,10 +3,116 @@
 #if defined(USE_ARDUINO_GFX)
 
 tft_display::tft_display(int16_t _W, int16_t _H) : _height(_H), _width(_W) {
-    bus = new Arduino_HWSPI(14, 5, 13, 15, -1, &SPI);
-    _gfx = new Arduino_ST7789(bus, TFT_RST, ROTATION, 0, _width, _height, 52, 40, 53, 40);
-}
+    // clang-format off
+#if TFT_DATABUS_N == 3
+    #if TFT_DISPLAY_DRIVER_N != 49
+        #error "TFT_DATABUS_N=3 requires TFT_DISPLAY_DRIVER_N=49 (Arduino_RGB_Display)"
+    #endif
+    bus = new Arduino_ESP32RGBPanel( // TFT_DATABUS(
+        TFT_DE,
+        TFT_VSYNC,
+        TFT_HSYNC,
+        TFT_PCLK,
+        TFT_R0,
+        TFT_R1,
+        TFT_R2,
+        TFT_R3,
+        TFT_R4,
+        TFT_G0,
+        TFT_G1,
+        TFT_G2,
+        TFT_G3,
+        TFT_G4,
+        TFT_G5,
+        TFT_B0,
+        TFT_B1,
+        TFT_B2,
+        TFT_B3,
+        TFT_B4,
+        TFT_HSYNC_POL,
+        TFT_HSYNC_FRONT_PORCH,
+        TFT_HSYNC_PULSE_WIDTH,
+        TFT_HSYNC_BACK_PORCH,
+        TFT_VSYNC_POL,
+        TFT_VSYNC_FRONT_PORCH,
+        TFT_VSYNC_PULSE_WIDTH,
+        TFT_VSYNC_BACK_PORCH,
+        TFT_PCLK_ACTIVE_NEG,
+        TFT_PREF_SPEED
+    );
+    #if !defined(TFT_WIDTH) || !defined(TFT_HEIGHT)
+        #error "Missing Macros definitions of: TFT_WIDTH, TFT_HEIGHT"
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(TFT_WIDTH, TFT_HEIGHT, bus, 0, true);
+#endif
+#if TFT_DATABUS_N == 0
+    bus = new TFT_DATABUS(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, TFT_MISO, &SPI);
+#elif TFT_DATABUS_N == 1
+    bus = new TFT_DATABUS(TFT_CS, TFT_SCLK, TFT_D0, TFT_D1, TFT_D2, TFT_D3);
+#elif TFT_DATABUS_N == 2
+    bus = new TFT_DATABUS(
+        TFT_DC, TFT_CS, TFT_WR, TFT_RD, TFT_D0, TFT_D1, TFT_D2, TFT_D3, TFT_D4, TFT_D5, TFT_D6, TFT_D7
+    );
+#endif
+#if TFT_DISPLAY_DRIVER_N == 50
+    #error "Arduino_DSI_Display requires a DSI panel instance; not supported in this init."
+#elif TFT_DISPLAY_DRIVER_N >= 47 && TFT_DISPLAY_DRIVER_N <= 48
+    #if !defined(TFT_RST) || !defined(TFT_WIDTH) || !defined(TFT_HEIGHT)
+        #error "Missing Macros definitions of: TFT_RST, TFT_WIDTH, TFT_HEIGHT"
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(bus, TFT_RST, TFT_WIDTH, TFT_HEIGHT);
+#elif TFT_DISPLAY_DRIVER_N == 44
+    #if !defined(TFT_RST) || !defined(TFT_ROTATION)
+        #error "Missing Macros definitions of: TFT_RST, TFT_ROTATION"
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(bus, TFT_RST, TFT_ROTATION);
+#elif TFT_DISPLAY_DRIVER_N >= 45 && TFT_DISPLAY_DRIVER_N <= 46
+    #if !defined(TFT_RST)
+        #error "Missing Macros definitions of: TFT_RST"
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(bus, TFT_RST);
+#elif TFT_DISPLAY_DRIVER_N >= 36 && TFT_DISPLAY_DRIVER_N <= 43
+    #if !defined(TFT_RST) || !defined(TFT_ROTATION) || !defined(TFT_WIDTH) || !defined(TFT_HEIGHT) ||            \
+        !defined(TFT_COL_OFS1) || !defined(TFT_ROW_OFS1) || !defined(TFT_COL_OFS2) || !defined(TFT_ROW_OFS2)
+        #error "Missing Macros definitions of: TFT_RST, TFT_ROTATION, TFT_WIDTH,\
+                TFT_HEIGHT, TFT_COL_OFS1, TFT_ROW_OFS1, TFT_COL_OFS2,TFT_ROW_OFS2 "
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(
+        bus,
+        TFT_RST,
+        TFT_ROTATION,
+        TFT_WIDTH,
+        TFT_HEIGHT,
+        TFT_COL_OFS1,
+        TFT_ROW_OFS1,
+        TFT_COL_OFS2,
+        TFT_ROW_OFS2
+    );
+#elif TFT_DISPLAY_DRIVER_N >= 23 && TFT_DISPLAY_DRIVER_N <= 35
+        _gfx = new TFT_DISPLAY_DRIVER(bus, TFT_RST, TFT_ROTATION, TFT_IPS);
+#else
+    #if !defined(TFT_RST) || !defined(TFT_ROTATION) || !defined(TFT_IPS) || !defined(TFT_WIDTH) ||               \
+        !defined(TFT_HEIGHT) || !defined(TFT_COL_OFS1) || !defined(TFT_ROW_OFS1) || !defined(TFT_COL_OFS2) ||    \
+        !defined(TFT_ROW_OFS2)
+        #error "Missing Macros definitions of: TFT_RST, TFT_ROTATION, TFT_IPS, TFT_WIDTH,\
+                TFT_HEIGHT, TFT_COL_OFS1, TFT_ROW_OFS1, TFT_COL_OFS2,TFT_ROW_OFS2 "
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(
+        bus,
+        TFT_RST,
+        TFT_ROTATION,
+        TFT_IPS,
+        TFT_WIDTH,
+        TFT_HEIGHT,
+        TFT_COL_OFS1,
+        TFT_ROW_OFS1,
+        TFT_COL_OFS2,
+        TFT_ROW_OFS2
+    );
+#endif
 
+}
+// clang-format on
 void tft_display::begin(uint32_t speed) {
     (void)speed;
     if (_gfx) {
@@ -97,11 +203,11 @@ void tft_display::fillTriangle(
 }
 
 void tft_display::drawEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    drawEllipseFallback(x0, y0, rx, ry, color);
+    _gfx->drawEllipse(x0, y0, rx, ry, color);
 }
 
 void tft_display::fillEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    fillEllipseFallback(x0, y0, rx, ry, color);
+    _gfx->fillEllipse(x0, y0, rx, ry, color);
 }
 
 void tft_display::drawArc(
@@ -313,84 +419,6 @@ void tft_display::drawWideLineFallback(float ax, float ay, float bx, float by, f
             color
         );
     }
-}
-
-void tft_display::drawEllipseFallback(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint32_t color) {
-    if (!_gfx || rx < 0 || ry < 0) return;
-    int32_t rx2 = rx * rx;
-    int32_t ry2 = ry * ry;
-    int32_t x = 0;
-    int32_t y = ry;
-    int64_t px = 0;
-    int64_t py = 2LL * rx2 * y;
-    plot4EllipsePoints(x0, y0, x, y, color);
-    int64_t p = std::llround(ry2 - (rx2 * ry) + (0.25 * rx2));
-    while (px < py) {
-        ++x;
-        px += 2LL * ry2;
-        if (p < 0) p += ry2 + px;
-        else {
-            --y;
-            py -= 2LL * rx2;
-            p += ry2 + px - py;
-        }
-        plot4EllipsePoints(x0, y0, x, y, color);
-    }
-    p = std::llround(ry2 * (x + 0.5) * (x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2 * ry2);
-    while (y > 0) {
-        --y;
-        py -= 2LL * rx2;
-        if (p > 0) p += rx2 - py;
-        else {
-            ++x;
-            px += 2LL * ry2;
-            p += rx2 - py + px;
-        }
-        plot4EllipsePoints(x0, y0, x, y, color);
-    }
-}
-
-void tft_display::fillEllipseFallback(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint32_t color) {
-    if (!_gfx || rx < 0 || ry < 0) return;
-    int32_t rx2 = rx * rx;
-    int32_t ry2 = ry * ry;
-    int32_t x = 0;
-    int32_t y = ry;
-    int64_t px = 0;
-    int64_t py = 2LL * rx2 * y;
-    int64_t p = std::llround(ry2 - (rx2 * ry) + (0.25 * rx2));
-    while (px < py) {
-        ++x;
-        px += 2LL * ry2;
-        if (p < 0) p += ry2 + px;
-        else {
-            --y;
-            py -= 2LL * rx2;
-            p += ry2 + px - py;
-        }
-        _gfx->drawFastHLine(x0 - x, y0 + y, x * 2, color);
-        _gfx->drawFastHLine(x0 - x, y0 - y, x * 2, color);
-    }
-    p = std::llround(ry2 * (x + 0.5) * (x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2 * ry2);
-    while (y >= 0) {
-        _gfx->drawFastHLine(x0 - x, y0 + y, x * 2, color);
-        _gfx->drawFastHLine(x0 - x, y0 - y, x * 2, color);
-        --y;
-        py -= 2LL * rx2;
-        if (p > 0) p += rx2 - py;
-        else {
-            ++x;
-            px += 2LL * ry2;
-            p += rx2 - py + px;
-        }
-    }
-}
-
-void tft_display::plot4EllipsePoints(int16_t cx, int16_t cy, int32_t x, int32_t y, uint32_t color) {
-    _gfx->drawPixel(cx + x, cy + y, color);
-    _gfx->drawPixel(cx - x, cy + y, color);
-    _gfx->drawPixel(cx + x, cy - y, color);
-    _gfx->drawPixel(cx - x, cy - y, color);
 }
 
 int16_t tft_display::drawAlignedString(const String &s, int32_t x, int32_t y, uint8_t datum) {

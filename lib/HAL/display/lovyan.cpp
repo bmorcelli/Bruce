@@ -9,38 +9,113 @@ void tft_display::begin(uint32_t speed) {
 
     {
         auto cfg = _bus_instance.config();
-
-        cfg.spi_host = HSPI_HOST;
-        cfg.spi_mode = 0;
-        cfg.freq_write = 40000000;
-        cfg.freq_read = 15000000;
-        cfg.spi_3wire = true;
-        cfg.use_lock = true;
+#if defined(LOVYAN_SPI_BUS)
+#if !defined(TFT_SPI_HOST) || !defined(TFT_SPI_MODE) || !defined(TFT_WRITE_FREQ) ||                          \
+    !defined(TFT_READ_FREQ) || !defined(TFT_SPI_3WIRE) || !defined(TFT_USE_LOCK) || !defined(TFT_SCLK) ||    \
+    !defined(TFT_MOSI) || !defined(TFT_MISO) || !defined(TFT_DC)
+#else
+#error "To use LOVYAN_SPI_BUS, need to define:\n \
+        - TFT_SPI_HOST\n \
+        - TFT_SPI_MODE\n \
+        - TFT_WRITE_FREQ\n \
+        - TFT_READ_FREQ\n \
+        - TFT_SPI_3WIRE\n \
+        - TFT_USE_LOCK\n \
+        - TFT_SCLK\n \
+        - TFT_MOSI\n \
+        - TFT_MISO\n \
+        - TFT_DC\n"
+#endif
+        cfg.spi_host = TFT_SPI_HOST;
+        cfg.spi_mode = TFT_SPI_MODE;
+        cfg.freq_write = TFT_WRITE_FREQ;
+        cfg.freq_read = TFT_READ_FREQ;
+        cfg.spi_3wire = TFT_SPI_3WIRE;
+        cfg.use_lock = TFT_USE_LOCK;
         cfg.dma_channel = SPI_DMA_CH_AUTO;
         cfg.pin_sclk = TFT_SCLK;
         cfg.pin_mosi = TFT_MOSI;
-        cfg.pin_miso = -1;
+        cfg.pin_miso = TFT_MISO;
         cfg.pin_dc = TFT_DC;
+
+#elif defined(LOVYAN_I2C_BUS)
+#if !defined(TFT_I2C_PORT) || !defined(TFT_I2C_WRITE) || !defined(TFT_I2C_READ) || !defined(TFT_SDA) ||      \
+    !defined(TFT_SCL) || !defined(TFT_ADDR)
+#else
+#error "To use LOVYAN_I2C_BUS, need to define:\n \
+        - TFT_I2C_PORT\n \
+        - TFT_I2C_WRITE\n \
+        - TFT_I2C_READ\n \
+        - TFT_SDA\n \
+        - TFT_SCL\n \
+        - TFT_ADDR"
+#endif
+        cfg.i2c_port = TFT_I2C_PORT;    // (0 or 1)
+        cfg.freq_write = TFT_I2C_WRITE; // 400000
+        cfg.freq_read = TFT_I2C_READ;   // 400000
+        cfg.pin_sda = TFT_SDA;          //
+        cfg.pin_scl = TFT_SCL;          //
+        cfg.i2c_addr = TFT_ADDR;        //
+#elif defined(LOVYAN_8PARALLEL_BUS)
+#if !defined(TFT_WRITE_FREQ) || !defined(TFT_WR) || !defined(TFT_RD) || !defined(TFT_DC) ||                  \
+    !defined(TFT_D0) || !defined(TFT_D1) || !defined(TFT_D2) || !defined(TFT_D3) || !defined(TFT_D4) ||      \
+    !defined(TFT_D5) || !defined(TFT_D6) || !defined(TFT_D7)
+#else
+#error "To use LOVYAN_8PARALLEL_BUS, need to define:\n \
+        - TFT_WRITE_FREQ\n \
+        - TFT_WR\n \
+        - TFT_RD\n \
+        - TFT_DC\n \
+        - TFT_D0\n \
+        - TFT_D1\n \
+        - TFT_D2\n \
+        - TFT_D3\n \
+        - TFT_D4\n \
+        - TFT_D5\n \
+        - TFT_D6\n \
+        - TFT_D7"
+#endif
+        cfg.freq_write = TFT_WRITE_FREQ;
+        cfg.pin_wr = TFT_WR;
+        cfg.pin_rd = TFT_RD;
+        cfg.pin_rs = TFT_DC;
+        cfg.pin_d0 = TFT_D0;
+        cfg.pin_d1 = TFT_D1;
+        cfg.pin_d2 = TFT_D2;
+        cfg.pin_d3 = TFT_D3;
+        cfg.pin_d4 = TFT_D4;
+        cfg.pin_d5 = TFT_D5;
+        cfg.pin_d6 = TFT_D6;
+        cfg.pin_d7 = TFT_D7;
+#else
+#error "Define a bus: LOVYAN_SPI_BUS, LOVYAN_I2C_BUS, LOVYAN_8PARALLEL_BUS."
+#endif
 
         _bus_instance.config(cfg);
         _panel_instance.setBus(&_bus_instance);
     }
 
     {
+#if !defined(TFT_CS) || !defined(TFT_RST) || !defined(TFT_BUSY_PIN) || !defined(TFT_HEIGHT) ||               \
+    !defined(TFT_WIDTH) || !defined(TFT_OFFSET_X) || !defined(TFT_OFFSET_Y) || !defined(TFT_INVERTION) ||    \
+    !defined(TFT_RGB_ORDER) || !defined(TFT_MEM_HEIGHT) || !defined(TFT_MEM_WIDTH)
+#error "Missing Macro definitions of: TFT_CS, TFT_RST, TFT_BUSY_PIN, TFT_HEIGHT, TFT_WIDTH,\
+        TFT_OFFSET_X, TFT_OFFSET_Y, TFT_INVERTION, TFT_RGB_ORDER, TFT_MEM_WIDTH, TFT_MEM_HEIGHT"
+#endif
         auto cfg = _panel_instance.config();
         cfg.pin_cs = TFT_CS;
         cfg.pin_rst = TFT_RST;
-        cfg.pin_busy = -1;
-        cfg.memory_width = 240;
-        cfg.memory_height = 320;
+        cfg.pin_busy = TFT_BUSY_PIN;
+        cfg.memory_width = TFT_MEM_WIDTH;
+        cfg.memory_height = TFT_MEM_HEIGHT;
         cfg.panel_width = TFT_WIDTH;
         cfg.panel_height = TFT_HEIGHT;
-        cfg.offset_x = 52;
-        cfg.offset_y = 40;
+        cfg.offset_x = TFT_OFFSET_X;
+        cfg.offset_y = TFT_OFFSET_Y;
         cfg.offset_rotation = 0;
         cfg.readable = true;
-        cfg.invert = false;
-        cfg.rgb_order = false;
+        cfg.invert = TFT_INVERTION;
+        cfg.rgb_order = TFT_RGB_ORDER;
         cfg.dlen_16bit = false;
         cfg.bus_shared = true;
         _panel_instance.config(cfg);
