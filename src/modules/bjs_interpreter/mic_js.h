@@ -1,13 +1,14 @@
-#pragma once
+// Mic bindings for the JS interpreter
 
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
-#include <duktape.h>
+#ifndef __MIC_JS_H__
+#define __MIC_JS_H__
 
-duk_ret_t putPropMicFunctions(duk_context *ctx, duk_idx_t obj_idx, uint8_t magic);
-duk_ret_t registerMic(duk_context *ctx);
+#include "helpers_js.h"
 
-duk_ret_t native_micRecordWav(duk_context *ctx);
+extern "C" {
+JSValue native_micRecordWav(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+}
 
 #endif
-
-
+#endif

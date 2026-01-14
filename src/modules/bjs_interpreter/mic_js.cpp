@@ -1,18 +1,9 @@
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "mic_js.h"
 
+#include "core/sd_functions.h"
 #include "helpers_js.h"
 #include "modules/others/mic.h"
-
-duk_ret_t putPropMicFunctions(duk_context *ctx, duk_idx_t obj_idx, uint8_t magic) {
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "recordWav", native_micRecordWav, 2, magic);
-    return 0;
-}
-
-duk_ret_t registerMic(duk_context *ctx) {
-    bduk_register_c_lightfunc(ctx, "micRecordWav", native_micRecordWav, 2);
-    return 0;
-}
 
 // mic.recordWav(pathOrPathObj?, options?)
 // - pathOrPathObj: string ("/BruceMIC/rec.wav") OR { fs: "SD"|"LittleFS", path: "/..." } (same as storage)
@@ -20,44 +11,45 @@ duk_ret_t registerMic(duk_context *ctx) {
 //    - maxMs: number (0 = unlimited)
 //    - stopOnSel: boolean (default true)
 // Returns: { ok: boolean, path: string, bytes: number, sampleRateHz: number, channels: number }
-duk_ret_t native_micRecordWav(duk_context *ctx) {
+JSValue native_micRecordWav(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+    (void)this_val;
+
     FileParamsJS fileParams;
-    if (duk_is_undefined(ctx, 0) || duk_is_null(ctx, 0)) {
-        // default path
+    if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0])) {
         fileParams.fs = nullptr;
         fileParams.path = "/BruceMIC/recording.wav";
         fileParams.exist = false;
         fileParams.paramOffset = 0;
     } else {
-        fileParams = js_get_path_from_params(ctx, false);
+        fileParams = js_get_path_from_params(ctx, argv, false);
     }
 
     uint32_t maxMs = 8000;
     bool stopOnSel = true;
 
-    if (duk_is_object(ctx, 1)) {
-        if (duk_get_prop_string(ctx, 1, "maxMs")) {
-            if (duk_is_number(ctx, -1)) maxMs = (uint32_t)duk_to_uint(ctx, -1);
+    if (argc > 1 && JS_IsObject(ctx, argv[1])) {
+        JSValue maxMsVal = JS_GetPropertyStr(ctx, argv[1], "maxMs");
+        if (JS_IsNumber(ctx, maxMsVal)) {
+            int tmp = 0;
+            JS_ToInt32(ctx, &tmp, maxMsVal);
+            if (tmp >= 0) maxMs = (uint32_t)tmp;
         }
-        duk_pop(ctx);
 
-        if (duk_get_prop_string(ctx, 1, "stopOnSel")) {
-            stopOnSel = duk_get_boolean_default(ctx, -1, true);
-        }
-        duk_pop(ctx);
+        JSValue stopVal = JS_GetPropertyStr(ctx, argv[1], "stopOnSel");
+        if (JS_IsBool(stopVal)) { stopOnSel = JS_ToBool(ctx, stopVal); }
     }
 
     // Choose FS if not specified
     FS *fs = fileParams.fs;
     if (fs == nullptr) {
         if (!getFsStorage(fs) || fs == nullptr) {
-            duk_idx_t obj = duk_push_object(ctx);
-            bduk_put_prop(ctx, obj, "ok", duk_push_boolean, false);
-            bduk_put_prop(ctx, obj, "path", duk_push_string, "");
-            bduk_put_prop(ctx, obj, "bytes", duk_push_uint, 0);
-            bduk_put_prop(ctx, obj, "sampleRateHz", duk_push_uint, 48000);
-            bduk_put_prop(ctx, obj, "channels", duk_push_uint, 1);
-            return 1;
+            JSValue obj = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, obj, "ok", JS_NewBool(0));
+            JS_SetPropertyStr(ctx, obj, "path", JS_NewString(ctx, ""));
+            JS_SetPropertyStr(ctx, obj, "bytes", JS_NewInt32(ctx, 0));
+            JS_SetPropertyStr(ctx, obj, "sampleRateHz", JS_NewInt32(ctx, 48000));
+            JS_SetPropertyStr(ctx, obj, "channels", JS_NewInt32(ctx, 1));
+            return obj;
         }
     }
 
@@ -67,15 +59,13 @@ duk_ret_t native_micRecordWav(duk_context *ctx) {
     uint32_t outBytes = 0;
     bool ok = mic_record_wav_to_path(fs, path, maxMs, stopOnSel, &outBytes);
 
-    duk_idx_t obj = duk_push_object(ctx);
-    bduk_put_prop(ctx, obj, "ok", duk_push_boolean, ok);
-    bduk_put_prop(ctx, obj, "path", duk_push_string, path.c_str());
-    bduk_put_prop(ctx, obj, "bytes", duk_push_uint, outBytes);
-    bduk_put_prop(ctx, obj, "sampleRateHz", duk_push_uint, 48000);
-    bduk_put_prop(ctx, obj, "channels", duk_push_uint, 1);
-    return 1;
+    JSValue obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "ok", JS_NewBool(ok ? 1 : 0));
+    JS_SetPropertyStr(ctx, obj, "path", JS_NewString(ctx, path.c_str()));
+    JS_SetPropertyStr(ctx, obj, "bytes", JS_NewInt32(ctx, (int32_t)outBytes));
+    JS_SetPropertyStr(ctx, obj, "sampleRateHz", JS_NewInt32(ctx, 48000));
+    JS_SetPropertyStr(ctx, obj, "channels", JS_NewInt32(ctx, 1));
+    return obj;
 }
 
 #endif
-
-
