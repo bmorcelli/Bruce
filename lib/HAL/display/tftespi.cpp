@@ -10,8 +10,6 @@ uint32_t tft_display::getTextBgColor() const { return TFT_eSPI::textbgcolor; }
 
 uint8_t tft_display::getTextSize() const { return TFT_eSPI::textsize; }
 
-SPIClass &tft_display::getSPIinstance() const { return TFT_eSPI::getSPIinstance(); }
-
 uint8_t tft_display::getRotation() { return TFT_eSPI::getRotation(); }
 
 TFT_eSPI *tft_display::native() { return static_cast<TFT_eSPI *>(this); }

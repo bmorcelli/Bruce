@@ -34,8 +34,10 @@ public:
     using TFT_eSPI::fillRoundRect;
     using TFT_eSPI::fillScreen;
     using TFT_eSPI::fillTriangle;
+    using TFT_eSPI::fontHeight;
     using TFT_eSPI::getCursorX;
     using TFT_eSPI::getCursorY;
+    using TFT_eSPI::getSPIinstance;
     using TFT_eSPI::getSwapBytes;
     using TFT_eSPI::getTextDatum;
     using TFT_eSPI::height;
@@ -59,12 +61,15 @@ public:
     using TFT_eSPI::write;
     using TFT_eSPI::writecommand;
 
-    using TFT_eSPI::fontHeight;
+    // Touchscreen Functions
+    using TFT_eSPI::calibrateTouch;
+    using TFT_eSPI::getTouch;
+    using TFT_eSPI::getTouchRaw;
+    using TFT_eSPI::setTouch;
 
     uint32_t getTextColor() const;
     uint32_t getTextBgColor() const;
     uint8_t getTextSize() const;
-    SPIClass &getSPIinstance() const;
     uint8_t getRotation();
     TFT_eSPI *native();
 };
