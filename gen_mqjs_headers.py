@@ -57,7 +57,8 @@ def sha256_file(path):
             chunk = f.read(8192)
             if not chunk:
                 break
-            h.update(chunk)
+            # Normalize CRLF to LF so signatures are stable across OSes.
+            h.update(chunk.replace(b"\r\n", b"\n"))
     return h.hexdigest()
 
 def _project_option(name: str):

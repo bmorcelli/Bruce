@@ -37,7 +37,6 @@ public:
     using TFT_eSPI::fontHeight;
     using TFT_eSPI::getCursorX;
     using TFT_eSPI::getCursorY;
-    using TFT_eSPI::getSPIinstance;
     using TFT_eSPI::getSwapBytes;
     using TFT_eSPI::getTextDatum;
     using TFT_eSPI::height;
@@ -61,12 +60,19 @@ public:
     using TFT_eSPI::write;
     using TFT_eSPI::writecommand;
 
+#ifdef TOUCH_CS
+#if !defined(TFT_PARALLEL_8_BIT) && !defined(RP2040_PIO_INTERFACE) && !defined(TFT_PARALLEL_16_BIT)
     // Touchscreen Functions
     using TFT_eSPI::calibrateTouch;
     using TFT_eSPI::getTouch;
     using TFT_eSPI::getTouchRaw;
     using TFT_eSPI::setTouch;
+#endif
+#endif
 
+#if !defined(TFT_PARALLEL_8_BIT) && !defined(TFT_PARALLEL_16_BIT)
+    using TFT_eSPI::getSPIinstance;
+#endif
     uint32_t getTextColor() const;
     uint32_t getTextBgColor() const;
     uint8_t getTextSize() const;
