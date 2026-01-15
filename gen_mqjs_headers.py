@@ -104,7 +104,6 @@ def compute_signature():
     # Any change here should force a rebuild.
     parts = []
     parts.append("v=3")
-    parts.append(f"PIOENV={PIOENV}")
     parts.append(f"watch_sha256={sha256_file(WATCH_FILE)}")
 
     mqjs_build_c = os.path.join(MQJS_PATH, "mquickjs_build.c")
