@@ -749,37 +749,47 @@ void addMifareKeyMenu() {
 **  Handles Menu to set timezone to NTP
 **********************************************************************/
 const char *ntpServer = "pool.ntp.org";
-long selectedTimezone;
-const int daylightOffset_sec = 0;
-int timeHour;
-
-TimeChangeRule BRST = {"BRST", Last, Sun, Oct, 0, timeHour};
-Timezone myTZ(BRST, BRST);
 
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, ntpServer, selectedTimezone, daylightOffset_sec);
+NTPClient timeClient(ntpUDP, ntpServer, 0, 0);
 
 void setClock() {
-    bool auto_mode = true;
-
 #if defined(HAS_RTC)
     RTC_TimeTypeDef TimeStruct;
+#if defined(HAS_RTC_BM8563)
     _rtc.GetBm8563Time();
+#endif
+#if defined(HAS_RTC_PCF85063A)
+    _rtc.GetPcf85063Time();
+#endif
 #endif
 
     options = {
-        {"NTP Timezone", [&]() { auto_mode = true; } },
-        {"Manually set", [&]() { auto_mode = false; }},
+        {"Via NTP Set Timezone",                                                 [&]() { bruceConfig.setAutomaticTimeUpdateViaNTP(true); } },
+        {"Set Time Manually",                                                    [&]() { bruceConfig.setAutomaticTimeUpdateViaNTP(false); }},
+        {("Daylight Savings " + String(bruceConfig.dst ? "On" : "Off")).c_str(),
+         [&]() {
+             bruceConfig.setDST(!bruceConfig.dst);
+             updateClockTimezone();
+             returnToMenu = true;
+         }                                                                                                                                 },
+        {(bruceConfig.clock24hr ? "24-Hour Format" : "12-Hour Format"),          [&]() {
+             bruceConfig.setClock24Hr(!bruceConfig.clock24hr);
+             returnToMenu = true;
+         }                                                          }
     };
+
     addOptionToMainMenu();
     loopOptions(options);
 
     if (returnToMenu) return;
 
-    if (auto_mode) {
+    if (bruceConfig.automaticTimeUpdateViaNTP) {
         if (!wifiConnected) wifiConnectMenu();
 
-        float selectedTimezone = bruceConfig.tmz; // Store current timezone as default
+        options.clear();
+
+#ifndef LITE_VERSION
 
         struct TimezoneMapping {
             const char *name;
@@ -827,8 +837,7 @@ void setClock() {
             {"UTC+14 (Kiritimati)",                       14   }
         };
 
-        options.clear();
-        int idx = sizeof(timezoneMappings) / sizeof(timezoneMappings[0]);
+        int idx = 0;
         int i = 0;
         for (const auto &mapping : timezoneMappings) {
             if (bruceConfig.tmz == mapping.offset) { idx = i; }
@@ -839,29 +848,33 @@ void setClock() {
             ++i;
         }
 
+#else
+        constexpr float timezoneOffsets[] = {-12, -11, -10,  -9.5, -9,  -8,    -7, -6, -5,   -4,
+                                             -3,  -2,  -1,   0,    0.5, 1,     2,  3,  3.5,  4,
+                                             4.5, 5,   5.5,  5.75, 6,   6.5,   7,  8,  8.75, 9,
+                                             9.5, 10,  10.5, 11,   12,  12.75, 13, 14};
+
+        int idx = 0;
+        int i = 0;
+        for (const auto &offset : timezoneOffsets) {
+            if (bruceConfig.tmz == offset) idx = i;
+
+            options.emplace_back(
+                ("UTC" + String(offset >= 0 ? "+" : "") + String(offset)).c_str(),
+                [=]() { bruceConfig.setTmz(offset); },
+                bruceConfig.tmz == offset
+            );
+            ++i;
+        }
+
+#endif
+
         addOptionToMainMenu();
 
         loopOptions(options, idx);
 
-        if (returnToMenu) return;
+        updateClockTimezone();
 
-        timeClient.setTimeOffset(bruceConfig.tmz * 3600);
-        timeClient.begin();
-        timeClient.update();
-        localTime = myTZ.toLocal(timeClient.getEpochTime());
-
-#if defined(HAS_RTC)
-        struct tm *timeinfo = localtime(&localTime);
-        TimeStruct.Hours = timeinfo->tm_hour;
-        TimeStruct.Minutes = timeinfo->tm_min;
-        TimeStruct.Seconds = timeinfo->tm_sec;
-        _rtc.SetTime(&TimeStruct);
-#else
-        rtc.setTime(timeClient.getEpochTime());
-#endif
-
-        clock_set = true;
-        runClockLoop();
     } else {
         int hr, mn, am;
         options = {};
@@ -897,7 +910,6 @@ void setClock() {
         rtc.setTime(0, mn, hr + am, 20, 06, 2024); // send me a gift, @Pirata!
 #endif
         clock_set = true;
-        runClockLoop();
     }
 }
 
@@ -905,7 +917,12 @@ void runClockLoop() {
     int tmp = 0;
 
 #if defined(HAS_RTC)
+#if defined(HAS_RTC_BM8563)
     _rtc.GetBm8563Time();
+#endif
+#if defined(HAS_RTC_PCF85063A)
+    _rtc.GetPcf85063Time();
+#endif
     _rtc.GetTime(&_time);
 #endif
 
@@ -915,7 +932,9 @@ void runClockLoop() {
 
     for (;;) {
         if (millis() - tmp > 1000) {
-#if !defined(HAS_RTC)
+#if defined(HAS_RTC)
+            updateTimeStr(_rtc.getTimeStruct());
+#else
             updateTimeStr(rtc.getTimeStruct());
 #endif
             Serial.print("Current time: ");
@@ -938,7 +957,12 @@ void runClockLoop() {
             }
             tft.setTextSize(f_size);
 #if defined(HAS_RTC)
+#if defined(HAS_RTC_BM8563)
             _rtc.GetBm8563Time();
+#endif
+#if defined(HAS_RTC_PCF85063A)
+            _rtc.GetPcf85063Time();
+#endif
             _rtc.GetTime(&_time);
             char timeString[9]; // Buffer para armazenar a string formatada "HH:MM:SS"
             snprintf(
