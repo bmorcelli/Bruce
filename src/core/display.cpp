@@ -44,7 +44,11 @@ void displayScrollingText(const String &text, Opt_Coord &coord) {
         String scrollingPart =
             displayText.substring(i, i + (coord.size - 1)); // Display charLimit characters at a time
         tft.fillRect(
-            coord.x, coord.y, (coord.size - 1) * LW * tft.textsize, LH * tft.textsize, bruceConfig.bgColor
+            coord.x,
+            coord.y,
+            (coord.size - 1) * LW * tft.getTextSize(),
+            LH * tft.getTextSize(),
+            bruceConfig.bgColor
         ); // Clear display area
         tft.setCursor(coord.x, coord.y);
         tft.setCursor(coord.x, coord.y);
@@ -926,7 +930,7 @@ Opt_Coord listFiles(int index, std::vector<FileList> fileList) {
         start = index - MAX_ITEMS + 1;
         if (start < 0) start = 0;
     }
-    int nchars = (tftWidth - 20) / (6 * tft.textsize);
+    int nchars = (tftWidth - 20) / (6 * tft.getTextSize());
     String txt = ">";
     while (i < arraySize) {
         if (i >= start) {
