@@ -1,7 +1,6 @@
 #ifndef LIB_HAL_LOVYAN_H
 #define LIB_HAL_LOVYAN_H
 #include <pins_arduino.h>
-#if defined(USE_LOVYANGFX)
 
 #if !defined(LOVYAN_PANEL)
 #error "You must define LOVYAN_PANEL:\n \
@@ -208,5 +207,4 @@ public:
     int16_t height() const;
 };
 
-#endif
 #endif // LIB_HAL_LOVYAN_H

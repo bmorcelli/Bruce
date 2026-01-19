@@ -2,6 +2,16 @@
 
 #if defined(USE_LOVYANGFX)
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+static SemaphoreHandle_t tftMutex;
+#define RUN_ON_MUTEX(fn)                                                                                     \
+    xSemaphoreTakeRecursive(tftMutex, portMAX_DELAY);                                                        \
+    fn;                                                                                                      \
+    xSemaphoreGiveRecursive(tftMutex);
+
 tft_display::tft_display(int16_t _W, int16_t _H) : _height(_H), _width(_W) {}
 
 void tft_display::begin(uint32_t speed) {
@@ -10,22 +20,22 @@ void tft_display::begin(uint32_t speed) {
     {
         auto cfg = _bus_instance.config();
 #if defined(LOVYAN_SPI_BUS)
-#if !defined(TFT_SPI_HOST) || !defined(TFT_SPI_MODE) || !defined(TFT_WRITE_FREQ) ||                          \
-    !defined(TFT_READ_FREQ) || !defined(TFT_SPI_3WIRE) || !defined(TFT_USE_LOCK) || !defined(TFT_SCLK) ||    \
-    !defined(TFT_MOSI) || !defined(TFT_MISO) || !defined(TFT_DC)
-#else
-#error "To use LOVYAN_SPI_BUS, need to define:\n \
-        - TFT_SPI_HOST\n \
-        - TFT_SPI_MODE\n \
-        - TFT_WRITE_FREQ\n \
-        - TFT_READ_FREQ\n \
-        - TFT_SPI_3WIRE\n \
-        - TFT_USE_LOCK\n \
-        - TFT_SCLK\n \
-        - TFT_MOSI\n \
-        - TFT_MISO\n \
-        - TFT_DC\n"
-#endif
+        // #if !defined(TFT_SPI_HOST) || !defined(TFT_SPI_MODE) || !defined(TFT_WRITE_FREQ) ||                          \
+//     !defined(TFT_READ_FREQ) || !defined(TFT_SPI_3WIRE) || !defined(TFT_USE_LOCK) || !defined(TFT_SCLK) ||    \
+//     !defined(TFT_MOSI) || !defined(TFT_MISO) || !defined(TFT_DC)
+        // #else
+        // #error "To use LOVYAN_SPI_BUS, need to define:\n \
+//         - TFT_SPI_HOST\n \
+//         - TFT_SPI_MODE\n \
+//         - TFT_WRITE_FREQ\n \
+//         - TFT_READ_FREQ\n \
+//         - TFT_SPI_3WIRE\n \
+//         - TFT_USE_LOCK\n \
+//         - TFT_SCLK\n \
+//         - TFT_MOSI\n \
+//         - TFT_MISO\n \
+//         - TFT_DC\n"
+        // #endif
         cfg.spi_host = TFT_SPI_HOST;
         cfg.spi_mode = TFT_SPI_MODE;
         cfg.freq_write = TFT_WRITE_FREQ;
@@ -121,7 +131,7 @@ void tft_display::begin(uint32_t speed) {
         _panel_instance.config(cfg);
         setPanel(&_panel_instance);
     }
-    lgfx::LGFX_Device::begin();
+    RUN_ON_MUTEX(lgfx::LGFX_Device::begin());
 }
 
 void tft_display::init(uint8_t tc) {
@@ -135,79 +145,79 @@ void tft_display::setRotation(uint8_t r) {
 }
 
 void tft_display::drawPixel(int32_t x, int32_t y, uint32_t color) {
-    lgfx::LGFX_Device::drawPixel(x, y, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawPixel(x, y, (uint16_t)color));
 }
 
 void tft_display::drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color) {
-    lgfx::LGFX_Device::drawLine(x0, y0, x1, y1, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawLine(x0, y0, x1, y1, (uint16_t)color));
 }
 
 void tft_display::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color) {
-    lgfx::LGFX_Device::drawFastHLine(x, y, w, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawFastHLine(x, y, w, (uint16_t)color));
 }
 
 void tft_display::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) {
-    lgfx::LGFX_Device::drawFastVLine(x, y, h, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawFastVLine(x, y, h, (uint16_t)color));
 }
 
 void tft_display::drawRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    lgfx::LGFX_Device::drawRect(x, y, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawRect(x, y, w, h, (uint16_t)color));
 }
 
 void tft_display::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    lgfx::LGFX_Device::fillRect(x, y, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillRect(x, y, w, h, (uint16_t)color));
 }
 
 void tft_display::fillRectHGradient(
     int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2
 ) {
     (void)color2;
-    fillRect(x, y, w, h, (uint16_t)color1);
+    RUN_ON_MUTEX(fillRect(x, y, w, h, (uint16_t)color1));
 }
 
 void tft_display::fillRectVGradient(
     int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2
 ) {
     (void)color2;
-    fillRect(x, y, w, h, (uint16_t)color1);
+    RUN_ON_MUTEX(fillRect(x, y, w, h, (uint16_t)color1));
 }
 
-void tft_display::fillScreen(uint32_t color) { lgfx::LGFX_Device::fillScreen((uint16_t)color); }
+void tft_display::fillScreen(uint32_t color) { RUN_ON_MUTEX(lgfx::LGFX_Device::fillScreen((uint16_t)color)); }
 
 void tft_display::drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    lgfx::LGFX_Device::drawRoundRect(x, y, w, h, r, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawRoundRect(x, y, w, h, r, (uint16_t)color));
 }
 
 void tft_display::fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    lgfx::LGFX_Device::fillRoundRect(x, y, w, h, r, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillRoundRect(x, y, w, h, r, (uint16_t)color));
 }
 
 void tft_display::drawCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    lgfx::LGFX_Device::drawCircle(x0, y0, r, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawCircle(x0, y0, r, (uint16_t)color));
 }
 
 void tft_display::fillCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    lgfx::LGFX_Device::fillCircle(x0, y0, r, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillCircle(x0, y0, r, (uint16_t)color));
 }
 
 void tft_display::drawTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    lgfx::LGFX_Device::drawTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color));
 }
 
 void tft_display::fillTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    lgfx::LGFX_Device::fillTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color));
 }
 
 void tft_display::drawEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    lgfx::LGFX_Device::drawEllipse(x0, y0, rx, ry, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawEllipse(x0, y0, rx, ry, (uint16_t)color));
 }
 
 void tft_display::fillEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    lgfx::LGFX_Device::fillEllipse(x0, y0, rx, ry, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillEllipse(x0, y0, rx, ry, (uint16_t)color));
 }
 
 void tft_display::drawArc(
@@ -216,36 +226,36 @@ void tft_display::drawArc(
 ) {
     (void)bg_color;
     (void)smoothArc;
-    lgfx::LGFX_Device::fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, (uint16_t)fg_color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, (uint16_t)fg_color));
 }
 
 void tft_display::drawWideLine(
     float ax, float ay, float bx, float by, float wd, uint32_t fg_color, uint32_t bg_color
 ) {
     (void)bg_color;
-    lgfx::LGFX_Device::drawWideLine(ax, ay, bx, by, wd, (uint16_t)fg_color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawWideLine(ax, ay, bx, by, wd, (uint16_t)fg_color));
 }
 
 void tft_display::drawXBitmap(
     int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color
 ) {
     if (!bitmap) return;
-    lgfx::LGFX_Device::drawXBitmap(x, y, bitmap, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawXBitmap(x, y, bitmap, w, h, (uint16_t)color));
 }
 
 void tft_display::drawXBitmap(
     int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color, uint16_t bg
 ) {
     if (!bitmap) return;
-    lgfx::LGFX_Device::drawXBitmap(x, y, bitmap, w, h, (uint16_t)color, (uint16_t)bg);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::drawXBitmap(x, y, bitmap, w, h, (uint16_t)color, (uint16_t)bg));
 }
 
 void tft_display::pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t *data) {
-    lgfx::LGFX_Device::pushImage(x, y, w, h, data);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::pushImage(x, y, w, h, data));
 }
 
 void tft_display::pushImage(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t *data) {
-    lgfx::LGFX_Device::pushImage(x, y, w, h, data);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::pushImage(x, y, w, h, data));
 }
 
 void tft_display::pushImage(
@@ -257,7 +267,7 @@ void tft_display::pushImage(
             uint8_t idx = data[row * w + col];
             uint16_t color = cmap[idx];
             if (_swapBytes) color = static_cast<uint16_t>((color >> 8) | (color << 8));
-            lgfx::LGFX_Device::drawPixel(x + col, y + row, (uint16_t)color);
+            RUN_ON_MUTEX(lgfx::LGFX_Device::drawPixel(x + col, y + row, (uint16_t)color));
         }
     }
 }
@@ -350,28 +360,43 @@ int16_t tft_display::drawRightString(const String &string, int32_t x, int32_t y,
     return drawAlignedString(string, x, y, TR_DATUM);
 }
 
-size_t tft_display::write(uint8_t c) { return lgfx::LGFX_Device::write(c); }
-
-size_t tft_display::write(const uint8_t *buffer, size_t size) {
-    return lgfx::LGFX_Device::write(buffer, size);
+size_t tft_display::write(uint8_t c) {
+    size_t t = 0;
+    RUN_ON_MUTEX(lgfx::LGFX_Device::write(c));
+    return t;
 }
 
-size_t tft_display::println() { return lgfx::LGFX_Device::println(); }
+size_t tft_display::write(const uint8_t *buffer, size_t size) {
+    size_t t = 0;
+    RUN_ON_MUTEX(t = lgfx::LGFX_Device::write(buffer, size));
+    return t;
+}
+
+size_t tft_display::println() {
+    size_t t = 0;
+    RUN_ON_MUTEX(t = lgfx::LGFX_Device::println());
+    return t;
+}
 
 size_t tft_display::printf(const char *fmt, ...) {
     if (!fmt) return 0;
+    size_t t = 0;
     va_list args;
     va_start(args, fmt);
     char stackBuf[128];
     int len = vsnprintf(stackBuf, sizeof(stackBuf), fmt, args);
     va_end(args);
     if (len < 0) return 0;
-    if (static_cast<size_t>(len) < sizeof(stackBuf)) { return lgfx::LGFX_Device::print(stackBuf); }
+    if (static_cast<size_t>(len) < sizeof(stackBuf)) {
+        RUN_ON_MUTEX(t = lgfx::LGFX_Device::print(stackBuf))
+        return t;
+    }
     std::unique_ptr<char[]> buf(new char[len + 1]);
     va_start(args, fmt);
     vsnprintf(buf.get(), len + 1, fmt, args);
     va_end(args);
-    return lgfx::LGFX_Device::print(buf.get());
+    RUN_ON_MUTEX(t = lgfx::LGFX_Device::print(buf.get()))
+    return t;
 }
 
 int16_t tft_display::width() const { return lgfx::LGFX_Device::width(); }
@@ -425,7 +450,7 @@ int16_t tft_display::drawAlignedString(const String &s, int32_t x, int32_t y, ui
         default: break;
     }
     lgfx::LGFX_Device::setCursor(cx, cy);
-    lgfx::LGFX_Device::print(s);
+    RUN_ON_MUTEX(lgfx::LGFX_Device::print(s));
     return w;
 }
 
@@ -466,7 +491,7 @@ void tft_sprite::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) 
 }
 
 void tft_sprite::pushSprite(int32_t x, int32_t y, uint32_t transparent) {
-    lgfx::LGFX_Sprite::pushSprite(x, y, (uint16_t)transparent);
+    RUN_ON_MUTEX(lgfx::LGFX_Sprite::pushSprite(x, y, (uint16_t)transparent));
 }
 
 void tft_sprite::pushToSprite(tft_sprite *dest, int32_t x, int32_t y, uint32_t transparent) {
@@ -478,7 +503,9 @@ void tft_sprite::pushImage(
 ) {
     if (!data || !bpp8 || !cmap) return;
     for (int32_t row = 0; row < h; ++row) {
-        for (int32_t col = 0; col < w; ++col) { drawPixel(x + col, y + row, cmap[data[row * w + col]]); }
+        for (int32_t col = 0; col < w; ++col) {
+            RUN_ON_MUTEX(drawPixel(x + col, y + row, cmap[data[row * w + col]]));
+        }
     }
 }
 

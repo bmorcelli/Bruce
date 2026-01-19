@@ -22,6 +22,9 @@ StartupApp startupApp;
 MainMenu mainMenu;
 SPIClass sdcardSPI;
 #ifdef USE_HSPI_PORT
+#ifndef VSPI
+#define VSPI FSPI
+#endif
 SPIClass CC_NRF_SPI(VSPI);
 #else
 SPIClass CC_NRF_SPI(HSPI);

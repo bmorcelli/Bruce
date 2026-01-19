@@ -124,51 +124,5 @@ public:
 
     TFT_eSprite *nativeSprite();
 };
-
-#elif defined(USE_LOVYANGFX)
-class tft_sprite : private lgfx::LGFX_Sprite {
-public:
-    explicit tft_sprite(tft_display *parent);
-    ~tft_sprite() = default;
-
-    using lgfx::LGFX_Sprite::drawCircle;
-    using lgfx::LGFX_Sprite::drawLine;
-    using lgfx::LGFX_Sprite::drawPixel;
-    using lgfx::LGFX_Sprite::drawRect;
-    using lgfx::LGFX_Sprite::drawRoundRect;
-    using lgfx::LGFX_Sprite::drawString;
-    using lgfx::LGFX_Sprite::drawXBitmap;
-    using lgfx::LGFX_Sprite::fillCircle;
-    using lgfx::LGFX_Sprite::fillRect;
-    using lgfx::LGFX_Sprite::fillRoundRect;
-    using lgfx::LGFX_Sprite::height;
-    using lgfx::LGFX_Sprite::pushImage;
-    using lgfx::LGFX_Sprite::setCursor;
-    using lgfx::LGFX_Sprite::setTextColor;
-    using lgfx::LGFX_Sprite::setTextDatum;
-    using lgfx::LGFX_Sprite::setTextSize;
-    using lgfx::LGFX_Sprite::width;
-
-    void *createSprite(int16_t w, int16_t h, uint8_t frames = 1);
-    void deleteSprite();
-    void setColorDepth(uint8_t depth);
-
-    void fillScreen(uint32_t color);
-    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
-    void fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
-    void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
-    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color);
-    void drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color);
-
-    void pushSprite(int32_t x, int32_t y, uint32_t transparent = TFT_TRANSPARENT);
-    void pushToSprite(tft_sprite *dest, int32_t x, int32_t y, uint32_t transparent = TFT_TRANSPARENT);
-    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t *data, bool bpp8, uint16_t *cmap);
-    void
-    pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *data, bool bpp8, uint16_t *cmap);
-
-    void fillRectHGradient(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2);
-    void fillRectVGradient(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2);
-};
-
 #endif
 #endif // LIB_HAL_TFTESPI_H

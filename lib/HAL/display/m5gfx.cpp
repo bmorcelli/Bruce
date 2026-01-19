@@ -2,6 +2,16 @@
 
 #if defined(USE_M5GFX)
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+static SemaphoreHandle_t tftMutex;
+#define RUN_ON_MUTEX(fn)                                                                                     \
+    xSemaphoreTakeRecursive(tftMutex, portMAX_DELAY);                                                        \
+    fn;                                                                                                      \
+    xSemaphoreGiveRecursive(tftMutex);
+
 tft_display::tft_display(int16_t _W, int16_t _H) : _height(_H), _width(_W) {}
 
 void tft_display::begin(uint32_t speed) { (void)speed; }
@@ -17,27 +27,27 @@ void tft_display::setRotation(uint8_t r) {
 }
 
 void tft_display::drawPixel(int32_t x, int32_t y, uint32_t color) {
-    M5.Display.drawPixel(x, y, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawPixel(x, y, (uint16_t)color));
 }
 
 void tft_display::drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color) {
-    M5.Display.drawLine(x0, y0, x1, y1, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawLine(x0, y0, x1, y1, (uint16_t)color));
 }
 
 void tft_display::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color) {
-    M5.Display.drawFastHLine(x, y, w, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawFastHLine(x, y, w, (uint16_t)color));
 }
 
 void tft_display::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) {
-    M5.Display.drawFastVLine(x, y, h, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawFastVLine(x, y, h, (uint16_t)color));
 }
 
 void tft_display::drawRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    M5.Display.drawRect(x, y, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawRect(x, y, w, h, (uint16_t)color));
 }
 
 void tft_display::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    M5.Display.fillRect(x, y, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.fillRect(x, y, w, h, (uint16_t)color));
 }
 
 void tft_display::fillRectHGradient(
@@ -54,42 +64,42 @@ void tft_display::fillRectVGradient(
     fillRect(x, y, w, h, (uint16_t)color1);
 }
 
-void tft_display::fillScreen(uint32_t color) { M5.Display.fillScreen((uint16_t)color); }
+void tft_display::fillScreen(uint32_t color) { RUN_ON_MUTEX(M5.Display.fillScreen((uint16_t)color)); }
 
 void tft_display::drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    M5.Display.drawRoundRect(x, y, w, h, r, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawRoundRect(x, y, w, h, r, (uint16_t)color));
 }
 
 void tft_display::fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    M5.Display.fillRoundRect(x, y, w, h, r, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.fillRoundRect(x, y, w, h, r, (uint16_t)color));
 }
 
 void tft_display::drawCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    M5.Display.drawCircle(x0, y0, r, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawCircle(x0, y0, r, (uint16_t)color));
 }
 
 void tft_display::fillCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    M5.Display.fillCircle(x0, y0, r, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.fillCircle(x0, y0, r, (uint16_t)color));
 }
 
 void tft_display::drawTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    M5.Display.drawTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color));
 }
 
 void tft_display::fillTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    M5.Display.fillTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.fillTriangle(x0, y0, x1, y1, x2, y2, (uint16_t)color));
 }
 
 void tft_display::drawEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    M5.Display.drawEllipse(x0, y0, rx, ry, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawEllipse(x0, y0, rx, ry, (uint16_t)color));
 }
 
 void tft_display::fillEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    M5.Display.fillEllipse(x0, y0, rx, ry, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.fillEllipse(x0, y0, rx, ry, (uint16_t)color));
 }
 
 void tft_display::drawArc(
@@ -98,36 +108,36 @@ void tft_display::drawArc(
 ) {
     (void)bg_color;
     (void)smoothArc;
-    M5.Display.fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, (uint16_t)fg_color);
+    RUN_ON_MUTEX(M5.Display.fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, (uint16_t)fg_color));
 }
 
 void tft_display::drawWideLine(
     float ax, float ay, float bx, float by, float wd, uint32_t fg_color, uint32_t bg_color
 ) {
     (void)bg_color;
-    M5.Display.drawWideLine(ax, ay, bx, by, wd, (uint16_t)fg_color);
+    RUN_ON_MUTEX(M5.Display.drawWideLine(ax, ay, bx, by, wd, (uint16_t)fg_color));
 }
 
 void tft_display::drawXBitmap(
     int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color
 ) {
     if (!bitmap) return;
-    M5.Display.drawXBitmap(x, y, bitmap, w, h, (uint16_t)color);
+    RUN_ON_MUTEX(M5.Display.drawXBitmap(x, y, bitmap, w, h, (uint16_t)color));
 }
 
 void tft_display::drawXBitmap(
     int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color, uint16_t bg
 ) {
     if (!bitmap) return;
-    M5.Display.drawXBitmap(x, y, bitmap, w, h, (uint16_t)color, (uint16_t)bg);
+    RUN_ON_MUTEX(M5.Display.drawXBitmap(x, y, bitmap, w, h, (uint16_t)color, (uint16_t)bg));
 }
 
 void tft_display::pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t *data) {
-    M5.Display.pushImage(x, y, w, h, data);
+    RUN_ON_MUTEX(M5.Display.pushImage(x, y, w, h, data));
 }
 
 void tft_display::pushImage(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t *data) {
-    M5.Display.pushImage(x, y, w, h, data);
+    RUN_ON_MUTEX(M5.Display.pushImage(x, y, w, h, data));
 }
 
 void tft_display::pushImage(
@@ -139,7 +149,7 @@ void tft_display::pushImage(
             uint8_t idx = data[row * w + col];
             uint16_t color = cmap[idx];
             if (_swapBytes) color = static_cast<uint16_t>((color >> 8) | (color << 8));
-            M5.Display.drawPixel(x + col, y + row, (uint16_t)color);
+            RUN_ON_MUTEX(M5.Display.drawPixel(x + col, y + row, (uint16_t)color));
         }
     }
 }
@@ -232,26 +242,43 @@ int16_t tft_display::drawRightString(const String &string, int32_t x, int32_t y,
     return drawAlignedString(string, x, y, TR_DATUM);
 }
 
-size_t tft_display::write(uint8_t c) { return M5.Display.write(c); }
+size_t tft_display::write(uint8_t c) {
+    size_t t = 0;
+    RUN_ON_MUTEX(t = M5.Display.write(c));
+    return t;
+}
 
-size_t tft_display::write(const uint8_t *buffer, size_t size) { return M5.Display.write(buffer, size); }
+size_t tft_display::write(const uint8_t *buffer, size_t size) {
+    size_t t = 0;
+    RUN_ON_MUTEX(t = M5.Display.write(buffer, size));
+    return t;
+}
 
-size_t tft_display::println() { return M5.Display.println(); }
+size_t tft_display::println() {
+    size_t t = 0;
+    RUN_ON_MUTEX(t = M5.Display.println());
+    return t;
+}
 
 size_t tft_display::printf(const char *fmt, ...) {
     if (!fmt) return 0;
     va_list args;
+    size_t t = 0;
     va_start(args, fmt);
     char stackBuf[128];
     int len = vsnprintf(stackBuf, sizeof(stackBuf), fmt, args);
     va_end(args);
     if (len < 0) return 0;
-    if (static_cast<size_t>(len) < sizeof(stackBuf)) { return M5.Display.print(stackBuf); }
+    if (static_cast<size_t>(len) < sizeof(stackBuf)) {
+        RUN_ON_MUTEX(t = M5.Display.print(stackBuf));
+        return t;
+    }
     std::unique_ptr<char[]> buf(new char[len + 1]);
     va_start(args, fmt);
     vsnprintf(buf.get(), len + 1, fmt, args);
     va_end(args);
-    return M5.Display.print(buf.get());
+    RUN_ON_MUTEX(t = M5.Display.print(buf.get()));
+    return t;
 }
 
 int16_t tft_display::width() const { return M5.Display.width(); }
@@ -305,7 +332,7 @@ int16_t tft_display::drawAlignedString(const String &s, int32_t x, int32_t y, ui
         default: break;
     }
     M5.Display.setCursor(cx, cy);
-    M5.Display.print(s);
+    RUN_ON_MUTEX(M5.Display.print(s));
     return w;
 }
 
@@ -345,7 +372,7 @@ void tft_sprite::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) 
 }
 
 void tft_sprite::pushSprite(int32_t x, int32_t y, uint32_t transparent) {
-    lgfx::LGFX_Sprite::pushSprite(x, y, (uint16_t)transparent);
+    RUN_ON_MUTEX(lgfx::LGFX_Sprite::pushSprite(x, y, (uint16_t)transparent));
 }
 
 void tft_sprite::pushToSprite(tft_sprite *dest, int32_t x, int32_t y, uint32_t transparent) {

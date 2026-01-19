@@ -8,9 +8,12 @@ All examples below are complete and can be copied into `pins_arduino.h` and edit
 Add the one of the following libs to your env:
 ```
 	;moononournation/GFX Library for Arduino @ ^1.5.5
-	;lovyan03/LovyanGFX @ ^1.2.0
+	;lovyan03/LovyanGFX @ ^1.2.7
 	;m5stack/M5Unified @ ^0.2.11
 	;m5stack/M5gfx @ ^0.2.18
+
+	; For ESP32-S3, Lovyan 1.2.7 isn't up to date for Arduino 3.3.4, use Develop
+	;https://github.com/lovyan03/LovyanGFX#develop
 ```
 ## LovyanGFX (USE_LOVYANGFX)
 
@@ -46,7 +49,7 @@ Required macros for SPI:
 #define LOVYAN_BUS   Bus_SPI
 #define LOVYAN_SPI_BUS 1
 
-#define TFT_SPI_HOST  HSPI_HOST
+#define TFT_SPI_HOST  SPI3_HOST
 #define TFT_SPI_MODE  0
 #define TFT_WRITE_FREQ 40000000
 #define TFT_READ_FREQ  15000000

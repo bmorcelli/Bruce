@@ -1,6 +1,7 @@
 #include "tft.h"
 
 #if defined(USE_TFT_ESPI)
+// This library uses Mutex locally! don'r need to rewrite the whole thing!!
 
 tft_display::tft_display(int16_t _W, int16_t _H) : TFT_eSPI(_W, _H) {}
 

@@ -1,7 +1,6 @@
 #ifndef LIB_HAL_ARDGFX_H
 #define LIB_HAL_ARDGFX_H
 #include <pins_arduino.h>
-#if defined(USE_ARDUINO_GFX)
 
 class TFT_eSPI;
 class tft_sprite;
@@ -420,6 +419,5 @@ private:
     uint8_t _textSize = 1;
     uint8_t _textDatum = 0;
 };
-#endif // USE_ARDUINO_GFX
 #endif
 #endif // LIB_HAL_ARDGFX_H

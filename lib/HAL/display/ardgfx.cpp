@@ -2,6 +2,16 @@
 
 #if defined(USE_ARDUINO_GFX)
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+static SemaphoreHandle_t tftMutex;
+#define RUN_ON_MUTEX(fn)                                                                                     \
+    xSemaphoreTakeRecursive(tftMutex, portMAX_DELAY);                                                        \
+    fn;                                                                                                      \
+    xSemaphoreGiveRecursive(tftMutex);
+
 tft_display::tft_display(int16_t _W, int16_t _H) : _height(_H), _width(_W) {
     // clang-format off
 #if TFT_DATABUS_N == 3
@@ -133,81 +143,81 @@ void tft_display::setRotation(uint8_t r) {
 }
 
 void tft_display::drawPixel(int32_t x, int32_t y, uint32_t color) {
-    if (_gfx) _gfx->drawPixel(x, y, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawPixel(x, y, color)); }
 }
 
 void tft_display::drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color) {
-    if (_gfx) _gfx->drawLine(x0, y0, x1, y1, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawLine(x0, y0, x1, y1, color)); }
 }
 
 void tft_display::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color) {
-    if (_gfx) _gfx->drawFastHLine(x, y, w, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawFastHLine(x, y, w, color)); }
 }
 
 void tft_display::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) {
-    if (_gfx) _gfx->drawFastVLine(x, y, h, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawFastVLine(x, y, h, color)); }
 }
 
 void tft_display::drawRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    if (_gfx) _gfx->drawRect(x, y, w, h, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawRect(x, y, w, h, color)); }
 }
 
 void tft_display::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    if (_gfx) _gfx->fillRect(x, y, w, h, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->fillRect(x, y, w, h, color)); }
 }
 
 void tft_display::fillRectHGradient(
     int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2
 ) {
     (void)color2;
-    fillRect(x, y, w, h, color1);
+    RUN_ON_MUTEX(fillRect(x, y, w, h, color1));
 }
 
 void tft_display::fillRectVGradient(
     int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color1, uint32_t color2
 ) {
     (void)color2;
-    fillRect(x, y, w, h, color1);
+    RUN_ON_MUTEX(fillRect(x, y, w, h, color1));
 }
 
 void tft_display::fillScreen(uint32_t color) {
-    if (_gfx) _gfx->fillScreen(color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->fillScreen(color)); }
 }
 
 void tft_display::drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    if (_gfx) _gfx->drawRoundRect(x, y, w, h, r, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawRoundRect(x, y, w, h, r, color)); }
 }
 
 void tft_display::fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
-    if (_gfx) _gfx->fillRoundRect(x, y, w, h, r, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->fillRoundRect(x, y, w, h, r, color)); }
 }
 
 void tft_display::drawCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    if (_gfx) _gfx->drawCircle(x0, y0, r, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawCircle(x0, y0, r, color)); }
 }
 
 void tft_display::fillCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
-    if (_gfx) _gfx->fillCircle(x0, y0, r, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->fillCircle(x0, y0, r, color)); }
 }
 
 void tft_display::drawTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    if (_gfx) _gfx->drawTriangle(x0, y0, x1, y1, x2, y2, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->drawTriangle(x0, y0, x1, y1, x2, y2, color)); }
 }
 
 void tft_display::fillTriangle(
     int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color
 ) {
-    if (_gfx) _gfx->fillTriangle(x0, y0, x1, y1, x2, y2, color);
+    if (_gfx) { RUN_ON_MUTEX(_gfx->fillTriangle(x0, y0, x1, y1, x2, y2, color)); }
 }
 
 void tft_display::drawEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    _gfx->drawEllipse(x0, y0, rx, ry, color);
+    RUN_ON_MUTEX(_gfx->drawEllipse(x0, y0, rx, ry, color));
 }
 
 void tft_display::fillEllipse(int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
-    _gfx->fillEllipse(x0, y0, rx, ry, color);
+    RUN_ON_MUTEX(_gfx->fillEllipse(x0, y0, rx, ry, color));
 }
 
 void tft_display::drawArc(
@@ -216,7 +226,7 @@ void tft_display::drawArc(
 ) {
     (void)bg_color;
     (void)smoothArc;
-    _gfx->fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, fg_color);
+    RUN_ON_MUTEX(_gfx->fillArc(x, y, r, ir, startAngle + 90, endAngle + 90, fg_color));
 }
 
 void tft_display::drawWideLine(
@@ -230,7 +240,7 @@ void tft_display::drawXBitmap(
     int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color
 ) {
     if (!_gfx || !bitmap) return;
-    _gfx->drawXBitmap(x, y, bitmap, w, h, color);
+    RUN_ON_MUTEX(_gfx->drawXBitmap(x, y, bitmap, w, h, color));
 }
 
 void tft_display::drawXBitmap(
@@ -241,7 +251,7 @@ void tft_display::drawXBitmap(
         for (int16_t i = 0; i < w; ++i) {
             uint8_t byte = bitmap[(j * ((w + 7) / 8)) + (i >> 3)];
             bool bit = byte & (0x80 >> (i & 7));
-            _gfx->drawPixel(x + i, y + j, bit ? color : bg);
+            RUN_ON_MUTEX(_gfx->drawPixel(x + i, y + j, bit ? color : bg));
         }
     }
 }
@@ -261,7 +271,7 @@ void tft_display::pushImage(
     for (int32_t row = 0; row < h; ++row) {
         for (int32_t col = 0; col < w; ++col) {
             uint8_t idx = data[row * w + col];
-            _gfx->drawPixel(x + col, y + row, cmap[idx]);
+            RUN_ON_MUTEX(_gfx->drawPixel(x + col, y + row, cmap[idx]));
         }
     }
 }
@@ -279,10 +289,10 @@ void tft_display::invertDisplay(bool i) {
 
 void tft_display::sleep(bool value) {
     if (value) {
-        writecommand(0x10);
+        _gfx->writecommand(0x10);
         delay(5);
     } else {
-        writecommand(0x11);
+        _gfx->writecommand(0x11);
         delay(120);
     }
 }
@@ -356,16 +366,30 @@ int16_t tft_display::drawRightString(const String &string, int32_t x, int32_t y,
     return drawAlignedString(string, x, y, TR_DATUM);
 }
 
-size_t tft_display::write(uint8_t c) { return _gfx ? _gfx->write(c) : 0; }
+size_t tft_display::write(uint8_t c) {
+    if (_gfx) {
+        size_t t = 0;
+        RUN_ON_MUTEX(t = _gfx->write(c));
+        return t;
+    } else return 0;
+}
 
 size_t tft_display::write(const uint8_t *buffer, size_t size) {
     if (!_gfx || !buffer) return 0;
     size_t written = 0;
+    xSemaphoreTakeRecursive(tftMutex, portMAX_DELAY);
     for (size_t i = 0; i < size; ++i) { written += _gfx->write(buffer[i]); }
+    xSemaphoreGiveRecursive(tftMutex);
     return written;
 }
 
-size_t tft_display::println() { return _gfx ? _gfx->println() : 0; }
+size_t tft_display::println() {
+    if (_gfx) {
+        size_t t = 0;
+        RUN_ON_MUTEX(t = _gfx->println());
+        return t;
+    } else return 0;
+}
 
 size_t tft_display::printf(const char *fmt, ...) {
     if (!_gfx || !fmt) return 0;
@@ -375,12 +399,18 @@ size_t tft_display::printf(const char *fmt, ...) {
     int len = vsnprintf(stackBuf, sizeof(stackBuf), fmt, args);
     va_end(args);
     if (len < 0) return 0;
-    if (static_cast<size_t>(len) < sizeof(stackBuf)) { return _gfx->print(stackBuf); }
+    if (static_cast<size_t>(len) < sizeof(stackBuf)) {
+        size_t t = 0;
+        RUN_ON_MUTEX(t = _gfx->print(stackBuf));
+        return t;
+    }
     std::unique_ptr<char[]> buf(new char[len + 1]);
     va_start(args, fmt);
     vsnprintf(buf.get(), len + 1, fmt, args);
     va_end(args);
-    return _gfx->print(buf.get());
+    size_t t = 0;
+    RUN_ON_MUTEX(t = _gfx->print(buf.get()));
+    return t;
 }
 
 int16_t tft_display::width() const { return _gfx ? _gfx->width() : 0; }
@@ -412,7 +442,7 @@ void tft_display::drawWideLineFallback(float ax, float ay, float bx, float by, f
     float dy = by - ay;
     float len = std::sqrt(dx * dx + dy * dy);
     if (len == 0) {
-        _gfx->drawPixel(static_cast<int32_t>(ax), static_cast<int32_t>(ay), color);
+        RUN_ON_MUTEX(_gfx->drawPixel(static_cast<int32_t>(ax), static_cast<int32_t>(ay), color));
         return;
     }
     float nx = -dy / len;
@@ -421,13 +451,13 @@ void tft_display::drawWideLineFallback(float ax, float ay, float bx, float by, f
     for (int32_t i = -half; i <= half; ++i) {
         float ox = nx * static_cast<float>(i);
         float oy = ny * static_cast<float>(i);
-        _gfx->drawLine(
+        RUN_ON_MUTEX(_gfx->drawLine(
             static_cast<int32_t>(ax + ox),
             static_cast<int32_t>(ay + oy),
             static_cast<int32_t>(bx + ox),
             static_cast<int32_t>(by + oy),
             color
-        );
+        ));
     }
 }
 
@@ -460,7 +490,7 @@ int16_t tft_display::drawAlignedString(const String &s, int32_t x, int32_t y, ui
         default: break;
     }
     _gfx->setCursor(cx, cy);
-    _gfx->print(s);
+    RUN_ON_MUTEX(_gfx->print(s));
     return w;
 }
 

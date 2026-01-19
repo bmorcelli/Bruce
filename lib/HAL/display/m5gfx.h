@@ -1,7 +1,6 @@
 #ifndef LIB_HAL_M5GFX_H
 #define LIB_HAL_M5GFX_H
 #include <pins_arduino.h>
-#if defined(USE_M5GFX)
 
 #include <M5Unified.h>
 #include <SPI.h>
@@ -167,5 +166,4 @@ public:
     int16_t height() const;
 };
 
-#endif
 #endif // LIB_HAL_LOVYAN_H
