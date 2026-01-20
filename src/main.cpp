@@ -106,11 +106,10 @@ char timeStr[12];
 time_t localTime;
 struct tm *timeInfo;
 #if defined(HAS_RTC)
-#if defined(HAS_RTC_BM8563)
-cplus_RTC _rtc;
-#endif
 #if defined(HAS_RTC_PCF85063A)
 pcf85063_RTC _rtc;
+#else
+cplus_RTC _rtc;
 #endif
 RTC_TimeTypeDef _time;
 RTC_DateTypeDef _date;
