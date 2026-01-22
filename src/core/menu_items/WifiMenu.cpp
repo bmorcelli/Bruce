@@ -16,6 +16,10 @@
 #include "modules/wifi/sniffer.h"
 #include "modules/wifi/wifi_atks.h"
 
+#if defined(T_EMBED_1101)
+#include "modules/wifi/wifi_recover.h"
+#endif
+
 #ifndef LITE_VERSION
 #include "modules/pwnagotchi/pwnagotchi.h"
 #endif
@@ -104,6 +108,9 @@ void WifiMenu::optionsMenu() {
     options.push_back({"Wireguard", wg_setup});
     options.push_back({"Responder", responder});
     options.push_back({"Brucegotchi", brucegotchi_start});
+#if defined(T_EMBED_1101)
+    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
+#endif
 #endif
     options.push_back({"Config", [this]() { configMenu(); }});
 
