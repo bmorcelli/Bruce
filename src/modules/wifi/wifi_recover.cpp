@@ -1,3 +1,4 @@
+// --- wifi_recover.cpp ---
 /*
   WiFi Password Cracker for Bruce (ESP32-S3 / T-Embed)
   - Reads passwords from wordlist file
@@ -5,7 +6,7 @@
   - Single unified workflow
 */
 
-#include "wifi_benchmark.h"
+#include "wifi_recover.h"
 
 // Bruce core includes
 #include "core/display.h"
@@ -717,7 +718,7 @@ void wifi_crack_handshake(const String &wordlist_path, const String &pcap_path) 
 }
 
 /* ----------------- Menu Entry Point ----------------- */
-void wifi_benchmark_menu() {
+void wifi_recover_menu() {
     resetTftDisplay();
     drawMainBorderWithTitle("WiFi Cracker", true);
     padprintln("");
