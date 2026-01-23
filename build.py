@@ -1,6 +1,5 @@
-import csv
 from pathlib import Path
-
+import csv
 from SCons.Script import Import
 
 # Import PlatformIO's SCons environment
