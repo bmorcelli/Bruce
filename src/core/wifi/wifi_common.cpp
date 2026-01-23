@@ -37,7 +37,7 @@ void ensureWifiPlatform() {
 
 bool _wifiConnect(const String &ssid, int encryption) {
     String password = bruceConfig.getWifiPassword(ssid);
-    if (password == "" && encryption > 0) { password = keyboard(password, 63, "Network Password:"); }
+    if (password == "" && encryption > 0) { password = keyboard(password, 63, "Network Password:", true); }
     bool connected = _connectToWifiNetwork(ssid, password);
     bool retry = false;
 
@@ -55,7 +55,7 @@ bool _wifiConnect(const String &ssid, int encryption) {
             return false;
         }
 
-        password = keyboard(password, 63, "Network Password:");
+        password = keyboard(password, 63, "Network Password:", true);
         connected = _connectToWifiNetwork(ssid, password);
     }
 
@@ -63,6 +63,7 @@ bool _wifiConnect(const String &ssid, int encryption) {
         wifiConnected = true;
         wifiIP = WiFi.localIP().toString();
         bruceConfig.addWifiCredential(ssid, password);
+        vTaskDelay(5000 / portTICK_PERIOD_MS); // Wait 5 seconds for connection to stabilize
         updateClockTimezone();
     }
 
@@ -220,6 +221,7 @@ void wifiConnectTask(void *pvParameters) {
             if (WiFi.status() == WL_CONNECTED) {
                 wifiConnected = true;
                 wifiIP = WiFi.localIP().toString();
+                vTaskDelay(5000 / portTICK_PERIOD_MS); // Wait 5 seconds for connection to stabilize
                 updateClockTimezone();
                 drawStatusBar();
                 break;
@@ -262,6 +264,7 @@ bool wifiConnecttoKnownNet(void) {
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
         wifiIP = WiFi.localIP().toString();
+        vTaskDelay(5000 / portTICK_PERIOD_MS); // Wait 5 seconds for connection to stabilize
         updateClockTimezone();
     }
     return result;
