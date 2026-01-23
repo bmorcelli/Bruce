@@ -1,6 +1,6 @@
-from pathlib import Path
 import csv
-import shutil
+from pathlib import Path
+
 from SCons.Script import Import
 
 # Import PlatformIO's SCons environment
@@ -121,16 +121,6 @@ def _merge_bins_callback(target, source, env):
         except FileNotFoundError:
             size = 0
         print(f"[merge_bin] Success -> {out_bin} ({size} bytes)")
-
-        # Copy to build_output directory
-        try:
-            target_dir = proj_dir / "build_output" / pioenv
-            target_dir.mkdir(parents=True, exist_ok=True)
-            target_file = target_dir / out_bin.name
-            print(f"[merge_bin] Copying to {target_file}")
-            shutil.copy2(out_bin, target_file)
-        except Exception as e:
-            print(f"[merge_bin] Warning: Failed to copy output: {e}")
 
         if ota0_offset:
             if size < (ota0_offset + ota_size):
