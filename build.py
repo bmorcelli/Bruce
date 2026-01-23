@@ -100,7 +100,7 @@ def _merge_bins_callback(target, source, env):
             env.Exit(1)
 
     cmd = " ".join([
-        "pio pkg exec -p \"tool-esptoolpy\" -- esptool.py",
+        q(python_exe), "-m", "platformio", "pkg", "exec", "-p", q("tool-esptoolpy"), "--", "esptool.py",
         "--chip", chip_arg,
         "merge-bin",
         "--output", q(out_bin),
@@ -121,7 +121,6 @@ def _merge_bins_callback(target, source, env):
         except FileNotFoundError:
             size = 0
         print(f"[merge_bin] Success -> {out_bin} ({size} bytes)")
-
         if ota0_offset:
             if size < (ota0_offset + ota_size):
                 print("[Final bin] Valid bin to upload")
