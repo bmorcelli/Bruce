@@ -13,15 +13,17 @@
 // #define SRIX_DEBUG_WRITE_SIMULATION
 
 // Uncomment to enable verbose debug output on Serial
-//#define SRIX_DEBUG 
+// #define SRIX_DEBUG
 
 // Helper macro for debug
 #ifdef SRIX_DEBUG
-    #define SRIX_LOG(...) Serial.printf(__VA_ARGS__); Serial.println()
-    #define SRIX_PRINT(...) Serial.print(__VA_ARGS__)
+#define SRIX_LOG(...)                                                                                        \
+    Serial.printf(__VA_ARGS__);                                                                              \
+    Serial.println()
+#define SRIX_PRINT(...) Serial.print(__VA_ARGS__)
 #else
-    #define SRIX_LOG(...) 
-    #define SRIX_PRINT(...) 
+#define SRIX_LOG(...)
+#define SRIX_PRINT(...)
 #endif
 
 #include "pn532_srix.h"
@@ -45,8 +47,7 @@ public:
 
     void setup();
     void loop();
-// ========== JS INTERPRETER SUPPORT ==========
-#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+    // ========== JS INTERPRETER SUPPORT ==========
     // Headless constructor (no UI, no loop)
     SRIXTool(bool headless_mode);
 
@@ -62,7 +63,6 @@ public:
     uint8_t *getDump() { return _dump; }
     uint8_t *getUID() { return _uid; }
     bool isDumpValid() { return _dump_valid_from_read || _dump_valid_from_load; }
-#endif
 
 private:
 // PN532 for SRIX - uses IRQ/RST if board has them defined

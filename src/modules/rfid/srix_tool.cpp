@@ -13,7 +13,7 @@
 
 #define TAG_TIMEOUT_MS 100
 #define TAG_MAX_ATTEMPTS 5
-static constexpr uint32_t SRIX_EEPROM_WRITE_DELAY_MS = 15; //Delay for write operation
+static constexpr uint32_t SRIX_EEPROM_WRITE_DELAY_MS = 15; // Delay for write operation
 
 SRIXTool::SRIXTool() {
     current_state = IDLE_MODE;
@@ -387,7 +387,7 @@ void SRIXTool::write_tag() {
         } else {
             SRIX_LOG("[WriteBlock_GUI] ✅ WRITE BLOCK: %u", blocks_written);
             blocks_written++;
-            delay(SRIX_EEPROM_WRITE_DELAY_MS); //Delay for write
+            delay(SRIX_EEPROM_WRITE_DELAY_MS); // Delay for write
             waitForTagHeadless(600);
         }
 
@@ -833,8 +833,6 @@ void SRIXTool::delayWithReturn(uint32_t ms) {
 }
 
 // ========== JS INTERPRETER SUPPORT ==========
-#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
-
 SRIXTool::SRIXTool(bool headless_mode) {
     SRIX_LOG("[SRIX] Headless Constructor start");
 
@@ -850,9 +848,9 @@ SRIXTool::SRIXTool(bool headless_mode) {
 
     int sda_pin = bruceConfigPins.i2c_bus.sda;
     int scl_pin = bruceConfigPins.i2c_bus.scl;
-    
+
     SRIX_LOG("[SRIX] I2C pins: SDA=%d, SCL=%d", sda_pin, scl_pin);
-    
+
     Wire.begin(sda_pin, scl_pin);
     Wire.setClock(100000);
 
@@ -875,7 +873,7 @@ SRIXTool::SRIXTool(bool headless_mode) {
             SRIX_LOG("[SRIX] ❌ Init FAILED! (Check wiring)");
         }
     } else {
-         SRIX_LOG("[SRIX] ❌ Failed to create NFC object (Out of memory?)");
+        SRIX_LOG("[SRIX] ❌ Failed to create NFC object (Out of memory?)");
     }
 }
 
@@ -888,13 +886,13 @@ bool SRIXTool::waitForTagHeadless(uint32_t timeout_ms) {
     SRIX_LOG("[WaitHeadless] Waiting for tag... (Timeout: %lu ms)", timeout_ms);
 
     while ((millis() - startTime) < timeout_ms) {
-        
+
         // Init_select
         if (nfc->SRIX_initiate_select()) {
             SRIX_LOG("[WaitHeadless] ✅ Tag detected!");
             return true;
         }
-        
+
         // Delay for i2C Bus
         delay(100);
     }
@@ -1025,9 +1023,7 @@ int SRIXTool::write_tag_headless(int timeout_seconds) {
 
         // VERIFY (best-effort)
         if (nfc->SRIX_read_block(b, readCheck)) {
-            if (memcmp(block, readCheck, 4) == 0) {
-                blocks_verified++;
-            }   
+            if (memcmp(block, readCheck, 4) == 0) { blocks_verified++; }
         }
         if (!waitForTagHeadless(600)) {
             SRIX_LOG("[WriteTag_Headless] ❌ Tag lost at block %u", b);
@@ -1035,8 +1031,9 @@ int SRIXTool::write_tag_headless(int timeout_seconds) {
         }
     }
 
-    SRIX_LOG("[WriteTag_Headless] ✅ WRITE COMPLETE. Written=%u Verified=%u",
-             blocks_written, blocks_verified);
+    SRIX_LOG(
+        "[WriteTag_Headless] ✅ WRITE COMPLETE. Written=%u Verified=%u", blocks_written, blocks_verified
+    );
 
     // Return if OK
     if (blocks_verified == 128) {
@@ -1203,54 +1200,58 @@ int SRIXTool::write_single_block_headless(uint8_t block_num, const uint8_t *bloc
         return -3;
     }
 
-    SRIX_LOG("[WriteBlock_Headless] Start writing block %u. Data: %02X %02X %02X %02X", 
-             block_num, block_data[0], block_data[1], block_data[2], block_data[3]);
+    SRIX_LOG(
+        "[WriteBlock_Headless] Start writing block %u. Data: %02X %02X %02X %02X",
+        block_num,
+        block_data[0],
+        block_data[1],
+        block_data[2],
+        block_data[3]
+    );
 
     // 1. Wait Tag
     // Timeout 2500ms
     if (!waitForTagHeadless(2500)) {
         SRIX_LOG("[WriteBlock_Headless] ❌ Timeout: Tag not found");
-        return -1; 
+        return -1;
     }
 
     // 2. Tag found and selected
     SRIX_LOG("[WriteBlock_Headless] Tag ready. Sending write command...");
-    
+
     if (nfc->SRIX_write_block(block_num, (uint8_t *)block_data)) {
 
         // 3. Wait HW write (Critical Wait)
         delay(SRIX_EEPROM_WRITE_DELAY_MS);
         SRIX_LOG("[WriteBlock_Headless] ✅ WRITE SENT OK");
 
-    // ==============================
-    // 4. VERIFY (NEED BIGGER UPGRADE)
-    // ==============================
-    uint8_t readBuffer[4];
+        // ==============================
+        // 4. VERIFY (NEED BIGGER UPGRADE)
+        // ==============================
+        uint8_t readBuffer[4];
 
-    // Re-select: NEED TO IMPLEMNTAT VERIFY WRITTEN BLOCK - NOT POSSIBLE NOW
-    if (!nfc->SRIX_initiate_select()) {
-    SRIX_LOG("[WriteBlock_Headless] ⚠️ Re-select failed (ignored)");}
-    delay(10);
+        // Re-select: NEED TO IMPLEMNTAT VERIFY WRITTEN BLOCK - NOT POSSIBLE NOW
+        if (!nfc->SRIX_initiate_select()) { SRIX_LOG("[WriteBlock_Headless] ⚠️ Re-select failed (ignored)"); }
+        delay(10);
 
-    if (nfc->SRIX_read_block(block_num, readBuffer)) {
-        delay(5);
-        if (memcmp(block_data, readBuffer, 4) == 0) {
-            SRIX_LOG("[WriteBlock_Headless] ✅ VERIFY OK");
-            return 0; // WRITE + VERIFY OK
-        } else {
-            SRIX_LOG("[WriteBlock_Headless] ⚠️ VERIFY MISMATCH (write assumed OK)");
-            return 1; // WRITE OK, VERIFY FAIL
+        if (nfc->SRIX_read_block(block_num, readBuffer)) {
+            delay(5);
+            if (memcmp(block_data, readBuffer, 4) == 0) {
+                SRIX_LOG("[WriteBlock_Headless] ✅ VERIFY OK");
+                return 0; // WRITE + VERIFY OK
+            } else {
+                SRIX_LOG("[WriteBlock_Headless] ⚠️ VERIFY MISMATCH (write assumed OK)");
+                return 1; // WRITE OK, VERIFY FAIL
+            }
         }
+
+        SRIX_LOG("[WriteBlock_Headless] ⚠️ VERIFY SKIPPED (no RST / RF dirty)");
+        return 2; // WRITE OK, VERIFY NOT POSSIBLE
+    } else {
+        SRIX_LOG("[WriteBlock_Headless] ❌ WRITE FAILED");
+        return -5;
     }
-
-    SRIX_LOG("[WriteBlock_Headless] ⚠️ VERIFY SKIPPED (no RST / RF dirty)");
-    return 2; // WRITE OK, VERIFY NOT POSSIBLE
-    }   else {
-    SRIX_LOG("[WriteBlock_Headless] ❌ WRITE FAILED");
-    return -5;}
 }
-
-#endif
 
 // Entry point
 void PN532_SRIX() { SRIXTool srix_tool; }
