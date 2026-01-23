@@ -243,6 +243,24 @@ Bus 3: `Arduino_ESP32RGBPanel` (RGB panel)
 #define TFT_PREF_SPEED        16000000
 ```
 
+Bus 4: `Arduino_ESP32DSIPanel` (DSI used in ESP32-P4)
+```c
+// Example of T-Display P4 TFT
+#define TFT_DATABUS_N 4
+#define TFT_HSYNC_PULSE_WIDTH 	28
+#define TFT_HSYNC_BACK_PORCH	26
+#define TFT_HSYNC_FRONT_PORCH	20
+#define TFT_VSYNC_PULSE_WIDTH	2
+#define TFT_VSYNC_BACK_PORCH	22
+#define TFT_VSYNC_FRONT_PORCH	200
+#define TFT_PREF_SPEED			60000000
+
+#define TFT_DISPLAY_DRIVER_N 	50
+#define TFT_WIDTH				540
+#define TFT_HEIGHT				1168
+#define TFT_RST					-1
+#define TFT_DSI_INIT			hi8561_lcd_init
+```
 ### Display driver selection (`TFT_DISPLAY_DRIVER_N`)
 
 All drivers use `TFT_DISPLAY_DRIVER_N`. The grouping below matches the constructor signature used in

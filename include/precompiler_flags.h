@@ -253,7 +253,11 @@
 // Temporary, delete after finish Interfaces
 
 #ifndef SMOOTH_FONT
-#define SMOOTH_FONT
+#define SMOOTH_FONT 1
+#endif
+
+#ifndef BTN_ALIAS
+#define BTN_ALIAS "Sel"
 #endif
 
 #ifndef DEEPSLEEP_WAKEUP_PIN

@@ -7,6 +7,7 @@ class tft_sprite;
 class tft_logger;
 
 #if defined(USE_ARDUINO_GFX)
+#include "tft_defines.h"
 #include <Arduino_GFX_Library.h>
 #include <algorithm>
 #include <cmath>
@@ -15,12 +16,13 @@ class tft_logger;
 #include <memory>
 // clang-format off
 // Check Data bus
-#if !defined(TFT_DATABUS_N) || TFT_DATABUS_N > 3
+#if !defined(TFT_DATABUS_N) || TFT_DATABUS_N > 4
     #warning "Please define the Data bus used for this board:\n \
     - 0: Arduino_HWSPI: Shared SPI with other devices;\n \
     - 1: Arduino_ESP32QSPI: Quad SPI, used in AMOLED and some new displays;\n \
     - 2: Arduino_ESP32PAR8Q: Parallel 8 bit;\n \
     - 3: Arduino_ESP32RGBPanel: Parallel 16 bit;\n \
+    - 4: Arduino_ESP32DSIPanel: DSI Panel for P4 devices;\n \
     \n \
     Using Arduino_HWSPI as default."
     #define TFT_DATABUS_N 0
@@ -86,15 +88,39 @@ class tft_logger;
                 TFT_PREF_SPEED"
     #endif
 
-    #if !defined(TFT_WIDTH) || defined(TFT_HEIGHT)
+    #if !defined(TFT_WIDTH) || !defined(TFT_HEIGHT)
         #error "Missing Macros definitions of: TFT_WIDTH, TFT_HEIGHT"
+    #endif
+#elif TFT_DATABUS_N == 4
+    #include "ardgfx_inits.h"
+    #define TFT_DATABUS_TYPE Arduino_ESP32DSIPanel
+    #define TFT_DATABUS Arduino_ESP32DSIPanel
+    #if !defined(TFT_HSYNC_PULSE_WIDTH) || !defined(TFT_HSYNC_BACK_PORCH) || !defined(TFT_HSYNC_FRONT_PORCH) || \
+        !defined(TFT_VSYNC_PULSE_WIDTH) || !defined(TFT_VSYNC_BACK_PORCH) || !defined(TFT_VSYNC_FRONT_PORCH) || \
+        !defined(TFT_PREF_SPEED)
+        #error "Missing Definitions for: \n \
+                TFT_HSYNC_FRONT_PORCH,\n \
+                TFT_HSYNC_PULSE_WIDTH,\n \
+                TFT_HSYNC_BACK_PORCH,\n \
+                TFT_VSYNC_FRONT_PORCH,\n \
+                TFT_VSYNC_PULSE_WIDTH,\n \
+                TFT_VSYNC_BACK_PORCH,\n \
+                TFT_PREF_SPEED"
+    #endif
+
+    #if !defined(TFT_WIDTH) || !defined(TFT_HEIGHT) || !defined(TFT_RST) || !defined(TFT_DSI_INIT)
+        #error "Missing Macros definitions of: TFT_WIDTH, TFT_HEIGHT, TFT_RST, TFT_DSI_INIT"
+    #endif
+    #ifndef TFT_DISPLAY_DRIVER_N
+    #define TFT_DISPLAY_DRIVER_N 50
     #endif
 #else
     #error "Invalid TFT_DATABUS_N\n Please define the Data bus used for this board:\n \
     - 0: Arduino_HWSPI: Shared SPI with other devices;\n \
     - 1: Arduino_ESP32QSPI: Quad SPI, used in AMOLED and some new displays;\n \
     - 2: Arduino_ESP32PAR8Q: Parallel 8 bit;\n \
-    - 3: Arduino_ESP32RGBPanel: Parallel 16 bit;"
+    - 3: Arduino_ESP32RGBPanel: Parallel 16 bit;\n \
+    - 4: Arduino_ESP32DSIPanel: DSI Panel for P4 devices;"
 #endif
 
 // Set Databus Type for constructor
@@ -104,7 +130,9 @@ class tft_logger;
     #endif
     #define TFT_DATABUS_TYPE Arduino_ESP32RGBPanel
 #else
-    #define TFT_DATABUS_TYPE Arduino_DataBus
+    #ifndef TFT_DATABUS_TYPE
+        #define TFT_DATABUS_TYPE Arduino_DataBus
+    #endif
 #endif
 
 #if !defined(TFT_DISPLAY_DRIVER_N)
