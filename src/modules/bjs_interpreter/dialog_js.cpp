@@ -186,7 +186,7 @@ JSValue native_dialogViewFile(JSContext *ctx, JSValue *this_val, int argc, JSVal
     if (SD.exists(filepath)) fs = &SD;
     else if (LittleFS.exists(filepath)) fs = &LittleFS; // ← add "else if" for SD Priority
     if (fs) { viewFile(*fs, filepath); }
-    return 0;
+    return JS_UNDEFINED;
 }
 
 JSValue native_dialogViewText(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {

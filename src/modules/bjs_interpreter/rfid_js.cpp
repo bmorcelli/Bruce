@@ -10,6 +10,7 @@
 #include "modules/rfid/srix_tool.h"
 #include "modules/rfid/tag_o_matic.h"
 
+// Singleton instances for RFID readers
 static TagOMatic *g_tagReader = nullptr;
 
 static TagOMatic *getTagReader() {
@@ -26,7 +27,7 @@ static void clearTagReader() {
     }
 }
 
-// SRIX
+// SRIX singleton
 static SRIXTool *g_srixReader = nullptr;
 
 static SRIXTool *getSRIXReader() {
@@ -43,109 +44,61 @@ static void clearSRIXReader() {
     }
 }
 
-duk_ret_t putPropRFIDFunctions(duk_context *ctx, duk_idx_t obj_idx, uint8_t magic) {
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "read", native_rfidRead, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "readUID", native_rfidReadUID, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "write", native_rfidWrite, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "save", native_rfidSave, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "load", native_rfidLoad, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "clear", native_rfidClear, 0, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "addMifareKey", native_rfid_AddMifareKey, 1, magic);
-    // SRIX functions
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixRead", native_srixRead, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixWrite", native_srixWrite, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixSave", native_srixSave, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixLoad", native_srixLoad, 1, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixClear", native_srixClear, 0, magic);
-    bduk_put_prop_c_lightfunc(ctx, obj_idx, "srixWriteBlock", native_srixWriteBlock, 2, magic);
-    return 0;
-}
+// ============================================================================
+// RFID FUNCTIONS
+// ============================================================================
 
-duk_ret_t registerRFID(duk_context *ctx) {
-    bduk_register_c_lightfunc(ctx, "rfidRead", native_rfidRead, 1);
-    bduk_register_c_lightfunc(ctx, "rfidReadUID", native_rfidReadUID, 1);
-    bduk_register_c_lightfunc(ctx, "rfidWrite", native_rfidWrite, 1);
-    bduk_register_c_lightfunc(ctx, "rfidSave", native_rfidSave, 1);
-    bduk_register_c_lightfunc(ctx, "rfidLoad", native_rfidLoad, 1);
-    bduk_register_c_lightfunc(ctx, "rfidClear", native_rfidClear, 0);
-    bduk_register_c_lightfunc(ctx, "rfidAddMifareKey", native_rfid_AddMifareKey, 1);
-    // SRIX functions
-    bduk_register_c_lightfunc(ctx, "srixRead", native_srixRead, 1);
-    bduk_register_c_lightfunc(ctx, "srixWrite", native_srixWrite, 1);
-    bduk_register_c_lightfunc(ctx, "srixSave", native_srixSave, 1);
-    bduk_register_c_lightfunc(ctx, "srixLoad", native_srixLoad, 1);
-    bduk_register_c_lightfunc(ctx, "srixClear", native_srixClear, 0);
-    bduk_register_c_lightfunc(ctx, "srixWriteBlock", native_srixWriteBlock, 2);
-    return 0;
-}
-
-duk_ret_t native_rfidRead(duk_context *ctx) {
+JSValue native_rfidRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidRead(timeout_in_seconds : number = 10);
-    // returns: object with complete or null data on timeout
+    // returns: object with complete data or null on timeout
 
-    duk_int_t timeout = duk_get_int_default(ctx, 0, 10);
+    int timeout = 10;
+    if (argc > 0 && JS_IsNumber(ctx, argv[0])) { JS_ToInt32(ctx, &timeout, argv[0]); }
 
     TagOMatic *tagReader = getTagReader();
 
     // Use existing headless functionality
     String jsonResult = tagReader->read_tag_headless(timeout);
 
-    if (jsonResult.isEmpty()) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (jsonResult.isEmpty()) { return JS_NULL; }
 
     // Create a JS object from the fields
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    JSValue obj = JS_NewObject(ctx);
 
     // Extract fields from the interface
     RFIDInterface *rfid = tagReader->getRFIDInterface();
-
     if (rfid) {
-        duk_push_string(ctx, rfid->printableUID.uid.c_str());
-        duk_put_prop_string(ctx, obj_idx, "uid");
-
-        duk_push_string(ctx, rfid->printableUID.picc_type.c_str());
-        duk_put_prop_string(ctx, obj_idx, "type");
-
-        duk_push_string(ctx, rfid->printableUID.sak.c_str());
-        duk_put_prop_string(ctx, obj_idx, "sak");
-
-        duk_push_string(ctx, rfid->printableUID.atqa.c_str());
-        duk_put_prop_string(ctx, obj_idx, "atqa");
-
-        duk_push_string(ctx, rfid->printableUID.bcc.c_str());
-        duk_put_prop_string(ctx, obj_idx, "bcc");
-
-        duk_push_string(ctx, rfid->strAllPages.c_str());
-        duk_put_prop_string(ctx, obj_idx, "pages");
-
-        duk_push_int(ctx, rfid->totalPages);
-        duk_put_prop_string(ctx, obj_idx, "totalPages");
+        JS_SetPropertyStr(ctx, obj, "uid", JS_NewString(ctx, rfid->printableUID.uid.c_str()));
+        JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, rfid->printableUID.picc_type.c_str()));
+        JS_SetPropertyStr(ctx, obj, "sak", JS_NewString(ctx, rfid->printableUID.sak.c_str()));
+        JS_SetPropertyStr(ctx, obj, "atqa", JS_NewString(ctx, rfid->printableUID.atqa.c_str()));
+        JS_SetPropertyStr(ctx, obj, "bcc", JS_NewString(ctx, rfid->printableUID.bcc.c_str()));
+        JS_SetPropertyStr(ctx, obj, "pages", JS_NewString(ctx, rfid->strAllPages.c_str()));
+        JS_SetPropertyStr(ctx, obj, "totalPages", JS_NewInt32(ctx, rfid->totalPages));
     }
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_rfidReadUID(duk_context *ctx) {
+JSValue native_rfidReadUID(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidReadUID(timeout_in_seconds : number = 5);
     // returns: string (UID) or empty string on timeout
 
-    duk_int_t timeout = duk_get_int_default(ctx, 0, 5);
+    int timeout = 5;
+    if (argc > 0 && JS_IsNumber(ctx, argv[0])) { JS_ToInt32(ctx, &timeout, argv[0]); }
 
     TagOMatic tagReader(true);
-
     String uid = tagReader.read_uid_headless(timeout);
-    duk_push_string(ctx, uid.c_str());
 
-    return 1;
+    return JS_NewString(ctx, uid.c_str());
 }
 
-duk_ret_t native_rfidWrite(duk_context *ctx) {
+JSValue native_rfidWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidWrite(timeout_in_seconds : number = 10);
     // returns: { success: boolean, message: string }
 
-    duk_int_t timeout = duk_get_int_default(ctx, 0, 10);
+    int timeout = 10;
+    if (argc > 0 && JS_IsNumber(ctx, argv[0])) { JS_ToInt32(ctx, &timeout, argv[0]); }
 
     TagOMatic *tagReader = getTagReader();
 
@@ -153,51 +106,39 @@ duk_ret_t native_rfidWrite(duk_context *ctx) {
     int result = tagReader->write_tag_headless(timeout);
 
     // Create return object
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    JSValue obj = JS_NewObject(ctx);
 
     switch (result) {
         case RFIDInterface::SUCCESS:
-            duk_push_boolean(ctx, true);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Tag written successfully");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Tag written successfully"));
             break;
-
         case RFIDInterface::TAG_NOT_PRESENT:
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "No tag present");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "No tag present"));
             break;
-
         case RFIDInterface::TAG_NOT_MATCH:
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Tag types do not match");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Tag types do not match"));
             break;
-
         default:
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Error writing data to tag");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Error writing data to tag"));
             break;
     }
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_rfidSave(duk_context *ctx) {
+JSValue native_rfidSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidSave(filename : string);
     // returns: { success: boolean, message: string, filepath: string }
 
-    if (!duk_is_string(ctx, 0)) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (argc < 1 || !JS_IsString(ctx, argv[0])) { return JS_NULL; }
 
-    const char *filename = duk_get_string(ctx, 0);
+    JSCStringBuf buf;
+    const char *filename = JS_ToCString(ctx, argv[0], &buf);
+    if (!filename) { return JS_NULL; }
 
     TagOMatic *tagReader = getTagReader();
 
@@ -205,144 +146,117 @@ duk_ret_t native_rfidSave(duk_context *ctx) {
     String result = tagReader->save_file_headless(String(filename));
 
     // Create return object
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    JSValue obj = JS_NewObject(ctx);
 
     if (!result.isEmpty()) {
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "File saved successfully");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-        duk_push_string(ctx, result.c_str());
-        duk_put_prop_string(ctx, obj_idx, "filepath");
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "File saved successfully"));
+        JS_SetPropertyStr(ctx, obj, "filepath", JS_NewString(ctx, result.c_str()));
     } else {
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "Error saving file");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-        duk_push_string(ctx, "");
-        duk_put_prop_string(ctx, obj_idx, "filepath");
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Error saving file"));
+        JS_SetPropertyStr(ctx, obj, "filepath", JS_NewString(ctx, ""));
     }
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_rfidLoad(duk_context *ctx) {
+JSValue native_rfidLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidLoad(filename : string);
     // returns: object with tag data or null on error
 
-    if (!duk_is_string(ctx, 0)) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (argc < 1 || !JS_IsString(ctx, argv[0])) { return JS_NULL; }
 
-    const char *filename = duk_get_string(ctx, 0);
+    JSCStringBuf buf;
+    const char *filename = JS_ToCString(ctx, argv[0], &buf);
+    if (!filename) { return JS_NULL; }
 
     TagOMatic *tagReader = getTagReader();
 
     // Load file
-    int result = tagReader->load_file_headless(String(filename));
+    bool success = tagReader->load_file_headless(String(filename));
 
-    if (result != RFIDInterface::SUCCESS) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (!success) { return JS_NULL; }
 
-    // Get the loaded data
+    // Create a JS object from the loaded data
+    JSValue obj = JS_NewObject(ctx);
+
+    // Extract fields from the interface
     RFIDInterface *rfid = tagReader->getRFIDInterface();
-
-    if (!rfid) {
-        duk_push_null(ctx);
-        return 1;
+    if (rfid) {
+        JS_SetPropertyStr(ctx, obj, "uid", JS_NewString(ctx, rfid->printableUID.uid.c_str()));
+        JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, rfid->printableUID.picc_type.c_str()));
+        JS_SetPropertyStr(ctx, obj, "sak", JS_NewString(ctx, rfid->printableUID.sak.c_str()));
+        JS_SetPropertyStr(ctx, obj, "atqa", JS_NewString(ctx, rfid->printableUID.atqa.c_str()));
+        JS_SetPropertyStr(ctx, obj, "bcc", JS_NewString(ctx, rfid->printableUID.bcc.c_str()));
+        JS_SetPropertyStr(ctx, obj, "pages", JS_NewString(ctx, rfid->strAllPages.c_str()));
+        JS_SetPropertyStr(ctx, obj, "totalPages", JS_NewInt32(ctx, rfid->totalPages));
     }
 
-    // Create return object with loaded data
-    duk_idx_t obj_idx = duk_push_object(ctx);
-
-    duk_push_string(ctx, rfid->printableUID.uid.c_str());
-    duk_put_prop_string(ctx, obj_idx, "uid");
-
-    duk_push_string(ctx, rfid->printableUID.picc_type.c_str());
-    duk_put_prop_string(ctx, obj_idx, "type");
-
-    duk_push_string(ctx, rfid->printableUID.sak.c_str());
-    duk_put_prop_string(ctx, obj_idx, "sak");
-
-    duk_push_string(ctx, rfid->printableUID.atqa.c_str());
-    duk_put_prop_string(ctx, obj_idx, "atqa");
-
-    duk_push_string(ctx, rfid->printableUID.bcc.c_str());
-    duk_put_prop_string(ctx, obj_idx, "bcc");
-
-    duk_push_string(ctx, rfid->strAllPages.c_str());
-    duk_put_prop_string(ctx, obj_idx, "pages");
-
-    duk_push_int(ctx, rfid->totalPages);
-    duk_put_prop_string(ctx, obj_idx, "totalPages");
-
-    duk_push_int(ctx, rfid->dataPages);
-    duk_put_prop_string(ctx, obj_idx, "dataPages");
-
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_rfidClear(duk_context *ctx) {
+JSValue native_rfidClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: rfidClear();
     // returns: undefined
-
     clearTagReader();
-    return 0;
+    return JS_UNDEFINED;
 }
 
-duk_ret_t native_rfid_AddMifareKey(duk_context *ctx) {
-    if (!duk_is_string(ctx, 0)) {
-        duk_idx_t obj_idx = duk_push_object(ctx);
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "Invalid parameter: key must be a string");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        return 1;
+JSValue native_rfid_AddMifareKey(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+    // usage: rfidAddMifareKey(key : string);
+    // returns: { success: boolean, message: string, key: string }
+
+    if (argc < 1 || !JS_IsString(ctx, argv[0])) {
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Invalid parameter: key must be a string"));
+        return obj;
     }
 
-    const char *key = duk_get_string(ctx, 0);
-    String keyStr = String(key);
+    JSCStringBuf buf;
+    const char *key_str = JS_ToCString(ctx, argv[0], &buf);
+    if (!key_str) {
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Failed to read key string"));
+        return obj;
+    }
 
+    // Use bruceConfig instead of tagReader
+    String keyStr = String(key_str);
     bruceConfig.addMifareKey(keyStr);
 
-    duk_idx_t obj_idx = duk_push_object(ctx);
-    duk_push_boolean(ctx, true);
-    duk_put_prop_string(ctx, obj_idx, "success");
-    duk_push_string(ctx, "Key processed");
-    duk_put_prop_string(ctx, obj_idx, "message");
-    duk_push_string(ctx, keyStr.c_str());
-    duk_put_prop_string(ctx, obj_idx, "key");
+    JSValue obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+    JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Key processed"));
+    JS_SetPropertyStr(ctx, obj, "key", JS_NewString(ctx, keyStr.c_str()));
 
-    return 1;
+    return obj;
 }
 
-// ========== SRIX FUNCTIONS ==========
+// ============================================================================
+// SRIX FUNCTIONS
+// ============================================================================
 
-duk_ret_t native_srixRead(duk_context *ctx) {
+JSValue native_srixRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixRead(timeout_in_seconds : number = 10);
     // returns: { uid: string, blocks: number, size: number, data: string } or null
 
-    duk_int_t timeout = duk_get_int_default(ctx, 0, 10);
+    int timeout = 10;
+    if (argc > 0 && JS_IsNumber(ctx, argv[0])) { JS_ToInt32(ctx, &timeout, argv[0]); }
+
     SRIXTool *srixReader = getSRIXReader();
 
+    // Use existing headless functionality
     String jsonResult = srixReader->read_tag_headless(timeout);
 
-    if (jsonResult.isEmpty()) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (jsonResult.isEmpty()) { return JS_NULL; }
 
-    // Build JS object from data
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    // Create a JS object from the fields
+    JSValue obj = JS_NewObject(ctx);
 
-    // Get UID
+    // Get UID using getUID() method
     String uid_str = "";
     uint8_t *uid = srixReader->getUID();
     for (uint8_t i = 0; i < 8; i++) {
@@ -351,18 +265,15 @@ duk_ret_t native_srixRead(duk_context *ctx) {
         if (i < 7) uid_str += " ";
     }
     uid_str.toUpperCase();
-    duk_push_string(ctx, uid_str.c_str());
-    duk_put_prop_string(ctx, obj_idx, "uid");
+    JS_SetPropertyStr(ctx, obj, "uid", JS_NewString(ctx, uid_str.c_str()));
 
     // Blocks count
-    duk_push_int(ctx, 128);
-    duk_put_prop_string(ctx, obj_idx, "blocks");
+    JS_SetPropertyStr(ctx, obj, "blocks", JS_NewInt32(ctx, 128));
 
     // Size in bytes
-    duk_push_int(ctx, 512);
-    duk_put_prop_string(ctx, obj_idx, "size");
+    JS_SetPropertyStr(ctx, obj, "size", JS_NewInt32(ctx, 512));
 
-    // Data as hex string
+    // Data as hex string using getDump() method
     String dump_str = "";
     uint8_t *dump = srixReader->getDump();
     for (uint16_t i = 0; i < 512; i++) {
@@ -370,144 +281,100 @@ duk_ret_t native_srixRead(duk_context *ctx) {
         dump_str += String(dump[i], HEX);
     }
     dump_str.toUpperCase();
-    duk_push_string(ctx, dump_str.c_str());
-    duk_put_prop_string(ctx, obj_idx, "data");
+    JS_SetPropertyStr(ctx, obj, "data", JS_NewString(ctx, dump_str.c_str()));
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_srixWrite(duk_context *ctx) {
+JSValue native_srixWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixWrite(timeout_in_seconds : number = 10);
-    // returns: { success, message, blocksVerified, code }
+    // returns: { success: boolean, message: string }
 
-    duk_int_t timeout = duk_get_int_default(ctx, 0, 10);
+    int timeout = 10;
+    if (argc > 0 && JS_IsNumber(ctx, argv[0])) { JS_ToInt32(ctx, &timeout, argv[0]); }
+
     SRIXTool *srixReader = getSRIXReader();
 
+    // Use headless write function
     int result = srixReader->write_tag_headless(timeout);
 
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    // Create return object
+    JSValue obj = JS_NewObject(ctx);
 
-    // expose numeric result (IMPORTANT)
-    duk_push_int(ctx, result);
-    duk_put_prop_string(ctx, obj_idx, "code");
-
-    if (result == 0) {
-        // WRITE + VERIFY OK
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "Tag written and fully verified");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-        duk_push_int(ctx, 128);
-        duk_put_prop_string(ctx, obj_idx, "blocksVerified");
-
-    } else if (result > 0) {
-        // WRITE OK, VERIFY PARTIAL / SKIPPED
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "Tag written successfully (partial or skipped verification)");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-        duk_push_int(ctx, result);
-        duk_put_prop_string(ctx, obj_idx, "blocksVerified");
-
-    } else if (result == -1) {
-        // Timeout
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "Timeout: no tag present");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-    } else if (result == -2) {
-        // No data
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "No data in memory. Read or load a tag first");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-    } else if (result == -6) {
-        // NFC not initialized
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "NFC not initialized");
-        duk_put_prop_string(ctx, obj_idx, "message");
-
-    } else {
-        // Real write failure
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-
-        duk_push_string(ctx, "Write operation failed");
-        duk_put_prop_string(ctx, obj_idx, "message");
+    switch (result) {
+        case 0:
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Tag written successfully"));
+            break;
+        case -1:
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Timeout: no tag present"));
+            break;
+        case -2:
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Tag types do not match"));
+            break;
+        default:
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Error writing data to tag"));
+            break;
     }
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_srixSave(duk_context *ctx) {
+JSValue native_srixSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixSave(filename : string);
     // returns: { success: boolean, message: string, filepath: string }
 
-    if (!duk_is_string(ctx, 0)) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (argc < 1 || !JS_IsString(ctx, argv[0])) { return JS_NULL; }
 
-    const char *filename = duk_get_string(ctx, 0);
+    JSCStringBuf buf;
+    const char *filename = JS_ToCString(ctx, argv[0], &buf);
+    if (!filename) { return JS_NULL; }
+
     SRIXTool *srixReader = getSRIXReader();
 
+    // Save file
     String result = srixReader->save_file_headless(String(filename));
 
     // Create return object
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    JSValue obj = JS_NewObject(ctx);
 
     if (!result.isEmpty()) {
-        duk_push_boolean(ctx, true);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "File saved successfully");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        duk_push_string(ctx, result.c_str());
-        duk_put_prop_string(ctx, obj_idx, "filepath");
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "File saved successfully"));
+        JS_SetPropertyStr(ctx, obj, "filepath", JS_NewString(ctx, result.c_str()));
     } else {
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "Error saving file. Check if tag data is loaded");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        duk_push_string(ctx, "");
-        duk_put_prop_string(ctx, obj_idx, "filepath");
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Error saving file"));
+        JS_SetPropertyStr(ctx, obj, "filepath", JS_NewString(ctx, ""));
     }
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_srixLoad(duk_context *ctx) {
+JSValue native_srixLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixLoad(filename : string);
     // returns: { uid: string, blocks: number, size: number, data: string } or null
 
-    if (!duk_is_string(ctx, 0)) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (argc < 1 || !JS_IsString(ctx, argv[0])) { return JS_NULL; }
 
-    const char *filename = duk_get_string(ctx, 0);
+    JSCStringBuf buf;
+    const char *filename = JS_ToCString(ctx, argv[0], &buf);
+    if (!filename) { return JS_NULL; }
+
     SRIXTool *srixReader = getSRIXReader();
 
+    // Load file
     int result = srixReader->load_file_headless(String(filename));
 
-    if (result != 0) {
-        duk_push_null(ctx);
-        return 1;
-    }
+    if (result != 0) { return JS_NULL; }
 
-    // Build JS object with loaded data
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    // Create a JS object from the loaded data
+    JSValue obj = JS_NewObject(ctx);
 
-    // UID
+    // UID using getUID()
     String uid_str = "";
     uint8_t *uid = srixReader->getUID();
     for (uint8_t i = 0; i < 8; i++) {
@@ -516,16 +383,12 @@ duk_ret_t native_srixLoad(duk_context *ctx) {
         if (i < 7) uid_str += " ";
     }
     uid_str.toUpperCase();
-    duk_push_string(ctx, uid_str.c_str());
-    duk_put_prop_string(ctx, obj_idx, "uid");
+    JS_SetPropertyStr(ctx, obj, "uid", JS_NewString(ctx, uid_str.c_str()));
 
-    duk_push_int(ctx, 128);
-    duk_put_prop_string(ctx, obj_idx, "blocks");
+    JS_SetPropertyStr(ctx, obj, "blocks", JS_NewInt32(ctx, 128));
+    JS_SetPropertyStr(ctx, obj, "size", JS_NewInt32(ctx, 512));
 
-    duk_push_int(ctx, 512);
-    duk_put_prop_string(ctx, obj_idx, "size");
-
-    // Data as hex string
+    // Data as hex string using getDump()
     String dump_str = "";
     uint8_t *dump = srixReader->getDump();
     for (uint16_t i = 0; i < 512; i++) {
@@ -533,56 +396,64 @@ duk_ret_t native_srixLoad(duk_context *ctx) {
         dump_str += String(dump[i], HEX);
     }
     dump_str.toUpperCase();
-    duk_push_string(ctx, dump_str.c_str());
-    duk_put_prop_string(ctx, obj_idx, "data");
+    JS_SetPropertyStr(ctx, obj, "data", JS_NewString(ctx, dump_str.c_str()));
 
-    return 1;
+    return obj;
 }
 
-duk_ret_t native_srixClear(duk_context *ctx) {
+JSValue native_srixClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixClear();
     // returns: undefined
-
     clearSRIXReader();
-    return 0;
+    return JS_UNDEFINED;
 }
 
-duk_ret_t native_srixWriteBlock(duk_context *ctx) {
+JSValue native_srixWriteBlock(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
     // usage: srixWriteBlock(blockNum : number, blockData : string);
     // blockData must be 8 hex characters (4 bytes)
     // returns: { success: boolean, message: string }
 
     // Validate parameters
-    if (!duk_is_number(ctx, 0) || !duk_is_string(ctx, 1)) {
-        duk_idx_t obj_idx = duk_push_object(ctx);
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "Invalid parameters: blockNum (number) and blockData (string) required");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        return 1;
+    if (argc < 2 || !JS_IsNumber(ctx, argv[0]) || !JS_IsString(ctx, argv[1])) {
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(
+            ctx,
+            obj,
+            "message",
+            JS_NewString(ctx, "Invalid parameters: blockNum (number) and blockData (string) required")
+        );
+        return obj;
     }
 
-    duk_int_t block_num = duk_get_int(ctx, 0);
-    const char *hex_data = duk_get_string(ctx, 1);
+    int block_num;
+    JS_ToInt32(ctx, &block_num, argv[0]);
+
+    JSCStringBuf buf;
+    const char *hex_data = JS_ToCString(ctx, argv[1], &buf);
+    if (!hex_data) {
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Failed to read blockData string"));
+        return obj;
+    }
 
     // Validate block number
     if (block_num < 0 || block_num > 127) {
-        duk_idx_t obj_idx = duk_push_object(ctx);
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "Block number must be 0-127");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        return 1;
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Block number must be 0-127"));
+        return obj;
     }
 
     // Validate hex data length (must be 8 characters = 4 bytes)
     if (strlen(hex_data) != 8) {
-        duk_idx_t obj_idx = duk_push_object(ctx);
-        duk_push_boolean(ctx, false);
-        duk_put_prop_string(ctx, obj_idx, "success");
-        duk_push_string(ctx, "Block data must be 8 hex characters (4 bytes)");
-        duk_put_prop_string(ctx, obj_idx, "message");
-        return 1;
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+        JS_SetPropertyStr(
+            ctx, obj, "message", JS_NewString(ctx, "Block data must be 8 hex characters (4 bytes)")
+        );
+        return obj;
     }
 
     // Convert hex string to bytes
@@ -597,73 +468,52 @@ duk_ret_t native_srixWriteBlock(duk_context *ctx) {
     int result = srixReader->write_single_block_headless((uint8_t)block_num, block_data);
 
     // Create return object
-    duk_idx_t obj_idx = duk_push_object(ctx);
+    JSValue obj = JS_NewObject(ctx);
 
     switch (result) {
         case 0:
             // Success
-            duk_push_boolean(ctx, true);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Write + Verify SUCCESS!");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Write + Verify SUCCESS!"));
             break;
         case 1:
-            // Success
-            duk_push_boolean(ctx, true);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "VERIFY MISMATCH (write assumed OK)");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            // Success with verify mismatch
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "VERIFY MISMATCH (write assumed OK)"));
             break;
         case 2:
-            // Success
-            duk_push_boolean(ctx, true);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "VERIFY SKIPPED (no RST / RF dirty)");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            // Success but verify skipped
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(true));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "VERIFY SKIPPED (no RST / RF dirty)"));
             break;
-
         case -1:
             // Timeout
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Timeout: no tag present");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Timeout: no tag present"));
             break;
-
         case -3:
             // Invalid data pointer
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Invalid data pointer");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Invalid data pointer"));
             break;
-
         case -4:
             // Invalid block number
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Invalid block number");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Invalid block number"));
             break;
-
         case -5:
             // Write failed
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Write operation failed");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Write operation failed"));
             break;
-
         default:
             // Unknown error
-            duk_push_boolean(ctx, false);
-            duk_put_prop_string(ctx, obj_idx, "success");
-            duk_push_string(ctx, "Unknown error");
-            duk_put_prop_string(ctx, obj_idx, "message");
+            JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
+            JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "Unknown error"));
             break;
     }
 
-    return 1;
+    return obj;
 }
 
 #endif

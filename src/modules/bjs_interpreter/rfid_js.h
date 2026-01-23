@@ -7,26 +7,34 @@
 #ifndef __RFID_JS_H__
 #define __RFID_JS_H__
 
-#include <duktape.h>
+#include "helpers_js.h"
 
-duk_ret_t putPropRFIDFunctions(duk_context *ctx, duk_idx_t obj_idx, uint8_t magic);
-duk_ret_t registerRFID(duk_context *ctx);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-duk_ret_t native_rfidRead(duk_context *ctx);
-duk_ret_t native_rfidReadUID(duk_context *ctx);
-duk_ret_t native_rfidWrite(duk_context *ctx);
-duk_ret_t native_rfidSave(duk_context *ctx);
-duk_ret_t native_rfidLoad(duk_context *ctx);
-duk_ret_t native_rfidClear(duk_context *ctx);
+// Standard RFID functions
+JSValue native_rfidRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_rfidReadUID(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_rfidWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_rfidSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_rfidLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_rfidClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
 // MIFARE key management
-duk_ret_t native_rfid_AddMifareKey(duk_context *ctx);
+JSValue native_rfid_AddMifareKey(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
 // SRIX functions
-duk_ret_t native_srixRead(duk_context *ctx);
-duk_ret_t native_srixWrite(duk_context *ctx);
-duk_ret_t native_srixSave(duk_context *ctx);
-duk_ret_t native_srixLoad(duk_context *ctx);
-duk_ret_t native_srixClear(duk_context *ctx);
-duk_ret_t native_srixWriteBlock(duk_context *ctx);
+JSValue native_srixRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_srixWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_srixSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_srixLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_srixClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue native_srixWriteBlock(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
