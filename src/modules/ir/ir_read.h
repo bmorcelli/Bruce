@@ -6,8 +6,10 @@
  * @date 2024-07-17
  */
 
-#include <IRrecv.h>
 #include <globals.h>
+
+#if !defined(BRUCE_DISABLE_IR)
+#include <IRrecv.h>
 
 class IrRead {
 public:
@@ -83,3 +85,13 @@ private:
 };
     std::vector<String> &quickButtons = quickButtonsTV;
 };
+#else
+class IrRead {
+public:
+    IrRead(bool /*headless_mode*/ = false, bool /*raw_mode*/ = false) {}
+    void setup() {}
+    void loop() {}
+    void quickLoop() {}
+    String loop_headless(int /*max_loops*/) { return ""; }
+};
+#endif

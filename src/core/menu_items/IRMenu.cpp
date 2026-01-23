@@ -1,4 +1,6 @@
 #include "IRMenu.h"
+
+#if !defined(BRUCE_DISABLE_IR)
 #include "core/display.h"
 #include "core/settings.h"
 #include "core/utils.h"
@@ -88,3 +90,4 @@ void IRMenu::drawIcon(float scale) {
         bruceConfig.bgColor
     );
 }
+#endif

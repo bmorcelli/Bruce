@@ -3,15 +3,21 @@
 
 #include <MenuItemInterface.h>
 
+#if !defined(BRUCE_DISABLE_BLE)
 #include "menu_items/BleMenu.h"
+#endif
 #include "menu_items/ClockMenu.h"
 #include "menu_items/ConfigMenu.h"
+#if !defined(BRUCE_DISABLE_ESPNOW)
 #include "menu_items/ConnectMenu.h"
+#endif
 #include "menu_items/EthernetMenu.h"
 #include "menu_items/FMMenu.h"
 #include "menu_items/FileMenu.h"
 #include "menu_items/GpsMenu.h"
+#if !defined(BRUCE_DISABLE_IR)
 #include "menu_items/IRMenu.h"
+#endif
 #include "menu_items/LoRaMenu.h"
 #include "menu_items/NRF24.h"
 #include "menu_items/OthersMenu.h"
@@ -22,13 +28,19 @@
 class MainMenu {
 public:
     FileMenu fileMenu;
+#if !defined(BRUCE_DISABLE_BLE)
     BleMenu bleMenu;
+#endif
     ClockMenu clockMenu;
+#if !defined(BRUCE_DISABLE_ESPNOW)
     ConnectMenu connectMenu;
+#endif
     ConfigMenu configMenu;
     FMMenu fmMenu;
     GpsMenu gpsMenu;
+#if !defined(BRUCE_DISABLE_IR)
     IRMenu irMenu;
+#endif
     NRF24Menu nrf24Menu;
     OthersMenu othersMenu;
     RFIDMenu rfidMenu;

@@ -1,4 +1,6 @@
 #include "ConnectMenu.h"
+
+#if !defined(BRUCE_DISABLE_ESPNOW)
 #include "core/connect/file_sharing.h"
 #include "core/connect/serial_commands.h"
 #include "core/display.h"
@@ -55,3 +57,4 @@ void ConnectMenu::drawIcon(float scale) {
         bruceConfig.priColor
     );
 }
+#endif

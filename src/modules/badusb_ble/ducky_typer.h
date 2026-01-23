@@ -10,7 +10,10 @@
 #else
 #include <CH9329_Keyboard.h>
 #endif
+#include <Bad_Usb_Lib.h>
+#if !defined(BRUCE_DISABLE_BLE)
 #include <BleKeyboard.h>
+#endif
 
 extern HIDInterface *hid_usb;
 extern HIDInterface *hid_ble;

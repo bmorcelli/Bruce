@@ -2,10 +2,16 @@
 #include "core/display.h"
 #include "core/settings.h"
 #include "core/utils.h"
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/rfid/PN532KillerTools.h"
+#endif
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/rfid/amiibo.h"
 #include "modules/rfid/chameleon.h"
+#endif
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/rfid/pn532ble.h"
+#endif
 #include "modules/rfid/rfid125.h"
 #include "modules/rfid/srix_tool.h" //added for srix Tool
 #include "modules/rfid/tag_o_matic.h"
@@ -26,14 +32,20 @@ void RFIDMenu::optionsMenu() {
         {"Erase data",  [=]() { TagOMatic(TagOMatic::ERASE_MODE); }     },
         {"Write NDEF",  [=]() { TagOMatic(TagOMatic::WRITE_NDEF_MODE); }},
 #endif
+#if !defined(BRUCE_DISABLE_BLE)
 #ifndef LITE_VERSION
         {"Amiibolink",  [=]() { Amiibo(); }                             },
 #endif
         {"Chameleon",   [=]() { Chameleon(); }                          },
+#endif
 #ifndef LITE_VERSION
+#if !defined(BRUCE_DISABLE_BLE)
         {"PN532 BLE",   [=]() { Pn532ble(); }                           },
+#endif
 #if !defined(REMOVE_RFID_HW_INTERFACE)  // Remove Hardware interface menu due to lack of external GPIO
+#if !defined(BRUCE_DISABLE_BLE)
         {"PN532 UART",  [=]() { PN532KillerTools(); }                   },
+#endif
 #endif
 #endif
         {"Config",      [this]() { configMenu(); }                      },

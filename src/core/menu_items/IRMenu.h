@@ -3,6 +3,7 @@
 
 #include <MenuItemInterface.h>
 
+#if !defined(BRUCE_DISABLE_IR)
 class IRMenu : public MenuItemInterface {
 public:
     IRMenu() : MenuItemInterface("IR") {}
@@ -15,5 +16,6 @@ public:
 private:
     void configMenu(void);
 };
+#endif
 
 #endif

@@ -132,6 +132,13 @@ const uint8_t *keyboardLayouts[] = {
 };
 
 void ducky_startKb(HIDInterface *&hid, bool ble) {
+#if defined(BRUCE_DISABLE_BLE)
+    if (ble) {
+        displayError("BLE disabled on this build");
+        returnToMenu = true;
+        return;
+    }
+#endif
     Serial.printf("\nducky_startKb before hid==null: BLE: %d\n", ble);
     if (hid == nullptr) {
         Serial.printf("ducky_startKb after hid==null: BLE: %d\n", ble);
@@ -141,13 +148,17 @@ void ducky_startKb(HIDInterface *&hid, bool ble) {
                 displayError("Restart your Device");
                 returnToMenu = true;
             }
+#if !defined(BRUCE_DISABLE_BLE)
             hid = new BleKeyboard(bruceConfigPins.bleName, "BruceFW", 100);
+#endif
         } else {
 #if defined(USB_as_HID)
             hid = new USBHIDKeyboard();
             USB.begin();
 #else
-            mySerial.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, BAD_RX, BAD_TX);
+            mySerial.begin(
+                CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, bruceConfigPins.uart_bus.rx, bruceConfigPins.uart_bus.tx
+            );
             delay(100);
             hid = new CH9329_Keyboard_();
 #endif
@@ -168,7 +179,9 @@ void ducky_startKb(HIDInterface *&hid, bool ble) {
         hid->begin(keyboardLayouts[bruceConfig.badUSBBLEKeyboardLayout]);
         hid->setDelay(bruceConfig.badUSBBLEKeyDelay);
 #else
-        mySerial.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, BAD_RX, BAD_TX);
+        mySerial.begin(
+            CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, bruceConfigPins.uart_bus.rx, bruceConfigPins.uart_bus.tx
+        );
         delay(100);
         hid->begin(mySerial, keyboardLayouts[bruceConfig.badUSBBLEKeyboardLayout]);
         hid->setDelay(bruceConfig.badUSBBLEKeyDelay);
@@ -180,6 +193,14 @@ void ducky_startKb(HIDInterface *&hid, bool ble) {
 void ducky_setup(HIDInterface *&hid, bool ble) {
     Serial.println("Ducky typer begin");
     tft.fillScreen(bruceConfig.bgColor);
+
+#if defined(BRUCE_DISABLE_BLE)
+    if (ble) {
+        displayError("BLE disabled on this build");
+        returnToMenu = true;
+        return;
+    }
+#endif
 
     if (ble && _Ask_for_restart == 2) {
         displayError("Restart your Device");
@@ -428,6 +449,13 @@ void ducky_keyboard(HIDInterface *&hid, bool ble) {
     String _mymsg = "";
     keyStroke key;
     long debounce = millis();
+#if defined(BRUCE_DISABLE_BLE)
+    if (ble) {
+        displayError("BLE disabled on this build");
+        returnToMenu = true;
+        return;
+    }
+#endif
     ducky_startKb(hid, ble);
     if (returnToMenu) return;
 
@@ -552,6 +580,12 @@ EXIT:
 
 // Send media commands through BLE or USB HID
 void MediaCommands(HIDInterface *hid, bool ble) {
+#if defined(BRUCE_DISABLE_BLE)
+    (void)ble;
+    displayError("BLE disabled on this build");
+    returnToMenu = true;
+    return;
+#endif
     if (_Ask_for_restart == 2) return;
     _Ask_for_restart = 1; // arm the flag
 

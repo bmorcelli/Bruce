@@ -3,8 +3,12 @@
 #include "modules/badusb_ble/ducky_typer.h"
 #include "modules/bjs_interpreter/interpreter.h"
 #include "modules/gps/wigle.h"
+#if !defined(BRUCE_DISABLE_IR)
 #include "modules/ir/TV-B-Gone.h"
+#endif
+#if !defined(BRUCE_DISABLE_IR)
 #include "modules/ir/custom_ir.h"
+#endif
 #include "modules/others/audio.h"
 #include "modules/others/qrcode_menu.h"
 #include "modules/rf/rf_send.h"
@@ -737,7 +741,8 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                                                              while (!check(AnyKeyPress))
                                                                  vTaskDelay(10 / portTICK_PERIOD_MS);
                                                          }});
-					if (filepath.endsWith(".ir")) {
+                    if (filepath.endsWith(".ir")) {
+#if !defined(BRUCE_DISABLE_IR)
                         options.insert(options.begin(), {"IR Choose cmd", [&]() {
                                                              delay(200);
                                                              chooseCmdIrFile(&fs, filepath);
@@ -746,7 +751,8 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                                                              delay(200);
                                                              txIrFile(&fs, filepath);
                                                          }});
-					}
+#endif
+                    }
                     if (filepath.endsWith(".sub"))
                         options.insert(options.begin(), {"Subghz Tx", [&]() {
                                                              delay(200);

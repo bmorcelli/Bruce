@@ -2,7 +2,9 @@
 #include "core/led_control.h"
 #include "core/wifi/wifi_common.h"
 #include "display.h"
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/ble_api/ble_api.hpp"
+#endif
 #include "modules/others/qrcode_menu.h"
 #include "modules/rf/rf_utils.h" // for initRfModule
 #include "mykeyboard.h"
@@ -1595,7 +1597,7 @@ void setTheme() {
         bruceConfig.saveFile();
     }
 }
-#if !defined(LITE_VERSION)
+#if !defined(LITE_VERSION) && !defined(BRUCE_DISABLE_BLE)
 BLE_API bleApi;
 static bool ble_api_enabled = false;
 

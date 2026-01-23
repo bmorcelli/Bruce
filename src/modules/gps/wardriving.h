@@ -9,7 +9,9 @@
 #ifndef __WAR_DRIVING_H__
 #define __WAR_DRIVING_H__
 
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/ble/ble_common.h"
+#endif
 #include <TinyGPS++.h>
 #include <esp_wifi_types.h>
 #include <globals.h>

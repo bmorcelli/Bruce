@@ -1,10 +1,13 @@
 
 #include <Arduino.h>
 #include <FS.h>
-#include <IRremoteESP8266.h>
-#include <IRsend.h>
 #include <SD.h>
 #include <globals.h>
+
+#if !defined(BRUCE_DISABLE_IR)
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
+#endif
 
 struct IRCode {
     IRCode(
@@ -37,6 +40,7 @@ struct IRCode {
     String filepath = "";
 };
 
+#if !defined(BRUCE_DISABLE_IR)
 // Custom IR
 void sendIRCommand(IRCode *code, bool hideDefaultUI = false);
 void sendRawCommand(uint16_t frequency, String rawData, bool hideDefaultUI = false);
@@ -51,3 +55,18 @@ bool sendDecodedCommand(String protocol, String value, uint8_t bits = 32, bool h
 void otherIRcodes();
 bool txIrFile(FS *fs, String filepath, bool hideDefaultUI = false);
 bool chooseCmdIrFile(FS *fs, String filepath);
+#else
+inline void sendIRCommand(IRCode * /*code*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendRawCommand(uint16_t /*frequency*/, String /*rawData*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendNECCommand(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendNECextCommand(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendRC5Command(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendRC6Command(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendSamsungCommand(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendSonyCommand(String /*address*/, String /*command*/, uint8_t /*nbits*/, bool /*hideDefaultUI*/ = false) {}
+inline void sendKaseikyoCommand(String /*address*/, String /*command*/, bool /*hideDefaultUI*/ = false) {}
+inline bool sendDecodedCommand(String /*protocol*/, String /*value*/, uint8_t /*bits*/ = 32, bool /*hideDefaultUI*/ = false) { return false; }
+inline void otherIRcodes() {}
+inline bool txIrFile(FS * /*fs*/, String /*filepath*/, bool /*hideDefaultUI*/ = false) { return false; }
+inline bool chooseCmdIrFile(FS * /*fs*/, String /*filepath*/) { return false; }
+#endif

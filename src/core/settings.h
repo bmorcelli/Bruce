@@ -104,6 +104,8 @@ void setTheme();
 
 void setMacAddressMenu();
 
+#if !defined(BRUCE_DISABLE_BLE)
 void enableBLEAPI();
+#endif
 
 #endif

@@ -1,10 +1,23 @@
 #include "ir_commands.h"
-#include "core/sd_functions.h"
 #include "helpers.h"
+#include <globals.h>
+
+#if defined(BRUCE_DISABLE_IR)
+uint32_t irCallback(cmd * /*c*/) {
+    serialDevice->println("IR disabled on this build");
+    return false;
+}
+
+void createIrCommands(SimpleCLI *cli) {
+    Command cmd = cli->addCompositeCmd("ir", irCallback);
+    (void)cmd;
+    cli->addSingleArgCmd("IRSend", irCallback);
+}
+#else
+#include "core/sd_functions.h"
 #include "modules/ir/custom_ir.h"
 #include "modules/ir/ir_read.h"
 #include <ArduinoJson.h>
-#include <globals.h>
 
 uint32_t irCallback(cmd *c) {
     serialDevice->println("Turning off IR LED");
@@ -228,3 +241,4 @@ void createIrCommands(SimpleCLI *cli) {
 
     cli->addSingleArgCmd("IRSend", irSendCallback);
 }
+#endif

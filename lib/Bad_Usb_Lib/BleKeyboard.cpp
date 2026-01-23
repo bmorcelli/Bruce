@@ -1,3 +1,5 @@
+#if !defined(BRUCE_DISABLE_BLE) && defined(CONFIG_BT_ENABLED)
+
 #include "BleKeyboard.h"
 #include "KeyboardLayout.h"
 
@@ -496,3 +498,4 @@ void BleKeyboard::delay_ms(uint64_t ms) {
         while (esp_timer_get_time() < e) {}
     }
 }
+#endif

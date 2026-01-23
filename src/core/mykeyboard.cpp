@@ -1,7 +1,11 @@
 #include "mykeyboard.h"
 #include "core/wifi/webInterface.h"
+#if !defined(BRUCE_DISABLE_IR)
 #include "modules/ir/TV-B-Gone.h"
+#endif
+#if !defined(BRUCE_DISABLE_IR)
 #include "modules/ir/custom_ir.h"
+#endif
 #include "modules/rf/rf_send.h"
 #include "powerSave.h"
 #include "sd_functions.h"

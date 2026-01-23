@@ -6,9 +6,11 @@
 
 #include <Arduino.h>
 #include <FS.h>
+#if !defined(BRUCE_DISABLE_IR)
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <IRutils.h>
+#endif
 #include <SD.h>
 #include <globals.h>
 
@@ -160,7 +162,11 @@ void displayStats(JammerState &state);
 /**
  * Main entry point for the IR jammer functionality
  */
+#if !defined(BRUCE_DISABLE_IR)
 void startIrJammer();
+#else
+inline void startIrJammer() {}
+#endif
 
 /**
  * Get the frequency in Hz from the frequency index

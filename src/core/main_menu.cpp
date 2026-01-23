@@ -6,13 +6,17 @@
 MainMenu::MainMenu() {
     _menuItems = {
         &wifiMenu,
+#if !defined(BRUCE_DISABLE_BLE)
         &bleMenu,
+#endif
 #if !defined(LITE_VERSION)
         &ethernetMenu,
 #endif
         &rfMenu,
         &rfidMenu,
+#if !defined(BRUCE_DISABLE_IR)
         &irMenu,
+#endif
 #if defined(FM_SI4713) && !defined(LITE_VERSION)
         &fmMenu,
 #endif
@@ -27,7 +31,7 @@ MainMenu::MainMenu() {
 #endif
         &othersMenu,
         &clockMenu,
-#if !defined(LITE_VERSION)
+#if !defined(LITE_VERSION) && !defined(BRUCE_DISABLE_ESPNOW)
         &connectMenu,
 #endif
         &configMenu,

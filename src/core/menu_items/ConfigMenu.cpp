@@ -47,7 +47,9 @@ void ConfigMenu::optionsMenu() {
         {"Startup App", setStartupApp},
         {"Hide/Show Apps", []() { mainMenu.hideAppsMenu(); }},
 #if !defined(LITE_VERSION)
+#if !defined(BRUCE_DISABLE_BLE)
         {"Toggle BLE API", []() { enableBLEAPI(); }},
+#endif
 #endif
         {"Network Creds", setNetworkCredsMenu},
         {"BadUSB/BLE", setBadUSBBLEMenu},

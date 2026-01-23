@@ -21,8 +21,10 @@ void GpsMenu::optionsMenu() {
 void GpsMenu::wardrivingMenu() {
     options = {
         {"Scan WiFi Networks", []() { Wardriving(true, false); }},
+#if !defined(BRUCE_DISABLE_BLE)
         {"Scan BLE Devices",   []() { Wardriving(false, true); }},
         {"Scan Both",          []() { Wardriving(true, true); } },
+#endif
         {"Back",               [this]() { optionsMenu(); }      },
     };
 

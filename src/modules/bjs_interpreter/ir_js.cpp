@@ -1,4 +1,4 @@
-#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER) && !defined(BRUCE_DISABLE_IR)
 #include "ir_js.h"
 
 #include "modules/ir/ir_read.h"

@@ -3,6 +3,7 @@
 
 #include <MenuItemInterface.h>
 
+#if !defined(BRUCE_DISABLE_ESPNOW)
 class ConnectMenu : public MenuItemInterface {
 public:
     ConnectMenu() : MenuItemInterface("Connect") {}
@@ -12,5 +13,6 @@ public:
     bool hasTheme() { return bruceConfig.theme.connect; }
     String themePath() { return bruceConfig.theme.paths.connect; }
 };
+#endif
 
 #endif

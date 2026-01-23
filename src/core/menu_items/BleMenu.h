@@ -3,6 +3,7 @@
 
 #include <MenuItemInterface.h>
 
+#if !defined(BRUCE_DISABLE_BLE)
 class BleMenu : public MenuItemInterface {
 public:
     BleMenu() : MenuItemInterface("BLE") {}
@@ -12,5 +13,6 @@ public:
     bool hasTheme() { return bruceConfig.theme.ble; }
     String themePath() { return bruceConfig.theme.paths.ble; }
 };
+#endif
 
 #endif

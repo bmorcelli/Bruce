@@ -61,8 +61,12 @@ Distributed under Creative Commons 2.5 -- Attribution & Share Alike
 
 #include <Arduino.h>
 #include <FS.h>
+#if !defined(BRUCE_DISABLE_IR)
 #include <IRremoteESP8266.h>
+#endif
+#if !defined(BRUCE_DISABLE_IR)
 #include <IRsend.h>
+#endif
 #include <SD.h>
 #include <globals.h>
 
@@ -70,5 +74,9 @@ Distributed under Creative Commons 2.5 -- Attribution & Share Alike
 void quickflashLEDx(uint8_t x);
 void delay_ten_us(uint16_t us);
 void quickflashLED(void);
+#if !defined(BRUCE_DISABLE_IR)
 void StartTvBGone();
+#else
+inline void StartTvBGone() {}
+#endif
 void checkIrTxPin();

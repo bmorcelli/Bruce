@@ -15,8 +15,10 @@
 #include "modules/gps/wardriving.h"
 #include "modules/pwnagotchi/pwnagotchi.h"
 #include "modules/rf/rf_send.h"
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/rfid/PN532KillerTools.h"
 #include "modules/rfid/pn532ble.h"
+#endif
 #include "modules/wifi/sniffer.h"
 #ifdef SOC_USB_OTG_SUPPORTED
 #include "core/massStorage.h"
@@ -36,8 +38,10 @@ StartupApp::StartupApp() {
     _startupApps["Wardriving"] = []() { Wardriving(); };
     _startupApps["WebUI"] = []() { startWebUi(!wifiConnecttoKnownNet()); };
 #ifndef LITE_VERSION
+#if !defined(BRUCE_DISABLE_BLE)
     _startupApps["PN532 BLE"] = []() { Pn532ble(); };
     _startupApps["PN532 UART"] = []() { PN532KillerTools(); };
+#endif
 #endif
 }
 

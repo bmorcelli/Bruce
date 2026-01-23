@@ -12,16 +12,21 @@
 #include "core/sd_functions.h"
 #include "core/wifi/wifi_common.h"
 #include "current_year.h"
+#if !defined(BRUCE_DISABLE_BLE)
 #include "modules/ble/ble_common.h"
+#endif
 
 #define MAX_WAIT 5000
 
-#if __has_include(<NimBLEExtAdvertising.h>)
+#if !defined(BRUCE_DISABLE_BLE) && __has_include(<NimBLEExtAdvertising.h>)
 #define NIMBLE_V2_PLUS 1
 #endif
 Wardriving::Wardriving(bool scanWiFi, bool scanBLE) {
     this->scanWiFi = scanWiFi;
     this->scanBLE = scanBLE;
+#if defined(BRUCE_DISABLE_BLE)
+    this->scanBLE = false;
+#endif
     setup();
 }
 
@@ -198,6 +203,9 @@ int Wardriving::scanWiFiNetworks() {
 }
 
 int Wardriving::scanBLEDevices() {
+#if defined(BRUCE_DISABLE_BLE)
+    return 0;
+#else
     tft.print("Scanning BLE....");
     ble_scan_setup();
     BLEScanResults foundDevices;
@@ -268,6 +276,7 @@ int Wardriving::scanBLEDevices() {
     tft.println("");
 
     return bleDevices.size();
+#endif
 }
 
 void Wardriving::loadAlertMACs() {
@@ -405,6 +414,7 @@ void Wardriving::append_to_file(int network_amount, int bluetooth_amount) {
     // Example: 63:56:ac:c4:d4:30,,Misc [LE],2018-08-03 18:14:12,0,,
     // -67,37.76090571,-122.44877987,104,49.3120002746582,,72,BLE
 
+#if !defined(BRUCE_DISABLE_BLE)
     for (const auto &device : bleDevices) {
         Serial.printf(
             "Processing BLE device: %s, Name: %s, RSSI: %d\n",
@@ -449,6 +459,7 @@ void Wardriving::append_to_file(int network_amount, int bluetooth_amount) {
             bluetoothDeviceCount++;
         }
     }
+#endif
     file.close();
 }
 
