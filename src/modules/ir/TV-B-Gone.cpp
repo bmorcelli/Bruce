@@ -1,6 +1,6 @@
 /*
-Last Updated: [CURRENT DATE]
-By [Your Name]
+Last Updated: 24/01/2026
+By: Ninja-Jr
 Optimizations for speed while maintaining 100% compatibility
 
 ------------------------------------------------------------
@@ -18,6 +18,9 @@ Distributed under Creative Commons 2.5 -- Attribution & Share Alike
 #include "core/settings.h"
 #include "core/utils.h"
 #include "ir_utils.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 // The TV-B-Gone for Arduino can use either the EU (European Union) or the NA (North America) database of
 // POWER CODES EU is for Europe, Middle East, Australia, New Zealand, and some countries in Africa and South
@@ -59,10 +62,13 @@ uint8_t bits_r = 0;
 uint8_t code_ptr;
 volatile const IrCode *powerCode;
 
+// Semaphore for thread-safe IR transmission
+static SemaphoreHandle_t ir_tx_mutex = NULL;
+
 // Faster bit reading with less operations
 uint8_t read_bits(uint8_t count) {
     uint8_t tmp = 0;
-    
+
     while (count--) {
         if (bitsleft_r == 0) {
             bits_r = powerCode->codes[code_ptr++];
@@ -79,14 +85,16 @@ uint8_t i, num_codes;
 uint8_t region;
 
 void delay_ten_us(uint16_t us) {
-    uint8_t timer;
-    while (us != 0) {
-        for (timer = 0; timer <= DELAY_CNT; timer++) {
-            NOPP;
-            NOPP;
-        }
-        NOPP;
-        us--;
+    uint32_t start = micros();
+    while (micros() - start < (us * 10)) {
+        vTaskDelay(1 / portTICK_PERIOD_MS);
+    }
+}
+
+void precise_delay_us(uint32_t us) {
+    uint32_t start = micros();
+    while (micros() - start < us) {
+        asm volatile ("nop");
     }
 }
 
@@ -116,7 +124,37 @@ void checkIrTxPin() {
     else gsetIrTxPin(true);
 }
 
+bool init_ir_tx_mutex() {
+    if (ir_tx_mutex == NULL) {
+        ir_tx_mutex = xSemaphoreCreateMutex();
+        if (ir_tx_mutex == NULL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void lock_ir_tx() {
+    if (ir_tx_mutex != NULL) {
+        xSemaphoreTake(ir_tx_mutex, portMAX_DELAY);
+    }
+}
+
+void unlock_ir_tx() {
+    if (ir_tx_mutex != NULL) {
+        xSemaphoreGive(ir_tx_mutex);
+    }
+}
+
 void StartTvBGone() {
+    if (!init_ir_tx_mutex()) {
+        displayRedStripe("Mutex init failed");
+        delay(2000);
+        return;
+    }
+    
+    lock_ir_tx();
+    
     Serial.begin(115200);
 #ifdef USE_BOOST
     PPM.enableOTG();
@@ -156,25 +194,32 @@ void StartTvBGone() {
             for (uint8_t k = 0; k < numpairs; k++) {
                 uint16_t ti;
                 ti = (read_bits(bitcompression)) * 2;
-                
+
                 // Direct calculation without temp variables
                 rawData[k * 2] = powerCode->times[ti] * 10;        // offtime * 10
                 rawData[(k * 2) + 1] = powerCode->times[ti + 1] * 10; // ontime * 10
             }
-            
+
             // Update progress less frequently for better performance
             if (i % 5 == 0) {
                 progressHandler(i, num_codes);
             }
-            
+
             irsend.sendRaw(rawData, (numpairs * 2), freq);
             bitsleft_r = 0;
-            delay_ten_us(20500);
+            
+            // Use precise delay for timing
+            uint32_t start_us = micros();
+            while (micros() - start_us < 205000) {
+                vTaskDelay(1 / portTICK_PERIOD_MS);
+            }
 
             // if user is pushing (holding down) TRIGGER button, stop transmission early
             if (check(SelPress)) // Pause TV-B-Gone
             {
-                while (check(SelPress)) yield();
+                while (check(SelPress)) {
+                    vTaskDelay(10 / portTICK_PERIOD_MS);
+                }
                 displayTextLine("Paused");
 
                 while (!check(SelPress)) { // If Presses Select again, continues
@@ -182,8 +227,11 @@ void StartTvBGone() {
                         endingEarly = true;
                         break;
                     }
+                    vTaskDelay(10 / portTICK_PERIOD_MS);
                 }
-                while (check(SelPress)) { yield(); }
+                while (check(SelPress)) {
+                    vTaskDelay(10 / portTICK_PERIOD_MS);
+                }
                 if (endingEarly) break; // Cancels  TV-B-Gone
                 displayTextLine("Running, Wait");
             }
@@ -196,8 +244,8 @@ void StartTvBGone() {
         if (endingEarly == false) {
             displayTextLine("All codes sent!");
             // pause for ~1.3 sec, then flash the visible LED 8 times to indicate that we're done
-            delay_ten_us(MAX_WAIT_TIME); // wait 655.350ms
-            delay_ten_us(MAX_WAIT_TIME); // wait 655.350ms
+            precise_delay_us(655350);
+            precise_delay_us(655350);
         } else {
             displayRedStripe("User Stopped");
             delay(2000);
@@ -212,4 +260,6 @@ void StartTvBGone() {
         PPM.disableOTG();
 #endif
     }
+    
+    unlock_ir_tx();
 } // end of sendAllCodes
