@@ -842,8 +842,6 @@ void SRIXTool::delayWithReturn(uint32_t ms) {
 }
 
 // ========== JS INTERPRETER SUPPORT ==========
-#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
-
 SRIXTool::SRIXTool(bool headless_mode) {
     SRIX_LOG("[SRIX] Headless Constructor start");
 
@@ -1263,8 +1261,6 @@ int SRIXTool::write_single_block_headless(uint8_t block_num, const uint8_t *bloc
         return -5;
     }
 }
-
-#endif
 
 // Entry point
 void PN532_SRIX() { SRIXTool srix_tool; }

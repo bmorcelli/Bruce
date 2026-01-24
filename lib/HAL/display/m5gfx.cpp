@@ -165,15 +165,7 @@ void tft_display::invertDisplay(bool i) {
     M5.Display.invertDisplay(i);
 }
 
-void tft_display::sleep(bool value) {
-    if (value) {
-        writecommand(0x10);
-        delay(5);
-    } else {
-        writecommand(0x11);
-        delay(120);
-    }
-}
+void tft_display::sleep(bool value) {}
 
 void tft_display::setSwapBytes(bool swap) { _swapBytes = swap; }
 

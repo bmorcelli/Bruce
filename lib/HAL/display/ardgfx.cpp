@@ -63,9 +63,16 @@ tft_display::tft_display(int16_t _W, int16_t _H) : _height(_H), _width(_W) {
     bus = new TFT_DATABUS(
         TFT_DC, TFT_CS, TFT_WR, TFT_RD, TFT_D0, TFT_D1, TFT_D2, TFT_D3, TFT_D4, TFT_D5, TFT_D6, TFT_D7
     );
+#elif TFT_DATABUS_N== 4
+    bus = new TFT_DATABUS(TFT_HSYNC_PULSE_WIDTH, TFT_HSYNC_BACK_PORCH, TFT_HSYNC_FRONT_PORCH,
+                          TFT_VSYNC_PULSE_WIDTH, TFT_VSYNC_BACK_PORCH, TFT_VSYNC_FRONT_PORCH, TFT_PREF_SPEED);
 #endif
 #if TFT_DISPLAY_DRIVER_N == 50
-    #error "Arduino_DSI_Display requires a DSI panel instance; not supported in this init."
+    #if !defined(TFT_RST) || !defined(TFT_WIDTH) || !defined(TFT_HEIGHT) || !defined(TFT_DSI_INIT)
+        #error "Missing Macros definitions of: TFT_RST, TFT_WIDTH, TFT_HEIGHT"
+    #endif
+    _gfx = new TFT_DISPLAY_DRIVER(TFT_WIDTH, TFT_HEIGHT, bus, 0, true, TFT_RST,
+                                  TFT_DSI_INIT, sizeof(TFT_DSI_INIT) / sizeof(lcd_init_cmd_t));
 #elif TFT_DISPLAY_DRIVER_N >= 47 && TFT_DISPLAY_DRIVER_N <= 48
     #if !defined(TFT_RST) || !defined(TFT_WIDTH) || !defined(TFT_HEIGHT)
         #error "Missing Macros definitions of: TFT_RST, TFT_WIDTH, TFT_HEIGHT"
@@ -287,15 +294,7 @@ void tft_display::invertDisplay(bool i) {
     if (_gfx) _gfx->invertDisplay(i);
 }
 
-void tft_display::sleep(bool value) {
-    if (value) {
-        _gfx->writecommand(0x10);
-        delay(5);
-    } else {
-        _gfx->writecommand(0x11);
-        delay(120);
-    }
-}
+void tft_display::sleep(bool value) {}
 
 void tft_display::setSwapBytes(bool swap) { _swapBytes = swap; }
 

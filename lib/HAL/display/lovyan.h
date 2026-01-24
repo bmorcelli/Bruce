@@ -50,6 +50,9 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+
+#include "tft_defines.h"
+
 class tft_display : private lgfx::LGFX_Device {
 public:
     explicit tft_display(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);

@@ -3,6 +3,8 @@
 #include <pins_arduino.h>
 #ifdef USE_TFT_ESPI
 #include <TFT_eSPI.h>
+
+#include "tft_defines.h"
 class tft_display : private TFT_eSPI {
 public:
     explicit tft_display(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);

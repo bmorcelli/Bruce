@@ -19,6 +19,8 @@ USBSerial USBserial;
 SerialDevice *serialDevice = &USBserial;
 
 StartupApp startupApp;
+String startupAppJSInterpreterFile = "";
+
 MainMenu mainMenu;
 SPIClass sdcardSPI;
 #ifdef USE_HSPI_PORT
@@ -430,7 +432,9 @@ void setup() {
         .cc = "US",
         .schan = 1,
         .nchan = 14,
+#ifdef CONFIG_ESP_PHY_MAX_TX_POWER
         .max_tx_power = CONFIG_ESP_PHY_MAX_TX_POWER, // 20
+#endif
         .policy = WIFI_COUNTRY_POLICY_MANUAL
     };
 
