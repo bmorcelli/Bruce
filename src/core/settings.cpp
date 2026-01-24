@@ -2,7 +2,9 @@
 #include "core/led_control.h"
 #include "core/wifi/wifi_common.h"
 #include "display.h"
+#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "modules/bjs_interpreter/interpreter.h"
+#endif
 #include "modules/ble_api/ble_api.hpp"
 #include "modules/others/qrcode_menu.h"
 #include "modules/rf/rf_utils.h" // for initRfModule
@@ -1182,10 +1184,12 @@ void setStartupApp() {
 
         options.push_back({appName.c_str(), [=]() {
                                bruceConfig.setStartupApp(appName);
+#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
                                if (appName == "JS Interpreter") {
                                    options = getScriptsOptionsList(true);
                                    loopOptions(options, MENU_TYPE_SUBMENU, "Startup Script");
                                }
+#endif
                            }});
     }
 
