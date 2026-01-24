@@ -1183,7 +1183,7 @@ void setStartupApp() {
         options.push_back({appName.c_str(), [=]() {
                                bruceConfig.setStartupApp(appName);
                                if (appName == "JS Interpreter") {
-                                   options = getScriptsOptionsList(true);
+                                   options = getScriptsOptionsList("", true);
                                    loopOptions(options, MENU_TYPE_SUBMENU, "Startup Script");
                                }
                            }});

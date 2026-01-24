@@ -170,12 +170,23 @@ String getScriptsFolder(FS *&fs) {
     return "";
 }
 
-std::vector<Option> getScriptsOptionsList(bool saveStartupScript) {
+std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupScript) {
     std::vector<Option> opt = {};
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
     FS *fs;
-    String folder = getScriptsFolder(fs);
-    if (folder == "") return opt; // did not find
+    String folder;
+
+    if (currentPath == "") {
+        folder = getScriptsFolder(fs);
+        if (folder == "") return opt; // did not find
+    } else {
+        folder = currentPath;
+        // Determine filesystem based on path
+        if (currentPath.startsWith("/")) {
+            fs = &LittleFS;
+            if (SD.exists(currentPath)) { fs = &SD; }
+        }
+    }
 
     File root = fs->open(folder);
     if (!root || !root.isDirectory()) return opt; // not a dir
@@ -187,27 +198,48 @@ std::vector<Option> getScriptsOptionsList(bool saveStartupScript) {
         if (fullPath == "") { break; }
         // Serial.printf("Path: %s (isDir: %d)\n", fullPath.c_str(), isDir);
 
-        if (isDir) continue;
+        if (isDir) {
+            // Skip hidden folders (starting with .)
+            if (nameOnly.startsWith(".")) continue;
 
-        int dotIndex = nameOnly.lastIndexOf(".");
-        String ext = dotIndex >= 0 ? nameOnly.substring(dotIndex + 1) : "";
-        ext.toUpperCase();
-        if (ext != "JS" && ext != "BJS") continue;
+            // Add folder option
+            String folderTitle = "- " + nameOnly;
+            opt.push_back({folderTitle.c_str(), [=]() {
+                               auto subOptions = getScriptsOptionsList(fullPath, saveStartupScript);
+                               if (subOptions.size() > 0) {
+                                   loopOptions(subOptions, MENU_TYPE_SUBMENU, fullPath.c_str());
+                               }
+                           }});
+        } else {
+            // Handle files
+            int dotIndex = nameOnly.lastIndexOf(".");
+            String ext = dotIndex >= 0 ? nameOnly.substring(dotIndex + 1) : "";
+            ext.toUpperCase();
+            if (ext != "JS" && ext != "BJS") continue;
 
-        String entry_title = nameOnly.substring(0, nameOnly.lastIndexOf(".")); // remove the extension
-        opt.push_back({entry_title.c_str(), [=]() {
-                           if (saveStartupScript) {
-                               bruceConfig.startupAppJSInterpreterFile = fullPath;
-                               bruceConfig.saveFile();
-                           } else {
-                               run_bjs_script_headless(*fs, fullPath);
-                           }
-                       }});
+            String entry_title = nameOnly.substring(0, nameOnly.lastIndexOf(".")); // remove the extension
+            opt.push_back({entry_title.c_str(), [=]() {
+                               if (saveStartupScript) {
+                                   bruceConfig.startupAppJSInterpreterFile = fullPath;
+                                   bruceConfig.saveFile();
+                               } else {
+                                   Serial.printf("Running script: %s\n", fullPath.c_str());
+                                   run_bjs_script_headless(*fs, fullPath);
+                               }
+                           }});
+        }
     }
 
     root.close();
 
-    std::sort(opt.begin(), opt.end(), [](const Option &a, const Option &b) {
+    // Add back navigation if we're in a subdirectory
+    if (currentPath != "" && currentPath != getScriptsFolder(fs)) {
+        opt.insert(opt.begin(), {"< Back", []() { return; }});
+    }
+
+    // Sort options
+    auto sortStart = opt.begin();
+    std::sort(sortStart, opt.end(), [](const Option &a, const Option &b) {
         String fa = String(a.label);
         fa.toUpperCase();
         String fb = String(b.label);
