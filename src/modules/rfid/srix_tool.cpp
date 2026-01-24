@@ -562,7 +562,7 @@ void SRIXTool::save_file() {
         // User cancelled the operation
         padprintln("Operation cancelled.");
         delay(2000);
-        set_state(IDLE_MODE); // O torna allo stato precedente
+        set_state(IDLE_MODE); // Back to IDLE
         return;
     }
 
