@@ -7,6 +7,7 @@ class OthersMenu : public MenuItemInterface {
 public:
     OthersMenu() : MenuItemInterface("Others") {}
 
+    void micMenu();
     void optionsMenu(void);
     void drawIcon(float scale);
     bool hasTheme() { return bruceConfig.theme.others; }
