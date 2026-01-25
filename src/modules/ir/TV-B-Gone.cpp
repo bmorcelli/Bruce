@@ -62,10 +62,10 @@ uint8_t bits_r = 0;
 uint8_t code_ptr;
 volatile const IrCode *powerCode;
 
-// Semaphore for thread-safe IR transmission
+// Semaphore for thread-safe IR transmission - protects IR LED pin access
 static SemaphoreHandle_t ir_tx_mutex = NULL;
 
-// Faster bit reading with less operations
+// Optimized bit reading - combines shift and bit test in single operation
 uint8_t read_bits(uint8_t count) {
     uint8_t tmp = 0;
 
@@ -74,7 +74,7 @@ uint8_t read_bits(uint8_t count) {
             bits_r = powerCode->codes[code_ptr++];
             bitsleft_r = 8;
         }
-        // Shift and add in one operation
+        // Shift and OR in one go - faster than separate operations
         tmp = (tmp << 1) | ((bits_r >> --bitsleft_r) & 1);
     }
     return tmp;
@@ -84,17 +84,16 @@ uint16_t ontime, offtime;
 uint8_t i, num_codes;
 uint8_t region;
 
+// Microsecond delay using NOPs - keeps timing tight without blocking RTOS
 void delay_ten_us(uint16_t us) {
-    uint32_t start = micros();
-    while (micros() - start < (us * 10)) {
-        vTaskDelay(1 / portTICK_PERIOD_MS);
-    }
-}
-
-void precise_delay_us(uint32_t us) {
-    uint32_t start = micros();
-    while (micros() - start < us) {
-        asm volatile ("nop");
+    uint8_t timer;
+    while (us != 0) {
+        for (timer = 0; timer <= DELAY_CNT; timer++) {
+            NOPP;
+            NOPP;
+        }
+        NOPP;
+        us--;
     }
 }
 
@@ -124,6 +123,7 @@ void checkIrTxPin() {
     else gsetIrTxPin(true);
 }
 
+// Mutex setup - one-time initialization
 bool init_ir_tx_mutex() {
     if (ir_tx_mutex == NULL) {
         ir_tx_mutex = xSemaphoreCreateMutex();
@@ -152,9 +152,7 @@ void StartTvBGone() {
         delay(2000);
         return;
     }
-    
-    lock_ir_tx();
-    
+
     Serial.begin(115200);
 #ifdef USE_BOOST
     PPM.enableOTG();
@@ -182,6 +180,9 @@ void StartTvBGone() {
 
         check(SelPress);
         for (i = 0; i < num_codes; i++) {
+            // Lock only during IR transmission - allows button checks to run while waiting
+            lock_ir_tx();
+            
             if (region == NA) powerCode = NApowerCodes[i];
             else powerCode = EUpowerCodes[i];
 
@@ -195,26 +196,24 @@ void StartTvBGone() {
                 uint16_t ti;
                 ti = (read_bits(bitcompression)) * 2;
 
-                // Direct calculation without temp variables
+                // Direct calculation - skips temp variable for speed
                 rawData[k * 2] = powerCode->times[ti] * 10;        // offtime * 10
                 rawData[(k * 2) + 1] = powerCode->times[ti + 1] * 10; // ontime * 10
             }
 
-            // Update progress less frequently for better performance
+            // Update progress every 5 codes instead of every code - reduces UI overhead
             if (i % 5 == 0) {
                 progressHandler(i, num_codes);
             }
 
             irsend.sendRaw(rawData, (numpairs * 2), freq);
+            unlock_ir_tx();  // Release mutex immediately so other tasks can run
             bitsleft_r = 0;
             
-            // Use precise delay for timing
-            uint32_t start_us = micros();
-            while (micros() - start_us < 205000) {
-                vTaskDelay(1 / portTICK_PERIOD_MS);
-            }
+            // Wait 205ms between codes using NOP delays (keeps timing precise)
+            delay_ten_us(20500);
 
-            // if user is pushing (holding down) TRIGGER button, stop transmission early
+            // Check for user input - this can run freely since mutex is unlocked
             if (check(SelPress)) // Pause TV-B-Gone
             {
                 while (check(SelPress)) {
@@ -243,9 +242,9 @@ void StartTvBGone() {
 
         if (endingEarly == false) {
             displayTextLine("All codes sent!");
-            // pause for ~1.3 sec, then flash the visible LED 8 times to indicate that we're done
-            precise_delay_us(655350);
-            precise_delay_us(655350);
+            // pause for ~1.3 sec using efficient NOP delays
+            delay_ten_us(MAX_WAIT_TIME);
+            delay_ten_us(MAX_WAIT_TIME);
         } else {
             displayRedStripe("User Stopped");
             delay(2000);
@@ -260,6 +259,4 @@ void StartTvBGone() {
         PPM.disableOTG();
 #endif
     }
-    
-    unlock_ir_tx();
 } // end of sendAllCodes
