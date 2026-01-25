@@ -55,6 +55,8 @@ Wardriving::~Wardriving() {
 }
 
 void Wardriving::setup() {
+    wifiNetworkCount = 0;
+    bluetoothDeviceCount = 0;
     ioExpander.turnPinOnOff(IO_EXP_GPS, HIGH);
 #ifdef USE_BOOST /// ENABLE 5V OUTPUT
     PPM.enableOTG();
@@ -229,7 +231,10 @@ int Wardriving::scanWiFiNetworks() {
 
 int Wardriving::scanBLEDevices() {
     padprint("Scanning BLE...");
-    ble_scan_setup();
+    if (!bleInitialized || pBLEScan == nullptr) {
+        ble_scan_setup();
+        bleInitialized = true;
+    }
     BLEScanResults foundDevices;
 
 #ifdef NIMBLE_V2_PLUS

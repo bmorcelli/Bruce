@@ -44,6 +44,7 @@ private:
     std::set<String> alertMACs;                   // Store alert MAC addresses from file
     bool scanWiFi = false;                        // Flag to scan WiFi networks
     bool scanBLE = false;                         // Flag to scan Bluetooth devices
+    bool bleInitialized = false;                  // Avoid repeated BLE init allocations
     int wifiNetworkCount = 0;                     // Counter fo wifi networks
     int bluetoothDeviceCount = 0;                 // Counter for bluetooth devices
     int foundMACAddressCount = 0;                 // Counter for found MAC addresses
