@@ -100,7 +100,14 @@ bool Wardriving::begin_gps() {
 }
 
 void Wardriving::end() {
-    wifiDisconnect();
+    if (scanWiFi) wifiDisconnect();
+    if (scanBLE) {
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+        esp_bt_controller_deinit();
+#else
+        BLEDevice::deinit();
+#endif
+    }
 
     GPSserial.end();
     restorePins();
@@ -119,7 +126,14 @@ void Wardriving::loop() {
         if (GPSserial.available() > 0) {
             count = 0;
             while (GPSserial.available() > 0) gps.encode(GPSserial.read());
-
+            String txt = "GPS Read: ";
+            // Debuging GPS messages
+            // while (GPSserial.available() > 0) {
+            //     char read = GPSserial.read();
+            //     txt += read;
+            //     gps.encode(read);
+            // }
+            // Serial.println(txt);
             if (gps.location.isUpdated()) {
                 padprintln("GPS location updated");
                 set_position();
