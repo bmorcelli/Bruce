@@ -203,7 +203,7 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
             if (nameOnly.startsWith(".")) continue;
 
             // Add folder option
-            String folderTitle = "- " + nameOnly;
+            String folderTitle = "[ " + nameOnly + " ]";
             opt.push_back({folderTitle.c_str(), [=]() {
                                auto subOptions = getScriptsOptionsList(fullPath, saveStartupScript);
                                if (subOptions.size() > 0) {
@@ -235,11 +235,17 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
     // Sort options
     auto sortStart = opt.begin();
     std::sort(sortStart, opt.end(), [](const Option &a, const Option &b) {
-        String fa = String(a.label);
-        fa.toUpperCase();
-        String fb = String(b.label);
-        fb.toUpperCase();
-        return fa < fb;
+        // Check if items start with '[' (folders)
+        bool aIsFolder = a.label[0] == '[';
+        bool bIsFolder = b.label[0] == '[';
+
+        // If one is a folder and the other isn't, folder comes first
+        if (aIsFolder != bIsFolder) {
+            return aIsFolder; // true if a is folder, false if b is folder
+        }
+
+        // If both are the same type, sort alphabetically
+        return strcasecmp(a.label.c_str(), b.label.c_str()) < 0;
     });
 
     // Add back navigation if we're in a subdirectory
