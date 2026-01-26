@@ -232,11 +232,6 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
 
     root.close();
 
-    // Add back navigation if we're in a subdirectory
-    if (currentPath != "" && currentPath != getScriptsFolder(fs)) {
-        opt.insert(opt.begin(), {"< Back", []() { return; }});
-    }
-
     // Sort options
     auto sortStart = opt.begin();
     std::sort(sortStart, opt.end(), [](const Option &a, const Option &b) {
@@ -246,6 +241,11 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
         fb.toUpperCase();
         return fa < fb;
     });
+
+    // Add back navigation if we're in a subdirectory
+    if (currentPath != "" && currentPath != getScriptsFolder(fs)) {
+        opt.push_back({"< Back", [=]() { return; }});
+    }
 
 #endif
     return opt;
