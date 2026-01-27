@@ -51,22 +51,28 @@ void ConfigMenu::optionsMenu() {
 #endif
         {"Network Creds", setNetworkCredsMenu},
         {"BadUSB/BLE", setBadUSBBLEMenu},
-        {"Clock", setClock},
-        {"Sleep", setSleepMode},
-        {"Factory Reset",
-         [=]() {
-             bruceConfigPins.factoryReset(); // this one doesnt restart ESP
-             bruceConfig.factoryReset();     // after this one, it restarts
-         }},
-        {"Restart", [=]() { ESP.restart(); }},
+        {"Clock", setClock}
     };
 
+#if !defined(LITE_VERSION)
+    if (!appStoreInstalled()) {
+        options.push_back({"Install App Store", []() { installAppStoreJS(); }});
+    }
+#endif
+
+    options.push_back({"Factory Reset", [=]() {
+                           bruceConfigPins.factoryReset(); // this one doesnt restart ESP
+                           bruceConfig.factoryReset();     // after this one, it restarts
+                       }});
+    options.push_back({"Sleep", setSleepMode});
+    options.push_back({"Restart", [=]() { ESP.restart(); }});
     options.push_back({"Turn-off", powerOff});
     options.push_back({"Deep Sleep", goToDeepSleep});
 
     if (bruceConfig.devMode) options.push_back({"Dev Mode", [this]() { devMenu(); }});
 
     options.push_back({"About", showDeviceInfo});
+
     addOptionToMainMenu();
 
     loopOptions(options, MENU_TYPE_SUBMENU, "Config");
