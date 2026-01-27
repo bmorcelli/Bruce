@@ -170,7 +170,7 @@ String getScriptsFolder(FS *&fs) {
     return "";
 }
 
-std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupScript) {
+std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupScript, int rememberedIndex) {
     std::vector<Option> opt = {};
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
     FS *fs;
@@ -207,7 +207,12 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
             opt.push_back({folderTitle.c_str(), [=]() {
                                auto subOptions = getScriptsOptionsList(fullPath, saveStartupScript);
                                if (subOptions.size() > 0) {
-                                   loopOptions(subOptions, MENU_TYPE_SUBMENU, fullPath.c_str());
+                                   String displayPath = fullPath;
+                                   int secondSlash = displayPath.indexOf('/', 1);
+                                   if (secondSlash >= 0) {
+                                       displayPath = displayPath.substring(secondSlash + 1);
+                                   }
+                                   loopOptions(subOptions, MENU_TYPE_SUBMENU, displayPath.c_str());
                                }
                            }});
         } else {
@@ -250,7 +255,41 @@ std::vector<Option> getScriptsOptionsList(String currentPath, bool saveStartupSc
 
     // Add back navigation if we're in a subdirectory
     if (currentPath != "" && currentPath != getScriptsFolder(fs)) {
-        opt.push_back({"< Back", [=]() { return; }});
+        opt.push_back(
+            {"< Back", [=]() {
+                 // Calculate parent directory
+                 String parentPath = currentPath;
+                 int lastSlash = parentPath.lastIndexOf('/');
+                 if (lastSlash > 0) {
+                     parentPath = parentPath.substring(0, lastSlash);
+                 } else {
+                     // If we can't go up, go to scripts root
+                     FS *parentFs;
+                     parentPath = getScriptsFolder(parentFs);
+                 }
+
+                 auto parentOptions = getScriptsOptionsList(parentPath, saveStartupScript);
+                 if (parentOptions.size() > 0) {
+                     String displayPath = parentPath;
+                     int secondSlash = displayPath.indexOf('/', 1);
+                     if (secondSlash >= 0) { displayPath = displayPath.substring(secondSlash + 1); }
+
+                     // Find the folder we just came from to restore selection
+                     int restoreIndex = 0;
+                     String currentFolderName = currentPath.substring(currentPath.lastIndexOf('/') + 1);
+                     String searchTitle = "[ " + currentFolderName + " ]";
+
+                     for (int i = 0; i < parentOptions.size(); i++) {
+                         if (parentOptions[i].label == searchTitle) {
+                             restoreIndex = i;
+                             break;
+                         }
+                     }
+
+                     loopOptions(parentOptions, MENU_TYPE_SUBMENU, displayPath.c_str(), restoreIndex);
+                 }
+             }}
+        );
     }
 
 #endif
