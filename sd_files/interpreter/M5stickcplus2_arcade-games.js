@@ -12,7 +12,7 @@ var getPrevPress = keyboardApi.getPrevPress;
 var getSelPress = keyboardApi.getSelPress;
 var getNextPress = keyboardApi.getNextPress;
 
-var WIDTH  = 240
+var WIDTH = 240
 var HEIGHT = 135;
 var BLACK = 0;
 var WHITE = 16777215;
@@ -830,7 +830,7 @@ function drawSpaceGameplay() {
     drawExplosions();
     drawPowerups();
     if (player.x !== player.lastX || player.y !== player.lastY) {
-        drawFillRect(player.lastX - player.width/2 - 6, player.lastY - 5, player.width + 12, player.height + 15, BLACK);
+        drawFillRect(player.lastX - player.width / 2 - 6, player.lastY - 5, player.width + 12, player.height + 15, BLACK);
         player.lastX = player.x;
         player.lastY = player.y;
     }
@@ -838,8 +838,8 @@ function drawSpaceGameplay() {
     drawSpaceHUD();
 }
 function drawPlayer(x, y, weaponLevel) {
-    drawFillRect(x - player.width/2, y, player.width, player.height, BLUE);
-    drawFillRect(x - player.width/2 + 3, y + 3, player.width - 6, player.height - 8, CYAN);
+    drawFillRect(x - player.width / 2, y, player.width, player.height, BLUE);
+    drawFillRect(x - player.width / 2 + 3, y + 3, player.width - 6, player.height - 8, CYAN);
     drawFillRect(x - 4, y - 5, 8, 5, WHITE);
     if (spaceFrameCounter % 6 < 3) {
         drawFillRect(x - 6, y + player.height, 12, 4, YELLOW);
@@ -849,16 +849,16 @@ function drawPlayer(x, y, weaponLevel) {
         drawFillRect(x - 3, y + player.height + 3, 6, 2, YELLOW);
     }
     if (weaponLevel > 1) {
-        drawFillRect(x - player.width/2 - 4, y + 3, 4, 4, YELLOW);
-        drawFillRect(x + player.width/2, y + 3, 4, 4, YELLOW);
-        drawFillRect(x - player.width/2 - 2, y + 5, 2, 6, YELLOW);
-        drawFillRect(x + player.width/2 + 1, y + 5, 2, 6, YELLOW);
+        drawFillRect(x - player.width / 2 - 4, y + 3, 4, 4, YELLOW);
+        drawFillRect(x + player.width / 2, y + 3, 4, 4, YELLOW);
+        drawFillRect(x - player.width / 2 - 2, y + 5, 2, 6, YELLOW);
+        drawFillRect(x + player.width / 2 + 1, y + 5, 2, 6, YELLOW);
     }
     if (weaponLevel > 2) {
-        drawFillRect(x - player.width/2 - 4, y + 10, 4, 4, YELLOW);
-        drawFillRect(x + player.width/2, y + 10, 4, 4, YELLOW);
+        drawFillRect(x - player.width / 2 - 4, y + 10, 4, 4, YELLOW);
+        drawFillRect(x + player.width / 2, y + 10, 4, 4, YELLOW);
     }
-    if (player.invincible && spaceFrameCounter % 6 < 3) drawRect(x - player.width/2 - 2, y - 2, player.width + 4, player.height + 4, WHITE);
+    if (player.invincible && spaceFrameCounter % 6 < 3) drawRect(x - player.width / 2 - 2, y - 2, player.width + 4, player.height + 4, WHITE);
 }
 function drawEnemies() {
     for (var i = 0; i < enemies.length; i++) {
@@ -1049,18 +1049,18 @@ function checkCollisions() {
         for (var j = 0; j < enemies.length; j++) {
             if (!enemies[j] || !enemies[j].active) continue;
             var enemy = enemies[j];
-            if (checkCollision(bullet.x - bullet.width/2, bullet.y - bullet.height/2, bullet.width, bullet.height, enemy.x, enemy.y, enemy.width, enemy.height)) {
+            if (checkCollision(bullet.x - bullet.width / 2, bullet.y - bullet.height / 2, bullet.width, bullet.height, enemy.x, enemy.y, enemy.width, enemy.height)) {
                 bullet.active = false;
                 drawFillRect(bullet.lastX - bullet.width / 2, bullet.lastY, bullet.width, bullet.height + 2, BLACK);
                 enemy.active = false;
                 drawFillRect(enemy.lastX - 5, enemy.lastY - 5, enemy.width + 10, enemy.height + 10, BLACK);
                 spaceScore += enemy.type.points;
                 killCount++;
-                createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2);
+                createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
                 spawnPowerup(enemy.x, enemy.y);
             }
         }
-        if (bossActive && boss && checkCollision(bullet.x - bullet.width/2, bullet.y - bullet.height/2, bullet.width, bullet.height, boss.x, boss.y, boss.width, boss.height)) {
+        if (bossActive && boss && checkCollision(bullet.x - bullet.width / 2, bullet.y - bullet.height / 2, bullet.width, bullet.height, boss.x, boss.y, boss.width, boss.height)) {
             bullet.active = false;
             drawFillRect(bullet.lastX - bullet.width / 2, bullet.lastY, bullet.width, bullet.height + 2, BLACK);
             boss.health--;
@@ -1068,7 +1068,7 @@ function checkCollisions() {
                 bossActive = false;
                 spaceScore += 500;
                 killCount += 5;
-                createExplosion(boss.x + boss.width/2, boss.y + boss.height/2);
+                createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2);
                 spaceLevelUp();
             }
         }
@@ -1077,7 +1077,7 @@ function checkCollisions() {
         for (var j = 0; j < enemies.length; j++) {
             if (!enemies[j] || !enemies[j].active) continue;
             var enemy = enemies[j];
-            if (checkCollision(player.x - player.width/2, player.y, player.width, player.height, enemy.x, enemy.y, enemy.width, enemy.height)) {
+            if (checkCollision(player.x - player.width / 2, player.y, player.width, player.height, enemy.x, enemy.y, enemy.width, enemy.height)) {
                 enemy.active = false;
                 drawFillRect(enemy.lastX - 5, enemy.lastY - 5, enemy.width + 10, enemy.height + 10, BLACK);
                 player.lives--;
@@ -1099,7 +1099,7 @@ function checkCollisions() {
         for (var j = 0; j < enemyBullets.length; j++) {
             if (!enemyBullets[j] || !enemyBullets[j].active) continue;
             var bullet = enemyBullets[j];
-            if (checkCollision(player.x - player.width/2, player.y, player.width, player.height, bullet.x - bullet.width/2, bullet.y, bullet.width, bullet.height)) {
+            if (checkCollision(player.x - player.width / 2, player.y, player.width, player.height, bullet.x - bullet.width / 2, bullet.y, bullet.width, bullet.height)) {
                 bullet.active = false;
                 player.lives--;
                 createExplosion(player.x, player.y + player.height, true);
@@ -1117,7 +1117,7 @@ function checkCollisions() {
                 break;
             }
         }
-        if (bossActive && boss && checkCollision(player.x - player.width/2, player.y, player.width, player.height, boss.x, boss.y, boss.width, boss.height)) {
+        if (bossActive && boss && checkCollision(player.x - player.width / 2, player.y, player.width, player.height, boss.x, boss.y, boss.width, boss.height)) {
             player.lives--;
             createExplosion(player.x, player.y + player.height, true);
             player.invincible = true;
@@ -1136,7 +1136,7 @@ function checkCollisions() {
     for (var i = 0; i < powerups.length; i++) {
         if (!powerups[i] || !powerups[i].active) continue;
         var powerup = powerups[i];
-        if (checkCollision(player.x - player.width/2, player.y, player.width, player.height, powerup.x - powerup.width/2, powerup.y, powerup.width, powerup.height)) {
+        if (checkCollision(player.x - player.width / 2, player.y, player.width, player.height, powerup.x - powerup.width / 2, powerup.y, powerup.width, powerup.height)) {
             powerup.active = false;
             drawFillRect(powerup.lastX - powerup.width / 2 - 2, powerup.lastY - 2, powerup.width + 4, powerup.height + 4, BLACK);
             if (powerup.type.type === "health" && player.lives < 3) player.lives++;
@@ -1286,7 +1286,7 @@ function drawSlotsPausedMenu() {
     }
 }
 function getWeightedRandom(weights) {
-    var totalWeight = weights.reduce(function(sum, w) { return sum + w; }, 0);
+    var totalWeight = weights.reduce(function (sum, w) { return sum + w; }, 0);
     var roll = Math.random() * totalWeight;
     var cumulative = 0;
     for (var i = 0; i < weights.length; i++) {
@@ -1514,7 +1514,7 @@ function updateFlappyBird() {
         if (checkCollision(bird.x - BIRD_WIDTH / 2, bird.y - BIRD_HEIGHT / 2, BIRD_WIDTH, BIRD_HEIGHT,
             pipes[i].x, 0, pipes[i].width, pipes[i].y) ||
             checkCollision(bird.x - BIRD_WIDTH / 2, bird.y - BIRD_HEIGHT / 2, BIRD_WIDTH, BIRD_HEIGHT,
-            pipes[i].x, pipes[i].y + pipes[i].height, pipes[i].width, HEIGHT - pipes[i].y - pipes[i].height - GROUND_HEIGHT)) {
+                pipes[i].x, pipes[i].y + pipes[i].height, pipes[i].width, HEIGHT - pipes[i].y - pipes[i].height - GROUND_HEIGHT)) {
             prevGameState = STATE_FLAPPY_BIRD;
             gameState = STATE_GAME_OVER;
             if (!suppressGameOverSound) {
@@ -1789,7 +1789,7 @@ function drawBlackjack() {
                 } else if (blackjack.dealerHand[i]) {
                     drawFillRect(5 + i * 30, 40, 20, 30, WHITE);
                     setTextColor(blackjack.dealerHand[i].suit === 'H' ||
-                                 blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
+                        blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
                     drawString(blackjack.dealerHand[i].value + blackjack.dealerHand[i].suit, 7 + i * 30, 55);
                 }
             }
@@ -1800,7 +1800,7 @@ function drawBlackjack() {
                 if (blackjack.playerHand[i]) {
                     drawFillRect(5 + i * 30, 90, 20, 30, WHITE);
                     setTextColor(blackjack.playerHand[i].suit === 'H' ||
-                                 blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
+                        blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
                     drawString(blackjack.playerHand[i].value + blackjack.playerHand[i].suit, 7 + i * 30, 105);
                 }
             }
@@ -1821,7 +1821,7 @@ function drawBlackjack() {
                 if (blackjack.dealerHand[i]) {
                     drawFillRect(5 + i * 30, 40, 20, 30, WHITE);
                     setTextColor(blackjack.dealerHand[i].suit === 'H' ||
-                                 blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
+                        blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
                     drawString(blackjack.dealerHand[i].value + blackjack.dealerHand[i].suit, 7 + i * 30, 55);
                 }
             }
@@ -1832,14 +1832,14 @@ function drawBlackjack() {
                 if (blackjack.playerHand[i]) {
                     drawFillRect(5 + i * 30, 90, 20, 30, WHITE);
                     setTextColor(blackjack.playerHand[i].suit === 'H' ||
-                                 blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
+                        blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
                     drawString(blackjack.playerHand[i].value + blackjack.playerHand[i].suit, 7 + i * 30, 105);
                 }
             }
 
             setTextSize(2);
             setTextColor(blackjack.resultMessage.includes("Win") ? GRAY :
-                         blackjack.resultMessage.includes("Lose") ? YELLOW : WHITE);
+                blackjack.resultMessage.includes("Lose") ? YELLOW : WHITE);
 
             try {
                 var lines = blackjack.resultMessage.split(" ");
