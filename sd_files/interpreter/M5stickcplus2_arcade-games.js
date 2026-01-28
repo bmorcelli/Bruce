@@ -55,6 +55,7 @@ var menuLastSelState = false;
 var mainMenuScroll = 0;
 var MENU_VISIBLE_ITEMS = 5;
 var menuOptions = ["BREAKOUT", "SNAKE", "SPACE SHOOTER", "SLOTS", "FLAPPY BIRD", "BLACKJACK", "QUIT"];
+var menuLastSelection;
 function drawMainMenu() {
     if (!mainMenuStaticDrawn || menuSelection !== menuLastSelection) {
         fillScreen(BLACK);
@@ -276,8 +277,8 @@ function breakoutNextLevel() {
     breakoutState = BREAKOUT_STATE_NEXT_LEVEL;
     breakoutStaticDrawn = false;
     breakoutLastStaticDrawnState = -1;
-    tone(700, 200);
-    tone(900, 200);
+    audio.tone(700, 200);
+    audio.tone(900, 200);
 }
 function drawBreakout() {
     switch (breakoutState) {
@@ -372,8 +373,8 @@ function drawBreakoutGameOverScreen() {
         drawString("PREV to Menu", 84, 115);
         breakoutStaticDrawn = true;
         breakoutLastStaticDrawnState = breakoutState;
-        tone(400, 300);
-        tone(300, 300);
+        audio.tone(400, 300);
+        audio.tone(300, 300);
     }
 }
 function drawBreakoutWinScreen() {
@@ -390,8 +391,8 @@ function drawBreakoutWinScreen() {
         drawString("PREV to Menu", WIDTH / 2 - 30, 115);
         breakoutStaticDrawn = true;
         breakoutLastStaticDrawnState = breakoutState;
-        tone(800, 200);
-        tone(1000, 200);
+        audio.tone(800, 200);
+        audio.tone(1000, 200);
     }
 }
 function drawBreakoutNextLevelScreen() {
@@ -424,20 +425,20 @@ function updateBreakout() {
     ball.y += ball.speedY;
     if (ball.x - ball.size / 2 < 0 || ball.x + ball.size / 2 > WIDTH) {
         ball.speedX = -ball.speedX;
-        tone(500, 100);
+        audio.tone(500, 100);
     }
     if (ball.y - ball.size / 2 < 0) {
         ball.speedY = -ball.speedY;
-        tone(500, 100);
+        audio.tone(500, 100);
     }
     if (ball.y - ball.size / 2 < 20) {
         ball.y = 20 + ball.size / 2;
         ball.speedY = Math.abs(ball.speedY);
-        tone(500, 100);
+        audio.tone(500, 100);
     }
     if (ball.y + ball.size / 2 > HEIGHT) {
         breakoutLives--;
-        tone(200, 300);
+        audio.tone(200, 300);
         if (breakoutLives <= 0) breakoutState = BREAKOUT_STATE_GAME_OVER;
         else ball.stuck = true;
         return;
@@ -446,7 +447,7 @@ function updateBreakout() {
         var hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
         ball.speedX = hitPos * 4;
         ball.speedY = -Math.abs(ball.speedY) * 1.05;
-        tone(600, 150);
+        audio.tone(600, 150);
     }
     for (var i = 0; i < bricks.length; i++) {
         if (!bricks[i].hit && ball.x + ball.size / 2 > bricks[i].x && ball.x - ball.size / 2 < bricks[i].x + bricks[i].width && ball.y + ball.size / 2 > bricks[i].y && ball.y - ball.size / 2 < bricks[i].y + bricks[i].height) {
@@ -455,10 +456,10 @@ function updateBreakout() {
             if (bricks[i].strength <= 0) {
                 bricks[i].hit = true;
                 breakoutScore += 10 * breakoutLevel;
-                tone(700, 100);
+                audio.tone(700, 100);
             } else {
                 breakoutScore += 5;
-                tone(650, 100);
+                audio.tone(650, 100);
             }
             var overlapLeft = ball.x + ball.size / 2 - bricks[i].x;
             var overlapRight = bricks[i].x + bricks[i].width - (ball.x - ball.size / 2);
@@ -677,7 +678,7 @@ function updateSnake() {
 
             placeFood();
 
-            tone(600, 150);
+            audio.tone(600, 150);
         } else {
             var tail = snake.pop();
             snakeErasePos = { x: tail.x, y: tail.y };
@@ -955,7 +956,10 @@ function updateBullets() {
     for (var i = 0; i < bullets.length; i++) {
         if (bullets[i] && bullets[i].active) {
             bullets[i].y -= bullets[i].speed;
-            if (bullets[i].y + bullets[i].height < 0) bullets[i].active = false;
+            if (bullets[i].y + bullets[i].height < 0) {
+                bullets.splice(i, 1);
+                return;
+            }
         }
     }
 }
@@ -966,7 +970,8 @@ function updateEnemies() {
             enemies[i].y += enemies[i].type.speed;
             if (enemies[i].y > HEIGHT) {
                 drawFillRect(enemies[i].lastX - 5, enemies[i].lastY - 5, enemies[i].width + 10, enemies[i].height + 10, BLACK);
-                enemies[i].active = false;
+                enemies.splice(i, 1);
+                return;
             }
             if (enemies[i].type.shootRate > 0 && spaceFrameCounter % enemies[i].type.shootRate === 0) spawnEnemyBullet(enemies[i].x + enemies[i].width / 2, enemies[i].y + enemies[i].height);
         }
@@ -987,7 +992,10 @@ function updateEnemyBullets() {
     for (var i = 0; i < enemyBullets.length; i++) {
         if (enemyBullets[i] && enemyBullets[i].active) {
             enemyBullets[i].y += enemyBullets[i].speed;
-            if (enemyBullets[i].y > HEIGHT) enemyBullets[i].active = false;
+            if (enemyBullets[i].y > HEIGHT) {
+                enemyBullets.splice(i, 1);
+                return;
+            }
         }
     }
 }
@@ -996,8 +1004,9 @@ function updateExplosions() {
         if (explosions[i] && explosions[i].active && explosions[i].life > 0) {
             explosions[i].life--;
             if (explosions[i].life <= 0) {
-                explosions[i].active = false;
                 drawFillRect(explosions[i].x - explosions[i].size / 2, explosions[i].y - explosions[i].size / 2, explosions[i].size, explosions[i].size, BLACK);
+                explosions.splice(i, 1);
+                return;
             }
         }
     }
@@ -1006,7 +1015,10 @@ function updatePowerups() {
     for (var i = 0; i < powerups.length; i++) {
         if (powerups[i] && powerups[i].active) {
             powerups[i].y += 1;
-            if (powerups[i].y > HEIGHT) powerups[i].active = false;
+            if (powerups[i].y > HEIGHT) {
+                powerups.splice(i, 1);
+                return;
+            }
         }
     }
 }
@@ -1040,6 +1052,7 @@ function spawnPowerup(x, y) {
     }
 }
 function fireBullet() {
+    if (bullets.length >= 10) return;
     bullets.push({ x: player.x, y: player.y - player.height / 2, width: BULLET_SIZE, height: BULLET_SIZE, speed: 5, active: true, lastX: player.x, lastY: player.y - player.height / 2 });
 }
 function checkCollisions() {
@@ -1058,6 +1071,9 @@ function checkCollisions() {
                 killCount++;
                 createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2);
                 spawnPowerup(enemy.x, enemy.y);
+                enemies.splice(j, 1);
+                bullets.splice(i, 1);
+                return;
             }
         }
         if (bossActive && boss && checkCollision(bullet.x - bullet.width/2, bullet.y - bullet.height/2, bullet.width, bullet.height, boss.x, boss.y, boss.width, boss.height)) {
@@ -1071,6 +1087,8 @@ function checkCollisions() {
                 createExplosion(boss.x + boss.width/2, boss.y + boss.height/2);
                 spaceLevelUp();
             }
+            bullets.splice(i, 1);
+            return;
         }
     }
     if (!player.invincible) {
@@ -1084,7 +1102,7 @@ function checkCollisions() {
                 createExplosion(player.x, player.y + player.height, true);
                 player.invincible = true;
                 player.invincibleTime = 60;
-                tone(500, 200);
+                audio.tone(500, 200);
                 if (player.lives <= 0) {
                     spaceState = SPACE_STATE_GAME_OVER;
                     gameState = STATE_GAME_OVER;
@@ -1093,7 +1111,8 @@ function checkCollisions() {
                     if (spaceScore > spaceHighScore) spaceHighScore = spaceScore;
                     spaceStaticDrawn = false;
                 }
-                break;
+                enemies.splice(j, 1);
+                return;
             }
         }
         for (var j = 0; j < enemyBullets.length; j++) {
@@ -1105,7 +1124,7 @@ function checkCollisions() {
                 createExplosion(player.x, player.y + player.height, true);
                 player.invincible = true;
                 player.invincibleTime = 60;
-                tone(500, 200);
+                audio.tone(500, 200);
                 if (player.lives <= 0) {
                     spaceState = SPACE_STATE_GAME_OVER;
                     gameState = STATE_GAME_OVER;
@@ -1114,6 +1133,7 @@ function checkCollisions() {
                     if (spaceScore > spaceHighScore) spaceHighScore = spaceScore;
                     spaceStaticDrawn = false;
                 }
+                bullets.splice(i, 1);
                 break;
             }
         }
@@ -1122,7 +1142,7 @@ function checkCollisions() {
             createExplosion(player.x, player.y + player.height, true);
             player.invincible = true;
             player.invincibleTime = 60;
-            tone(500, 200);
+            audio.tone(500, 200);
             if (player.lives <= 0) {
                 spaceState = SPACE_STATE_GAME_OVER;
                 gameState = STATE_GAME_OVER;
@@ -1144,6 +1164,8 @@ function checkCollisions() {
                 player.weaponLevel++;
                 player.weaponTime = 300;
             }
+            powerups.splice(i, 1);
+            return;
         }
     }
     if (player.invincible) {
@@ -1173,7 +1195,7 @@ function createExplosion(x, y, isPlayerExplosion) {
         var explosion = { x: x, y: y, size: EXPLOSION_MAX_SIZE, active: true, life: 10 };
         if (isPlayerExplosion) explosion.size = 16;
         explosions.push(explosion);
-        tone(600, 150);
+        audio.tone(600, 150);
     }
 }
 function checkCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
@@ -1311,7 +1333,7 @@ function updateSlots(selPressed) {
             slotMoney += bet * 40;
             slotMessage = "JACKPOT!";
             slotMessageTimer = 30;
-            tone(1000, 500);
+            audio.tone(1000, 500);
         } else if (slotReels[0] === slotReels[1] && slotReels[1] === slotReels[2]) {
             var multiplier;
             switch (slotReels[0]) {
@@ -1324,12 +1346,12 @@ function updateSlots(selPressed) {
             slotMoney += bet * multiplier;
             slotMessage = "WIN!";
             slotMessageTimer = 20;
-            tone(800, 300);
+            audio.tone(800, 300);
         } else if (slotReels[0] === slotReels[1] || slotReels[1] === slotReels[2]) {
             slotMoney += bet * 1;
             slotMessage = "Pair!";
             slotMessageTimer = 15;
-            tone(600, 200);
+            audio.tone(600, 200);
         }
         if (slotMoney <= 0) slotState = SLOT_STATE_GAME_OVER;
         slotStaticDrawn = false;
@@ -1486,7 +1508,7 @@ function updateFlappyBird() {
         prevGameState = STATE_FLAPPY_BIRD;
         gameState = STATE_GAME_OVER;
         if (!suppressGameOverSound) {
-            tone(400, 300); tone(300, 300);
+            audio.tone(400, 300); audio.tone(300, 300);
         }
         suppressGameOverSound = false;
         flappyState = FLAPPY_STATE_MENU;
@@ -1509,7 +1531,7 @@ function updateFlappyBird() {
         if (!pipes[i].passed && pipes[i].x + pipes[i].width < bird.x - BIRD_WIDTH / 2) {
             pipes[i].passed = true;
             flappyScore++;
-            tone(800, 100);
+            audio.tone(800, 100);
         }
         if (checkCollision(bird.x - BIRD_WIDTH / 2, bird.y - BIRD_HEIGHT / 2, BIRD_WIDTH, BIRD_HEIGHT,
             pipes[i].x, 0, pipes[i].width, pipes[i].y) ||
@@ -1518,7 +1540,7 @@ function updateFlappyBird() {
             prevGameState = STATE_FLAPPY_BIRD;
             gameState = STATE_GAME_OVER;
             if (!suppressGameOverSound) {
-                tone(400, 300);
+                audio.tone(400, 300);
             }
             suppressGameOverSound = false;
             flappyState = FLAPPY_STATE_MENU;
@@ -1699,23 +1721,23 @@ function determineWinner() {
     } else if (blackjack.playerBlackjack) {
         blackjack.playerMoney += Math.floor(blackjack.currentBet * 2.5);
         blackjack.resultMessage = "Blackjack! You Win!";
-        tone(800, 300);
+        audio.tone(800, 300);
     } else if (blackjack.dealerBlackjack) {
         blackjack.resultMessage = "Dealer Blackjack! You Lose!";
-        tone(500, 200);
+        audio.tone(500, 200);
     } else if (blackjack.playerBust) {
         blackjack.resultMessage = "Bust! You Lose!";
-        tone(500, 200);
+        audio.tone(500, 200);
     } else if (blackjack.dealerBust || playerValue > dealerValue) {
         blackjack.playerMoney += blackjack.currentBet * 2;
         blackjack.resultMessage = "You Win!";
-        tone(800, 300);
+        audio.tone(800, 300);
     } else if (playerValue === dealerValue) {
         blackjack.playerMoney += blackjack.currentBet;
         blackjack.resultMessage = "Push!";
     } else {
         blackjack.resultMessage = "You Lose!";
-        tone(500, 200);
+        audio.tone(500, 200);
     }
 
     if (!blackjack.resultMessage.includes(" ")) {
@@ -1760,581 +1782,4 @@ function drawBlackjack() {
         } else if (blackjack.state === 1) {
             setTextSize(2);
             setTextColor(GOLD);
-            drawString("PLACE YOUR BET", 50, 20);
-            setTextSize(1);
-            setTextColor(WHITE);
-            drawString("Money: " + blackjack.playerMoney, 10, 50);
-            for (var i = 0; i < BET_OPTIONS.length; i++) {
-                if (i === selectedBetIndex) {
-                    setTextColor(YELLOW);
-                    drawString("> " + BET_OPTIONS[i], 100, 50 + i * 15);
-                } else {
-                    setTextColor(WHITE);
-                    drawString("  " + BET_OPTIONS[i], 100, 50 + i * 15);
-                }
-            }
-            setTextColor(WHITE);
-            drawString("PREV/NEXT: Change", 10, 115);
-            drawString("M5: Confirm", 150, 115);
-        } else if (blackjack.state === 2) {
-            setTextSize(1);
-            setTextColor(WHITE);
-            drawString("Money: " + blackjack.playerMoney, 5, 10);
-            drawString("Bet: " + blackjack.currentBet, 190, 10);
-            drawString("Dealer's Hand:", 5, 25);
-            for (var i = 0; i < blackjack.dealerHand.length; i++) {
-                if (i === 1 && !blackjack.playerBust && blackjack.dealerHand.length === 2 &&
-                    calculateHandValue(blackjack.playerHand) !== 21) {
-                    drawFillRect(5 + i * 30, 40, 20, 30, GRAY);
-                } else if (blackjack.dealerHand[i]) {
-                    drawFillRect(5 + i * 30, 40, 20, 30, WHITE);
-                    setTextColor(blackjack.dealerHand[i].suit === 'H' ||
-                                 blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
-                    drawString(blackjack.dealerHand[i].value + blackjack.dealerHand[i].suit, 7 + i * 30, 55);
-                }
-            }
-            setTextColor(YELLOW);
-            drawString("Your Hand: " + calculateHandValue(blackjack.playerHand), 5, 75);
-            setTextColor(WHITE);
-            for (var i = 0; i < blackjack.playerHand.length; i++) {
-                if (blackjack.playerHand[i]) {
-                    drawFillRect(5 + i * 30, 90, 20, 30, WHITE);
-                    setTextColor(blackjack.playerHand[i].suit === 'H' ||
-                                 blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
-                    drawString(blackjack.playerHand[i].value + blackjack.playerHand[i].suit, 7 + i * 30, 105);
-                }
-            }
-            if (!blackjack.playerBust && !blackjack.playerBlackjack) {
-                setTextSize(1);
-                setTextColor(WHITE);
-                drawString("PREV: Menu", 15, 125);
-                drawString("M5: Stand", 95, 125);
-                drawString("NEXT: Hit", 170, 125);
-            }
-        } else if (blackjack.state === 3) {
-            setTextSize(1);
-            setTextColor(WHITE);
-            drawString("Money: " + blackjack.playerMoney, 5, 10);
-            drawString("Bet: " + blackjack.currentBet, 190, 10);
-            drawString("Dealer's Hand: " + calculateHandValue(blackjack.dealerHand), 5, 25);
-            for (var i = 0; i < blackjack.dealerHand.length; i++) {
-                if (blackjack.dealerHand[i]) {
-                    drawFillRect(5 + i * 30, 40, 20, 30, WHITE);
-                    setTextColor(blackjack.dealerHand[i].suit === 'H' ||
-                                 blackjack.dealerHand[i].suit === 'D' ? GRAY : BLACK);
-                    drawString(blackjack.dealerHand[i].value + blackjack.dealerHand[i].suit, 7 + i * 30, 55);
-                }
-            }
-            setTextColor(YELLOW);
-            drawString("Your Hand: " + calculateHandValue(blackjack.playerHand), 5, 75);
-            setTextColor(WHITE);
-            for (var i = 0; i < blackjack.playerHand.length; i++) {
-                if (blackjack.playerHand[i]) {
-                    drawFillRect(5 + i * 30, 90, 20, 30, WHITE);
-                    setTextColor(blackjack.playerHand[i].suit === 'H' ||
-                                 blackjack.playerHand[i].suit === 'D' ? GRAY : BLACK);
-                    drawString(blackjack.playerHand[i].value + blackjack.playerHand[i].suit, 7 + i * 30, 105);
-                }
-            }
-
-            setTextSize(2);
-            setTextColor(blackjack.resultMessage.includes("Win") ? GRAY :
-                         blackjack.resultMessage.includes("Lose") ? YELLOW : WHITE);
-
-            try {
-                var lines = blackjack.resultMessage.split(" ");
-                if (lines.length >= 2) {
-                    drawString(lines[0], 180 - (lines[0].length * 10) / 2, 60);
-                    drawString(lines[1], 180 - (lines[1].length * 10) / 2, 80);
-                } else {
-                    drawString(blackjack.resultMessage, 180 - (blackjack.resultMessage.length * 10) / 2, 70);
-                }
-            } catch (e) {
-                drawString("Game Over", 70, 70);
-            }
-
-            setTextSize(1);
-            setTextColor(WHITE);
-            var nextHandText = "M5: Next Hand";
-            var nextHandX = 120 - (nextHandText.length * 5) / 2;
-            drawString(nextHandText, nextHandX, 125);
-        } else if (blackjack.state === 4) {
-            fillScreen(BLACK);
-            drawRect(60, 30, 120, 70, GRAY);
-            setTextSize(1);
-            var options = ["Resume", "Main Menu", "Quit"];
-            for (var i = 0; i < options.length; i++) {
-                if (i === pauseMenuSelection) {
-                    setTextColor(YELLOW);
-                    drawFillRect(95, 47 + i * 15, 50, 10, GRAY);
-                    drawString("> " + options[i], 100, 50 + i * 15);
-                } else {
-                    setTextColor(WHITE);
-                    drawString("  " + options[i], 100, 50 + i * 15);
-                }
-            }
-        }
-        drawBlackjack.lastState = blackjack.state;
-        drawBlackjack.lastPlayerHandLength = blackjack.playerHand.length;
-    }
-}
-drawBlackjack.lastState = -1;
-drawBlackjack.lastPlayerHandLength = 0;
-
-function updateBlackjack() {
-    if (gameState !== STATE_BLACKJACK) return;
-    if (blackjack.state === 2 && (blackjack.playerBust || blackjack.playerBlackjack || blackjack.dealerBlackjack)) {
-        dealerTurn();
-    }
-}
-function handleInput() {
-    var currentSelState = getSelPress();
-    var prevPressed = getPrevPress();
-    var nextPressed = getNextPress();
-    var shouldExit = false;
-    switch (gameState) {
-        case STATE_MAIN_MENU:
-            if (prevPressed) {
-                menuSelection = (menuSelection - 1 + menuOptions.length) % menuOptions.length;
-                mainMenuStaticDrawn = false;
-            }
-            if (nextPressed) {
-                menuSelection = (menuSelection + 1) % menuOptions.length;
-                mainMenuStaticDrawn = false;
-            }
-            if (currentSelState && !menuLastSelState) {
-                if (menuSelection === 0) gameState = STATE_BREAKOUT;
-                else if (menuSelection === 1) gameState = STATE_SNAKE;
-                else if (menuSelection === 2) gameState = STATE_SPACE_SHOOTER;
-                else if (menuSelection === 3) { resetSlots(); gameState = STATE_SLOTS; }
-                else if (menuSelection === 4) { resetFlappyBird(); gameState = STATE_FLAPPY_BIRD; }
-                else if (menuSelection === 5) { resetBlackjack(); gameState = STATE_BLACKJACK; }
-                else if (menuSelection === 6) { gameState = STATE_EXIT_CONFIRM; exitConfirmSelection = 1; }
-                staticDrawn = false;
-                mainMenuStaticDrawn = false;
-                menuLastSelState = false;
-                breakoutLastSelState = false;
-                snakeLastSelState = false;
-                spaceLastSelState = false;
-                slotLastSelState = false;
-            }
-            menuLastSelState = currentSelState;
-            break;
-        case STATE_BREAKOUT:
-            if (currentSelState && !breakoutLastSelState) {
-                breakoutSelPressCount++;
-                if (breakoutSelPressCount === 1) breakoutSelPressWindowStart = Date.now();
-                if (Date.now() - breakoutSelPressWindowStart <= breakoutSelPressWindow) {
-                    if (breakoutSelPressCount >= breakoutSelPressThreshold) {
-                        breakoutIsPaused = true;
-                        gameState = STATE_PAUSED;
-                        prevGameState = STATE_BREAKOUT;
-                        breakoutSelPressCount = 0;
-                        breakoutSelPressWindowStart = -1;
-                        breakoutPauseCooldown = 30;
-                        pauseStaticDrawn = false;
-                    }
-                } else {
-                    breakoutSelPressCount = 1;
-                    breakoutSelPressWindowStart = Date.now();
-                }
-                if (breakoutState === BREAKOUT_STATE_START) {
-                    resetBreakout();
-                } else if (breakoutState === BREAKOUT_STATE_PLAYING && ball.stuck) {
-                    ball.stuck = false;
-                    resetBall();
-                } else if (breakoutState === BREAKOUT_STATE_GAME_OVER || breakoutState === BREAKOUT_STATE_WIN) {
-                    resetBreakout();
-                } else if (breakoutState === BREAKOUT_STATE_NEXT_LEVEL) {
-                    resetBreakout();
-                }
-            } else if (!currentSelState && breakoutLastSelState) {
-                breakoutLastSelState = false;
-            }
-            if (prevPressed && (breakoutState === BREAKOUT_STATE_GAME_OVER || breakoutState === BREAKOUT_STATE_WIN)) {
-                gameState = STATE_MAIN_MENU;
-                staticDrawn = false;
-                mainMenuStaticDrawn = false;
-                menuLastSelState = false;
-                breakoutLastSelState = false;
-            }
-            if (breakoutState === BREAKOUT_STATE_PLAYING && !breakoutIsPaused) {
-                if (prevPressed) paddle.x -= paddle.speed;
-                if (nextPressed) paddle.x += paddle.speed;
-                if (paddle.x < 0) paddle.x = 0;
-                if (paddle.x + paddle.width > WIDTH) paddle.x = WIDTH - paddle.width;
-            }
-            breakoutLastSelState = currentSelState;
-            break;
-        case STATE_SNAKE:
-            if (currentSelState && !snakeLastSelState) {
-                if (snakeState === SNAKE_STATE_MENU) resetSnake();
-                else if (snakeState === SNAKE_STATE_GAME) {
-                    snakeState = SNAKE_STATE_PAUSED;
-                    gameState = STATE_PAUSED;
-                    prevGameState = STATE_SNAKE;
-                    pauseStaticDrawn = false;
-                }
-            }
-            if (prevPressed && snakeState === SNAKE_STATE_GAME) {
-                switch (direction) {
-                    case 0: nextDirection = 2; break;
-                    case 1: nextDirection = 3; break;
-                    case 2: nextDirection = 1; break;
-                    case 3: nextDirection = 0; break;
-                }
-            }
-            if (nextPressed && snakeState === SNAKE_STATE_GAME) {
-                switch (direction) {
-                    case 0: nextDirection = 3; break;
-                    case 1: nextDirection = 2; break;
-                    case 2: nextDirection = 0; break;
-                    case 3: nextDirection = 1; break;
-                }
-            }
-            snakeLastSelState = currentSelState;
-            break;
-        case STATE_SPACE_SHOOTER:
-            if (currentSelState && !spaceLastSelState) {
-                if (spaceState === SPACE_STATE_MENU) resetSpaceShooter();
-                else if (spaceState === SPACE_STATE_GAME) {
-                    spaceIsPaused = true;
-                    gameState = STATE_PAUSED;
-                    prevGameState = STATE_SPACE_SHOOTER;
-                    pauseStaticDrawn = false;
-                }
-            }
-            if (prevPressed) player.x -= player.speed;
-            if (nextPressed) player.x += player.speed;
-            if (player.x < player.width / 2) player.x = player.width / 2;
-            if (player.x > WIDTH - player.width / 2) player.x = WIDTH - player.width / 2;
-            spaceLastSelState = currentSelState;
-            break;
-        case STATE_SLOTS:
-            if (currentSelState && !slotLastSelState) {
-                if (slotState === SLOT_STATE_MENU) resetSlots();
-                else if (slotState === SLOT_STATE_SPIN) updateSlots(true);
-                else if (slotState === SLOT_STATE_GAME_OVER) resetSlots();
-                else if (slotState === SLOT_STATE_PAUSED) {
-                    if (pauseMenuSelection === 0) {
-                        slotState = SLOT_STATE_SPIN;
-                        slotStaticDrawn = false;
-                    } else if (pauseMenuSelection === 1) {
-                        gameState = STATE_MAIN_MENU;
-                        resetSlots();
-                        staticDrawn = false;
-                        mainMenuStaticDrawn = false;
-                        menuLastSelState = false;
-                        breakoutLastSelState = false;
-                        snakeLastSelState = false;
-                        spaceLastSelState = false;
-                        slotLastSelState = false;
-                    } else if (pauseMenuSelection === 2) {
-                        gameState = STATE_EXIT_CONFIRM;
-                        prevGameState = STATE_SLOTS;
-                        exitConfirmSelection = 1;
-                        staticDrawn = false;
-                    }
-                }
-            }
-            if (slotState === SLOT_STATE_SPIN) {
-                if (prevPressed) {
-                    slotState = SLOT_STATE_PAUSED;
-                    pauseMenuSelection = 0;
-                    slotStaticDrawn = false;
-                }
-                if (nextPressed) {
-                    slotBetIndex = (slotBetIndex + 1) % slotBetOptions.length;
-                    slotStaticDrawn = false;
-                }
-            } else if (slotState === SLOT_STATE_PAUSED) {
-                if (prevPressed) {
-                    pauseMenuSelection = (pauseMenuSelection - 1 + 3) % 3;
-                    slotStaticDrawn = false;
-                }
-                if (nextPressed) {
-                    pauseMenuSelection = (pauseMenuSelection + 1) % 3;
-                    slotStaticDrawn = false;
-                }
-            } else if (slotState === SLOT_STATE_GAME_OVER) {
-                if (prevPressed) {
-                    gameState = STATE_MAIN_MENU;
-                    staticDrawn = false;
-                    mainMenuStaticDrawn = false;
-                    menuLastSelState = false;
-                    slotLastSelState = false;
-                }
-            }
-            slotLastSelState = currentSelState;
-            break;
-        case STATE_FLAPPY_BIRD:
-            if (currentSelState && !flappyLastSelState) {
-                if (flappyState === FLAPPY_STATE_MENU) {
-                    flappyState = FLAPPY_STATE_GAME;
-                    flappyStaticDrawn = false;
-                } else if (flappyState === FLAPPY_STATE_GAME) {
-                    bird.velocity = -FLAP_POWER;
-                    tone(600, 150);
-                }
-            }
-            if (prevPressed && flappyState === FLAPPY_STATE_GAME) {
-                flappyState = FLAPPY_STATE_PAUSED;
-                gameState = STATE_PAUSED;
-                prevGameState = STATE_FLAPPY_BIRD;
-                pauseStaticDrawn = false;
-            }
-            if (nextPressed && flappyState === FLAPPY_STATE_GAME) {
-                flappyState = FLAPPY_STATE_PAUSED;
-                gameState = STATE_PAUSED;
-                prevGameState = STATE_FLAPPY_BIRD;
-                pauseStaticDrawn = false;
-            }
-            flappyLastSelState = currentSelState;
-            break;
-        case STATE_BLACKJACK:
-            var betMenuSelection = selectedBetIndex;
-            if (typeof blackjack.prevState === 'undefined') {
-                blackjack.prevState = -1;
-            }
-            if (currentSelState && !menuLastSelState) {
-                if (blackjack.state === 1) {
-                    startBlackjackGame(BET_OPTIONS[betMenuSelection]);
-                } else if (blackjack.state === 2) {
-                    stand();
-                } else if (blackjack.state === 3) {
-                    if (blackjack.playerMoney <= 0) {
-                        prevGameState = STATE_BLACKJACK;
-                        gameState = STATE_GAME_OVER;
-                        staticDrawn = false;
-                    } else {
-                        blackjack.dealerHand = [];
-                        blackjack.playerHand = [];
-                        blackjack.currentBet = 0;
-                        blackjack.playerBust = false;
-                        blackjack.dealerBust = false;
-                        blackjack.playerBlackjack = false;
-                        blackjack.state = 1;
-                        betMenuSelection = 0;
-                        staticDrawn = false;
-                    }
-                } else if (blackjack.state === 4) {
-                    if (pauseMenuSelection === 0) {
-                        blackjack.state = blackjack.prevState;
-                        staticDrawn = false;
-                    } else if (pauseMenuSelection === 1) {
-                        gameState = STATE_MAIN_MENU;
-                        resetBlackjack();
-                        staticDrawn = false;
-                        mainMenuStaticDrawn = false;
-                        menuLastSelState = false;
-                    } else if (pauseMenuSelection === 2) {
-                        gameState = STATE_EXIT_CONFIRM;
-                        prevGameState = STATE_BLACKJACK;
-                        exitConfirmSelection = 1;
-                        staticDrawn = false;
-                    }
-                }
-            }
-            if (nextPressed && blackjack.state === 1) {
-                betMenuSelection = (betMenuSelection + 1) % BET_OPTIONS.length;
-                staticDrawn = false;
-            }
-            if (prevPressed && blackjack.state === 1) {
-                betMenuSelection = (betMenuSelection - 1 + BET_OPTIONS.length) % BET_OPTIONS.length;
-                staticDrawn = false;
-            }
-            if (prevPressed && blackjack.state === 2) {
-                blackjack.prevState = blackjack.state;
-                blackjack.state = 4;
-                pauseMenuSelection = 0;
-                staticDrawn = false;
-            }
-            if (blackjack.state === 4) {
-                if (prevPressed) {
-                    pauseMenuSelection = (pauseMenuSelection - 1 + 3) % 3;
-                    staticDrawn = false;
-                }
-                if (nextPressed) {
-                    pauseMenuSelection = (pauseMenuSelection + 1) % 3;
-                    staticDrawn = false;
-                }
-            }
-            if (nextPressed && blackjack.state === 2 && !blackjack.playerBust && !blackjack.playerBlackjack) {
-                hit();
-            }
-            selectedBetIndex = betMenuSelection;
-            menuLastSelState = currentSelState;
-            break;
-        case STATE_PAUSED:
-            if (prevPressed) {
-                pauseMenuSelection = (pauseMenuSelection - 1 + 3) % 3;
-                pauseStaticDrawn = false;
-            }
-            if (nextPressed) {
-                pauseMenuSelection = (pauseMenuSelection + 1) % 3;
-                pauseStaticDrawn = false;
-            }
-            if (currentSelState && !menuLastSelState && (prevGameState !== STATE_BREAKOUT || breakoutPauseCooldown <= 0)) {
-                if (pauseMenuSelection === 0) {
-                    gameState = prevGameState;
-                    if (prevGameState === STATE_BREAKOUT) {
-                        breakoutIsPaused = false;
-                        breakoutStaticDrawn = false;
-                        breakoutLastStaticDrawnState = -1;
-                    }
-                    if (prevGameState === STATE_SPACE_SHOOTER) {
-                        spaceIsPaused = false;
-                        spaceStaticDrawn = false;
-                        spaceLastStaticDrawnState = -1;
-                    }
-                    if (prevGameState === STATE_SNAKE) {
-                        snakeState = SNAKE_STATE_GAME;
-                        snakeStaticDrawn = false;
-                        snakeLastStaticDrawnState = -1;
-                    }
-                    if (prevGameState === STATE_FLAPPY_BIRD) {
-                        flappyState = FLAPPY_STATE_GAME;
-                        flappyStaticDrawn = false;
-                    }
-                    staticDrawn = false;
-                    pauseStaticDrawn = false;
-                } else if (pauseMenuSelection === 1) {
-                    gameState = STATE_MAIN_MENU;
-                    staticDrawn = false;
-                    mainMenuStaticDrawn = false;
-                    menuLastSelState = false;
-                    breakoutLastSelState = false;
-                    snakeLastSelState = false;
-                    spaceLastSelState = false;
-                    slotLastSelState = false;
-                    flappyLastSelState = false;
-                    snakeState = SNAKE_STATE_MENU;
-                    if (prevGameState === STATE_SPACE_SHOOTER) resetSpaceShooter();
-                    if (prevGameState === STATE_FLAPPY_BIRD) flappyState = FLAPPY_STATE_MENU;
-                    prevGameState = -1;
-                } else if (pauseMenuSelection === 2) {
-                    gameState = STATE_EXIT_CONFIRM;
-                    exitConfirmSelection = 1;
-                    staticDrawn = false;
-                }
-            }
-            menuLastSelState = currentSelState;
-            if (prevGameState === STATE_BREAKOUT && breakoutPauseCooldown > 0) breakoutPauseCooldown--;
-            break;
-        case STATE_GAME_OVER:
-            if (prevPressed) {
-                pauseMenuSelection = (pauseMenuSelection - 1 + 3) % 3;
-                staticDrawn = false;
-            }
-            if (nextPressed) {
-                pauseMenuSelection = (pauseMenuSelection + 1) % 3;
-                staticDrawn = false;
-            }
-            if (currentSelState && !menuLastSelState) {
-                if (pauseMenuSelection === 0) {
-                    if (prevGameState === STATE_FLAPPY_BIRD) resetFlappyBird();
-                    else if (prevGameState === STATE_SNAKE) resetSnake();
-                    else if (prevGameState === STATE_SPACE_SHOOTER) resetSpaceShooter();
-                    else if (prevGameState === STATE_BREAKOUT) resetBreakout();
-                    else if (prevGameState === STATE_BLACKJACK) resetBlackjack();
-                    gameState = prevGameState;
-                    staticDrawn = false;
-                } else if (pauseMenuSelection === 1) {
-                    gameState = STATE_MAIN_MENU;
-                    staticDrawn = false;
-                    mainMenuStaticDrawn = false;
-                    menuLastSelState = false;
-                    breakoutLastSelState = false;
-                    snakeLastSelState = false;
-                    spaceLastSelState = false;
-                    slotLastSelState = false;
-                    snakeState = SNAKE_STATE_MENU;
-                    if (prevGameState === STATE_SPACE_SHOOTER) resetSpaceShooter();
-                    prevGameState = -1;
-                } else if (pauseMenuSelection === 2) {
-                    gameState = STATE_EXIT_CONFIRM;
-                    exitConfirmSelection = 1;
-                    staticDrawn = false;
-                }
-            }
-            menuLastSelState = currentSelState;
-            if (gameState === STATE_MAIN_MENU) menuLastSelState = false;
-            break;
-        case STATE_LEVEL_UP:
-            if (prevPressed) {
-                gameState = STATE_MAIN_MENU;
-                staticDrawn = false;
-                mainMenuStaticDrawn = false;
-                menuLastSelState = false;
-                breakoutLastSelState = false;
-                snakeLastSelState = false;
-                spaceLastSelState = false;
-                slotLastSelState = false;
-            }
-            if (currentSelState && !menuLastSelState) {
-                if (prevGameState === STATE_SPACE_SHOOTER) {
-                    spaceState = SPACE_STATE_GAME;
-                    gameState = prevGameState;
-                    spaceStaticDrawn = false;
-                } else if (prevGameState === STATE_BREAKOUT) {
-                    resetBreakout();
-                    gameState = prevGameState;
-                    breakoutStaticDrawn = false;
-                }
-            }
-            menuLastSelState = currentSelState;
-            break;
-        case STATE_EXIT_CONFIRM:
-            if (prevPressed) {
-                exitConfirmSelection = (exitConfirmSelection - 1 + 2) % 2;
-                staticDrawn = false;
-            }
-            if (nextPressed) {
-                exitConfirmSelection = (exitConfirmSelection + 1) % 2;
-                staticDrawn = false;
-            }
-            if (currentSelState && !menuLastSelState) {
-                if (exitConfirmSelection === 0) {
-                    shouldExit = true;
-                } else {
-                    gameState = STATE_MAIN_MENU;
-                    staticDrawn = false;
-                    mainMenuStaticDrawn = false;
-                    menuLastSelState = false;
-                    breakoutLastSelState = false;
-                    snakeLastSelState = false;
-                    spaceLastSelState = false;
-                    slotLastSelState = false;
-                    flappyLastSelState = false;
-                }
-            }
-            menuLastSelState = currentSelState;
-            break;
-    }
-    return shouldExit;
-}
-function main() {
-    gameState = STATE_MAIN_MENU;
-    createStars();
-    while (true) {
-        var startTime = Date.now();
-        if (handleInput()) break;
-        switch (gameState) {
-            case STATE_MAIN_MENU: drawMainMenu(); break;
-            case STATE_BREAKOUT: updateBreakout(); drawBreakout(); break;
-            case STATE_SNAKE: updateSnake(); drawSnake(); break;
-            case STATE_SPACE_SHOOTER: updateSpaceShooter(); drawSpaceShooter(); break;
-            case STATE_SLOTS: updateSlots(false); drawSlots(); break;
-            case STATE_FLAPPY_BIRD: updateFlappyBird(); drawFlappyBird(); break;
-            case STATE_BLACKJACK: updateBlackjack(); drawBlackjack(); break;
-            case STATE_PAUSED: drawPauseMenu(); break;
-            case STATE_GAME_OVER: drawGameOverMenu(); break;
-            case STATE_LEVEL_UP: drawLevelUpMenu(); break;
-            case STATE_EXIT_CONFIRM: drawExitConfirm(); break;
-        }
-        frameCounter++;
-        var frameTime = Date.now() - startTime;
-        delay(Math.max(1, 33 - frameTime));
-    }
-}
-main()
+            drawString("PLA
