@@ -63,16 +63,6 @@ void OthersMenu::micMenu() {
     loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
 }
 
-void OthersMenu::micMenu() {
-    options = {
-        {"Spectrum", mic_test                   },
-        {"Record",   mic_record_app             },
-        {"Back",     [this]() { optionsMenu(); }},
-    };
-
-    loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
-}
-
 void OthersMenu::drawIcon(float scale) {
     clearIconArea();
 
