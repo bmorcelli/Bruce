@@ -1,6 +1,7 @@
 #include "settings.h"
 #include "core/led_control.h"
 #include "core/wifi/wifi_common.h"
+#include "current_year.h"
 #include "display.h"
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "modules/bjs_interpreter/interpreter.h"
@@ -909,8 +910,25 @@ void setClock() {
         TimeStruct.Minutes = mn;
         TimeStruct.Seconds = 0;
         _rtc.SetTime(&TimeStruct);
+        _rtc.GetTime(&_time);
+        _rtc.GetDate(&_date);
+
+        struct tm timeinfo = {};
+        timeinfo.tm_sec = _time.Seconds;
+        timeinfo.tm_min = _time.Minutes;
+        timeinfo.tm_hour = _time.Hours;
+        timeinfo.tm_mday = _date.Date;
+        timeinfo.tm_mon = _date.Month > 0 ? _date.Month - 1 : 0;
+        timeinfo.tm_year = _date.Year >= 1900 ? _date.Year - 1900 : 0;
+        time_t epoch = mktime(&timeinfo);
+        struct timeval tv = {.tv_sec = epoch};
+        settimeofday(&tv, nullptr);
 #else
-        rtc.setTime(0, mn, hr + am, 20, 06, 2024); // send me a gift, @Pirata!
+        rtc.setTime(0, mn, hr + am, 20, 06, CURRENT_YEAR); // send me a gift, @Pirata!
+        struct tm t = rtc.getTimeStruct();
+        time_t epoch = mktime(&t);
+        struct timeval tv = {.tv_sec = epoch};
+        settimeofday(&tv, nullptr);
 #endif
         clock_set = true;
     }
