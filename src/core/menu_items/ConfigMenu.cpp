@@ -121,15 +121,20 @@ void ConfigMenu::ledMenu() {
 void ConfigMenu::audioMenu() {
     while (true) {
         std::vector<Option> localOptions = {
+#if !defined(LITE_VERSION)
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+
             {String("Sound: ") + (bruceConfig.soundEnabled ? "ON" : "OFF"),
-             [this]() {
+                                                             [this]() {
                  // Toggle sound setting
                  bruceConfig.soundEnabled = !bruceConfig.soundEnabled;
                  bruceConfig.saveFile();
-             }                                                                                            },
+             }                                                                                                                                            },
 #if defined(HAS_NS4168_SPKR)
             {"Sound Volume",                                                [this]() { setSoundVolume(); }},
-#endif
+#endif  // BUZZ_PIN || HAS_NS4168_SPKR
+#endif  //  HAS_NS4168_SPKR
+#endif  //  LITE_VERSION
             {"Back",                                                        []() {}                       },
         };
 
@@ -184,9 +189,9 @@ void ConfigMenu::advancedMenu() {
         std::vector<Option> localOptions = {
 #if !defined(LITE_VERSION)
             {"Toggle BLE API", [this]() { enableBLEAPI(); }       },
+            {"BadUSB/BLE",     [this]() { setBadUSBBLEMenu(); }   },
 #endif
             {"Network Creds",  [this]() { setNetworkCredsMenu(); }},
-            {"BadUSB/BLE",     [this]() { setBadUSBBLEMenu(); }   },
             {"Factory Reset",
                                       []() {
                  // Confirmation dialog for destructive action

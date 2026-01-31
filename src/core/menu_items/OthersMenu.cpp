@@ -55,8 +55,10 @@ void OthersMenu::badUsbHidMenu() {
 
 void OthersMenu::micMenu() {
     options = {
+#if defined(MIC_SPM1423) || defined(MIC_INMP441)
         {"Spectrum", mic_test                   },
         {"Record",   mic_record_app             },
+#endif
         {"Back",     [this]() { optionsMenu(); }},
     };
 

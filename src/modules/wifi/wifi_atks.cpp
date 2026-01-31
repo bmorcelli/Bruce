@@ -918,6 +918,7 @@ void beaconAttack() {
              BeaconMode = 2;
              txt = "Spamming Random";
          }                        },
+#if !defined(LITE_VERSION)
         {"Single SSID",
          [&]() {
              BeaconMode = 4;
@@ -927,6 +928,7 @@ void beaconAttack() {
              BeaconMode = 3;
              txt = "Spamming Custom";
          }},
+#endif
     };
     addOptionToMainMenu();
     loopOptions(options);
@@ -935,7 +937,7 @@ void beaconAttack() {
     String beaconFile = "";
     File file;
     FS *fs;
-
+#if !defined(LITE_VERSION)
     // Get user input for single SSID mode
     if (BeaconMode == 4) {
         singleSSID = keyboard("BruceBeacon", 26, "Base SSID:");
@@ -943,7 +945,7 @@ void beaconAttack() {
             return; // User cancelled
         }
     }
-
+#endif
     if (BeaconMode != 3) {
         drawMainBorderWithTitle("WiFi: Beacon SPAM");
         displayTextLine(txt);
@@ -957,7 +959,9 @@ void beaconAttack() {
         } else if (BeaconMode == 2) {
             char *randoms = randomSSID();
             beaconSpamList(randoms);
-        } else if (BeaconMode == 4) {
+        }
+#if !defined(LITE_VERSION)
+        else if (BeaconMode == 4) {
             beaconSpamSingle(singleSSID);
         } else if (BeaconMode == 3) {
             if (!file) {
@@ -984,6 +988,7 @@ void beaconAttack() {
             const char *randoms = beaconFile.c_str();
             beaconSpamList(randoms);
         }
+#endif
         if (check(EscPress) || returnToMenu) {
             if (BeaconMode == 3) file.close();
             break;
