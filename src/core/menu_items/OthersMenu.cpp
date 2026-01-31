@@ -7,7 +7,6 @@
 #include "modules/others/ibutton.h"
 #include "modules/others/mic.h"
 #include "modules/others/qrcode_menu.h"
-#include "modules/others/timer.h"
 #include "modules/others/tururururu.h"
 
 void OthersMenu::optionsMenu() {
@@ -15,8 +14,7 @@ void OthersMenu::optionsMenu() {
         {"QRCodes",      qrcode_menu                              },
         {"Megalodon",    shark_setup                              },
 #if defined(MIC_SPM1423) || defined(MIC_INMP441)
-        {"Mic Spectrum", mic_test                                 },
-        {"Mic Record",   mic_record                               }, //@deveclipse
+        {"Microphone",   [this]() { micMenu(); }                  }, //@deveclipse
 #endif
 #ifndef LITE_VERSION
         {"BadUSB",       [=]() { ducky_setup(hid_usb, false); }   },
@@ -28,11 +26,20 @@ void OthersMenu::optionsMenu() {
 #ifndef LITE_VERSION
         {"iButton",      setup_ibutton                            },
 #endif
-        {"Timer",        [=]() { Timer(); }                       },
     };
     addOptionToMainMenu();
 
     loopOptions(options, MENU_TYPE_SUBMENU, "Others");
+}
+
+void OthersMenu::micMenu() {
+    options = {
+        {"Spectrum", mic_test                   },
+        {"Record",   mic_record_app             },
+        {"Back",     [this]() { optionsMenu(); }},
+    };
+
+    loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
 }
 
 void OthersMenu::drawIcon(float scale) {
