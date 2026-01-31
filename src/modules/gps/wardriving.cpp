@@ -226,6 +226,7 @@ void Wardriving::scanWiFiBLE() {
     FS *fs;
     if (!getFsStorage(fs)) {
         padprintln("Storage setup error");
+        displayError("Storage setup error", true);
         returnToMenu = true;
         return;
     }
@@ -240,6 +241,7 @@ void Wardriving::scanWiFiBLE() {
 
     if (!file) {
         padprintln("Failed to open file for writing");
+        displayError("Failed to open file for writing", true);
         returnToMenu = true;
         return;
     }
@@ -257,8 +259,15 @@ void Wardriving::scanWiFiBLE() {
     }
 
     padprintf("Coord: %.6f, %.6f\n", gps.location.lat(), gps.location.lng());
+    padprintln("Start Scanning...");
+
+    if (scanBLE && pBLEScan != nullptr && pBLEScan->isScanning()) {
+        pBLEScan->stop();
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
 
     int networksFound = scanWiFi ? scanWiFiNetworks() : 0;
+    int bleFound = 0;
     if (networksFound > 0) {
         for (int i = 0; i < networksFound; i++) {
             String macAddress = WiFi.BSSIDstr(i);
@@ -306,11 +315,12 @@ void Wardriving::scanWiFiBLE() {
         }
     }
     // Free scan results from heap as soon as we finish consuming them
-    if (scanWiFi) WiFi.scanDelete();
+    if (scanWiFi) {
+        WiFi.scanDelete();
+        vTaskDelay(120 / portTICK_PERIOD_MS);
+    }
 
-    NimBLEScan *pBleScan = nullptr;
     if (scanBLE) {
-        padprint("Scanning BLE...");
         if (!bleInitialized || pBLEScan == nullptr) {
             if (!BLEDevice::init("")) {
                 Serial.println(" Failed to init BLE");
@@ -324,27 +334,22 @@ void Wardriving::scanWiFiBLE() {
             pBLEScan->setWindow(SCAN_WINDOW);
             bleInitialized = true;
         }
-        pBleScan = pBLEScan;
-        if (pBleScan->isScanning()) {
-            pBleScan->stop();
+        if (pBLEScan->isScanning()) {
+            pBLEScan->stop();
             vTaskDelay(50 / portTICK_PERIOD_MS);
         }
 
         BLEScanResults foundDevices;
 
-        foundDevices = pBleScan->getResults(scanTime * 1000, false);
+        foundDevices = pBLEScan->getResults(scanTime * 1000, false);
 
         int count = foundDevices.getCount();
+        bleFound = count;
         if (count == 0) {
-            padprint(" Found None");
-            pBleScan->clearResults();
+            pBLEScan->clearResults();
             vTaskDelay(150 / portTICK_PERIOD_MS);
-            file.close();
-            return;
+            goto scan_summary;
         }
-
-        padprint(" Found: " + String(count) + " Devices   ");
-        padprintln("");
 
         // Bluetooth Rows
         // [BD_ADDR],[Device Name],[Capabilities],[First timestamp seen],[Channel],[Frequency],
@@ -417,8 +422,16 @@ void Wardriving::scanWiFiBLE() {
             if ((deviceIndex++ & 0x1F) == 0) vTaskDelay(1);
         }
 
-        pBleScan->clearResults();
+        pBLEScan->clearResults();
         vTaskDelay(20 / portTICK_PERIOD_MS);
+    }
+
+scan_summary:
+    if (scanWiFi || scanBLE) {
+        String summary = "Scan done.";
+        if (scanWiFi) summary += " WiFi: " + String(networksFound);
+        if (scanBLE) summary += " BLE: " + String(bleFound);
+        padprintln(summary);
     }
 
     file.close();
@@ -433,16 +446,8 @@ void Wardriving::enforceRegisteredMACLimit() {
 }
 
 int Wardriving::scanWiFiNetworks() {
-    padprint("Scanning Wi-Fi...");
     wifiConnected = true;
     int network_amount = WiFi.scanNetworks();
-    if (network_amount == 0) {
-        padprint(" Found: None");
-        return 0;
-    }
-    padprint(" Found: " + String(network_amount) + " Networks");
-    padprintln("");
-
     return network_amount;
 }
 
