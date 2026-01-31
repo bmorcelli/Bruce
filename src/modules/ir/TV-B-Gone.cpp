@@ -19,6 +19,9 @@ Distributed under Creative Commons 2.5 -- Attribution & Share Alike
 #include "core/utils.h"
 #include "ir_utils.h"
 #include <driver/rmt_tx.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 #include <vector>
 /*
 Last Updated: 30 Mar. 2018
@@ -279,9 +282,10 @@ void StartTvBGone() {
                 rawData[k * 2] = powerCode->times[ti] * 10;           // offtime * 10
                 rawData[(k * 2) + 1] = powerCode->times[ti + 1] * 10; // ontime * 10
             }
-            progressHandler(i, num_codes);
-            irsend.sendRaw(rawData, (numpairs * 2), freq);
+            tvbg_send_raw(rawData, (numpairs * 2), freq * 1000, 0.33f);
             bitsleft_r = 0;
+            unlock_ir_tx();
+            progressHandler(i, num_codes);
 
             // Wait 205ms between codes using NOP delays (keeps timing precise)
             delay_ten_us(20500);
