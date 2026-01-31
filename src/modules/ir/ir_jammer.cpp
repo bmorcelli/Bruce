@@ -21,6 +21,8 @@
 #include "ir_utils.h"
 #include <globals.h>
 #include <interface.h>
+#include <driver/rmt_tx.h>
+#include <vector>
 
 // Common IR remote control frequencies in Hz
 // Covers most consumer devices (30-56kHz range)
@@ -29,6 +31,90 @@ const int NUM_FREQS = sizeof(IR_FREQUENCIES) / sizeof(IR_FREQUENCIES[0]);
 
 // Human-readable mode names for display
 const char *IR_MODE_NAMES[] = {"BASIC", "ENH. BASIC", "SWEEP", "RANDOM", "EMPTY"};
+
+struct JamLevelDuration {
+    bool level = false;
+    uint16_t duration = 0;
+};
+
+static rmt_channel_handle_t jam_tx_chan = NULL;
+static rmt_encoder_handle_t jam_tx_encoder = NULL;
+static uint32_t jam_tx_freq_hz = 0;
+static float jam_tx_duty = -1.0f;
+
+static void jam_ensure_tx(uint32_t carrier_hz, float duty_cycle) {
+    if (jam_tx_chan == NULL) {
+        rmt_tx_channel_config_t tx_cfg = {};
+        tx_cfg.gpio_num = gpio_num_t(bruceConfigPins.irTx);
+        tx_cfg.clk_src = RMT_CLK_SRC_DEFAULT;
+        tx_cfg.resolution_hz = 1000000; // 1 tick = 1us
+        tx_cfg.mem_block_symbols = 64;
+        tx_cfg.trans_queue_depth = 1;
+        ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_cfg, &jam_tx_chan));
+        ESP_ERROR_CHECK(rmt_enable(jam_tx_chan));
+    }
+
+    if (jam_tx_encoder == NULL) {
+        rmt_copy_encoder_config_t encoder_cfg = {};
+        ESP_ERROR_CHECK(rmt_new_copy_encoder(&encoder_cfg, &jam_tx_encoder));
+    }
+
+    if (carrier_hz != jam_tx_freq_hz || duty_cycle != jam_tx_duty) {
+        rmt_carrier_config_t carrier_cfg = {};
+        carrier_cfg.frequency_hz = carrier_hz;
+        carrier_cfg.duty_cycle = duty_cycle;
+        carrier_cfg.flags.polarity_active_low = false;
+        ESP_ERROR_CHECK(rmt_apply_carrier(jam_tx_chan, &carrier_cfg));
+        jam_tx_freq_hz = carrier_hz;
+        jam_tx_duty = duty_cycle;
+    }
+}
+
+static void jam_append_level(std::vector<JamLevelDuration> &levels, bool level, uint32_t duration_us) {
+    while (duration_us > 0) {
+        uint16_t chunk = duration_us > 32767 ? 32767 : static_cast<uint16_t>(duration_us);
+        levels.push_back({level, chunk});
+        duration_us -= chunk;
+    }
+}
+
+static bool jam_send_raw(const uint16_t *durations, size_t count, uint32_t carrier_hz, float duty_cycle) {
+    if (durations == nullptr || count == 0) return false;
+
+    jam_ensure_tx(carrier_hz, duty_cycle);
+
+    std::vector<JamLevelDuration> levels;
+    bool level = true;
+    for (size_t i = 0; i < count; i++) {
+        jam_append_level(levels, level, durations[i]);
+        level = !level;
+    }
+
+    if (levels.size() % 2 != 0) levels.push_back({false, 1});
+
+    std::vector<rmt_symbol_word_t> symbols;
+    symbols.reserve((levels.size() + 1) / 2);
+    for (size_t i = 0; i < levels.size(); i += 2) {
+        rmt_symbol_word_t sym = {};
+        sym.level0 = levels[i].level;
+        sym.duration0 = levels[i].duration;
+        sym.level1 = levels[i + 1].level;
+        sym.duration1 = levels[i + 1].duration;
+        symbols.push_back(sym);
+    }
+
+    rmt_transmit_config_t tx_trans_cfg = {};
+    tx_trans_cfg.loop_count = 0;
+    ESP_ERROR_CHECK(rmt_transmit(
+        jam_tx_chan,
+        jam_tx_encoder,
+        symbols.data(),
+        symbols.size() * sizeof(rmt_symbol_word_t),
+        &tx_trans_cfg
+    ));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(jam_tx_chan, portMAX_DELAY));
+    return true;
+}
 
 /**
  * Initialize the jammer state with safe default values
@@ -370,12 +456,9 @@ void updateMaxSettings(JammerState &state) {
  *
  * @param irsend Reference to the IR transmitter object
  */
-void setupJammer(IRsend &irsend) {
+void setupJammer() {
     // Validate IR transmitter pin configuration
     checkIrTxPin();
-
-    // Initialize IR transmission library
-    irsend.begin();
 
     // Configure IR LED pin as output
     setup_ir_pin(bruceConfigPins.irTx, OUTPUT);
@@ -496,7 +579,7 @@ void updateStats(JammerState &state) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performJamming(JammerState &state, IRsend &irsend) {
+void performJamming(JammerState &state) {
     // Skip if jamming is paused
     if (!state.jamming_active) return;
 
@@ -509,11 +592,11 @@ void performJamming(JammerState &state, IRsend &irsend) {
 
         // Select appropriate jamming implementation based on mode
         switch (state.currentMode) {
-            case BASIC: performBasicJamming(state, irsend); break;
-            case ENHANCED_BASIC: performEnhancedBasicJamming(state, irsend); break;
-            case SWEEP: performSweepJamming(state, irsend); break;
-            case RANDOM: performRandomJamming(state, irsend); break;
-            case EMPTY: performEmptyJamming(state, irsend); break;
+            case BASIC: performBasicJamming(state); break;
+            case ENHANCED_BASIC: performEnhancedBasicJamming(state); break;
+            case SWEEP: performSweepJamming(state); break;
+            case RANDOM: performRandomJamming(state); break;
+            case EMPTY: performEmptyJamming(state); break;
         }
 
         // Update statistics after sending jam signals
@@ -528,7 +611,7 @@ void performJamming(JammerState &state, IRsend &irsend) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performBasicJamming(JammerState &state, IRsend &irsend) {
+void performBasicJamming(JammerState &state) {
     uint32_t currentMillis = millis();
 
     // Throttle transmission rate to prevent hardware overload
@@ -542,8 +625,9 @@ void performBasicJamming(JammerState &state, IRsend &irsend) {
             delayMicroseconds(state.markTiming);
         }
 
-        // Method 2: Use IR library for compatibility with different protocols
-        irsend.sendRaw(state.basicPattern, 20, getFrequency(state.current_freq_idx));
+        jam_send_raw(
+            state.basicPattern, 20, getFrequency(state.current_freq_idx), state.dutyCycle / 100.0f
+        );
         state.last_update = currentMillis;
     }
 }
@@ -555,7 +639,7 @@ void performBasicJamming(JammerState &state, IRsend &irsend) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performEnhancedBasicJamming(JammerState &state, IRsend &irsend) {
+void performEnhancedBasicJamming(JammerState &state) {
     uint32_t currentMillis = millis();
 
     // Throttle transmission rate
@@ -569,8 +653,9 @@ void performEnhancedBasicJamming(JammerState &state, IRsend &irsend) {
             delayMicroseconds(state.spaceTiming);
         }
 
-        // Method 2: Use IR library with custom pattern
-        irsend.sendRaw(state.basicPattern, 20, getFrequency(state.current_freq_idx));
+        jam_send_raw(
+            state.basicPattern, 20, getFrequency(state.current_freq_idx), state.dutyCycle / 100.0f
+        );
         state.last_update = currentMillis;
     }
 }
@@ -582,7 +667,7 @@ void performEnhancedBasicJamming(JammerState &state, IRsend &irsend) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performSweepJamming(JammerState &state, IRsend &irsend) {
+void performSweepJamming(JammerState &state) {
     uint32_t currentMillis = millis();
 
     // Faster update rate for smooth sweep
@@ -611,8 +696,9 @@ void performSweepJamming(JammerState &state, IRsend &irsend) {
             delayMicroseconds(state.markTiming);
         }
 
-        // Also use IR library for protocol compatibility
-        irsend.sendRaw(state.basicPattern, 20, getFrequency(state.current_freq_idx));
+        jam_send_raw(
+            state.basicPattern, 20, getFrequency(state.current_freq_idx), state.dutyCycle / 100.0f
+        );
         state.last_update = currentMillis;
     }
 }
@@ -624,7 +710,7 @@ void performSweepJamming(JammerState &state, IRsend &irsend) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performRandomJamming(JammerState &state, IRsend &irsend) {
+void performRandomJamming(JammerState &state) {
     uint32_t currentMillis = millis();
 
     // Slower update rate to allow for more random pattern generation
@@ -640,7 +726,9 @@ void performRandomJamming(JammerState &state, IRsend &irsend) {
             if (random(10) < 3) { state.current_freq_idx = random(NUM_FREQS); }
 
             // Send the random pattern at the selected frequency
-            irsend.sendRaw(state.randomPattern, 30, getFrequency(state.current_freq_idx));
+            jam_send_raw(
+                state.randomPattern, 30, getFrequency(state.current_freq_idx), state.dutyCycle / 100.0f
+            );
         }
 
         state.last_update = currentMillis;
@@ -654,14 +742,16 @@ void performRandomJamming(JammerState &state, IRsend &irsend) {
  * @param state Current jammer configuration
  * @param irsend IR transmitter interface
  */
-void performEmptyJamming(JammerState &state, IRsend &irsend) {
+void performEmptyJamming(JammerState &state) {
     uint32_t currentMillis = millis();
 
     // Medium update rate optimized for empty packet transmission
     if (currentMillis - state.last_update > 50) {
         // Send multiple empty packets at the current frequency
         for (int i = 0; i < state.jamDensity; i++) {
-            irsend.sendRaw(state.emptyPattern, 4, getFrequency(state.current_freq_idx));
+            jam_send_raw(
+                state.emptyPattern, 4, getFrequency(state.current_freq_idx), state.dutyCycle / 100.0f
+            );
         }
 
         // Occasionally change frequency (40% chance)
@@ -676,7 +766,7 @@ void performEmptyJamming(JammerState &state, IRsend &irsend) {
  *
  * @param irsend IR transmitter interface to reset
  */
-void cleanupJammer(IRsend &irsend) {
+void cleanupJammer() {
 
 #ifdef USE_BOOST /// ENABLE 5V OUTPUT
     PPM.disableOTG();
@@ -699,20 +789,17 @@ void startIrJammer() {
 #ifdef USE_BOOST /// ENABLE 5V OUTPUT
     PPM.enableOTG();
 #endif
-    // Initialize IR transmitter with configured pin
-    IRsend irsend(bruceConfigPins.irTx);
-
     // Initialize jammer state structure
     JammerState state;
 
     // Set up hardware and state
-    setupJammer(irsend);
+    setupJammer();
     initJammerState(state);
 
     // Main jammer loop - runs until ESC is pressed
     while (!check(EscPress)) {
         renderJammerUI(state);         // Update display
-        performJamming(state, irsend); // Execute jamming if active
+        performJamming(state); // Execute jamming if active
         handleJammerInput(state);      // Process user input
 
         // Small delay to prevent system overload
@@ -720,7 +807,7 @@ void startIrJammer() {
     }
 
     // Clean up when exiting
-    cleanupJammer(irsend);
+    cleanupJammer();
 }
 
 /**

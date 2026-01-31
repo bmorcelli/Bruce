@@ -18,9 +18,12 @@ Distributed under Creative Commons 2.5 -- Attribution & Share Alike
 #include "core/settings.h"
 #include "core/utils.h"
 #include "ir_utils.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/semphr.h>
+#include <driver/rmt_tx.h>
+#include <vector>
+/*
+Last Updated: 30 Mar. 2018
+By Anton Grimpelhuber (anton.grimpelhuber@gmail.com)
+*/
 
 // The TV-B-Gone for Arduino can use either the EU (European Union) or the NA (North America) database of
 // POWER CODES EU is for Europe, Middle East, Australia, New Zealand, and some countries in Africa and South
@@ -84,6 +87,90 @@ uint16_t ontime, offtime;
 uint8_t i, num_codes;
 uint8_t region;
 
+struct TvBgLevelDuration {
+    bool level = false;
+    uint16_t duration = 0;
+};
+
+static rmt_channel_handle_t tvbg_tx_chan = NULL;
+static rmt_encoder_handle_t tvbg_tx_encoder = NULL;
+static uint32_t tvbg_tx_freq_hz = 0;
+static float tvbg_tx_duty = -1.0f;
+
+static void tvbg_ensure_tx(uint32_t carrier_hz, float duty_cycle) {
+    if (tvbg_tx_chan == NULL) {
+        rmt_tx_channel_config_t tx_cfg = {};
+        tx_cfg.gpio_num = gpio_num_t(bruceConfigPins.irTx);
+        tx_cfg.clk_src = RMT_CLK_SRC_DEFAULT;
+        tx_cfg.resolution_hz = 1000000; // 1 tick = 1us
+        tx_cfg.mem_block_symbols = 64;
+        tx_cfg.trans_queue_depth = 1;
+        ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_cfg, &tvbg_tx_chan));
+        ESP_ERROR_CHECK(rmt_enable(tvbg_tx_chan));
+    }
+
+    if (tvbg_tx_encoder == NULL) {
+        rmt_copy_encoder_config_t encoder_cfg = {};
+        ESP_ERROR_CHECK(rmt_new_copy_encoder(&encoder_cfg, &tvbg_tx_encoder));
+    }
+
+    if (carrier_hz != tvbg_tx_freq_hz || duty_cycle != tvbg_tx_duty) {
+        rmt_carrier_config_t carrier_cfg = {};
+        carrier_cfg.frequency_hz = carrier_hz;
+        carrier_cfg.duty_cycle = duty_cycle;
+        carrier_cfg.flags.polarity_active_low = false;
+        ESP_ERROR_CHECK(rmt_apply_carrier(tvbg_tx_chan, &carrier_cfg));
+        tvbg_tx_freq_hz = carrier_hz;
+        tvbg_tx_duty = duty_cycle;
+    }
+}
+
+static void tvbg_append_level(std::vector<TvBgLevelDuration> &levels, bool level, uint32_t duration_us) {
+    while (duration_us > 0) {
+        uint16_t chunk = duration_us > 32767 ? 32767 : static_cast<uint16_t>(duration_us);
+        levels.push_back({level, chunk});
+        duration_us -= chunk;
+    }
+}
+
+static bool tvbg_send_raw(const uint16_t *durations, size_t count, uint32_t carrier_hz, float duty_cycle) {
+    if (durations == nullptr || count == 0) return false;
+
+    tvbg_ensure_tx(carrier_hz, duty_cycle);
+
+    std::vector<TvBgLevelDuration> levels;
+    bool level = true;
+    for (size_t i = 0; i < count; i++) {
+        tvbg_append_level(levels, level, durations[i]);
+        level = !level;
+    }
+
+    if (levels.size() % 2 != 0) levels.push_back({false, 1});
+
+    std::vector<rmt_symbol_word_t> symbols;
+    symbols.reserve((levels.size() + 1) / 2);
+    for (size_t i = 0; i < levels.size(); i += 2) {
+        rmt_symbol_word_t sym = {};
+        sym.level0 = levels[i].level;
+        sym.duration0 = levels[i].duration;
+        sym.level1 = levels[i + 1].level;
+        sym.duration1 = levels[i + 1].duration;
+        symbols.push_back(sym);
+    }
+
+    rmt_transmit_config_t tx_trans_cfg = {};
+    tx_trans_cfg.loop_count = 0;
+    ESP_ERROR_CHECK(rmt_transmit(
+        tvbg_tx_chan,
+        tvbg_tx_encoder,
+        symbols.data(),
+        symbols.size() * sizeof(rmt_symbol_word_t),
+        &tx_trans_cfg
+    ));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(tvbg_tx_chan, portMAX_DELAY));
+    return true;
+}
+
 // Microsecond delay using NOPs - keeps timing tight without blocking RTOS
 void delay_ten_us(uint16_t us) {
     uint8_t timer;
@@ -127,23 +214,17 @@ void checkIrTxPin() {
 bool init_ir_tx_mutex() {
     if (ir_tx_mutex == NULL) {
         ir_tx_mutex = xSemaphoreCreateMutex();
-        if (ir_tx_mutex == NULL) {
-            return false;
-        }
+        if (ir_tx_mutex == NULL) { return false; }
     }
     return true;
 }
 
 void lock_ir_tx() {
-    if (ir_tx_mutex != NULL) {
-        xSemaphoreTake(ir_tx_mutex, portMAX_DELAY);
-    }
+    if (ir_tx_mutex != NULL) { xSemaphoreTake(ir_tx_mutex, portMAX_DELAY); }
 }
 
 void unlock_ir_tx() {
-    if (ir_tx_mutex != NULL) {
-        xSemaphoreGive(ir_tx_mutex);
-    }
+    if (ir_tx_mutex != NULL) { xSemaphoreGive(ir_tx_mutex); }
 }
 
 void StartTvBGone() {
@@ -158,8 +239,6 @@ void StartTvBGone() {
     PPM.enableOTG();
 #endif
     checkIrTxPin();
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
     setup_ir_pin(bruceConfigPins.irTx, OUTPUT);
 
     // determine region
@@ -182,7 +261,7 @@ void StartTvBGone() {
         for (i = 0; i < num_codes; i++) {
             // Lock only during IR transmission - allows button checks to run while waiting
             lock_ir_tx();
-            
+
             if (region == NA) powerCode = NApowerCodes[i];
             else powerCode = EUpowerCodes[i];
 
@@ -197,28 +276,20 @@ void StartTvBGone() {
                 ti = (read_bits(bitcompression)) * 2;
 
                 // Direct calculation - skips temp variable for speed
-                rawData[k * 2] = powerCode->times[ti] * 10;        // offtime * 10
+                rawData[k * 2] = powerCode->times[ti] * 10;           // offtime * 10
                 rawData[(k * 2) + 1] = powerCode->times[ti + 1] * 10; // ontime * 10
             }
-
-            // Update progress every 5 codes instead of every code - reduces UI overhead
-            if (i % 5 == 0) {
-                progressHandler(i, num_codes);
-            }
-
+            progressHandler(i, num_codes);
             irsend.sendRaw(rawData, (numpairs * 2), freq);
-            unlock_ir_tx();  // Release mutex immediately so other tasks can run
             bitsleft_r = 0;
-            
+
             // Wait 205ms between codes using NOP delays (keeps timing precise)
             delay_ten_us(20500);
 
             // Check for user input - this can run freely since mutex is unlocked
             if (check(SelPress)) // Pause TV-B-Gone
             {
-                while (check(SelPress)) {
-                    vTaskDelay(10 / portTICK_PERIOD_MS);
-                }
+                while (check(SelPress)) { vTaskDelay(10 / portTICK_PERIOD_MS); }
                 displayTextLine("Paused");
 
                 while (!check(SelPress)) { // If Presses Select again, continues
@@ -228,9 +299,7 @@ void StartTvBGone() {
                     }
                     vTaskDelay(10 / portTICK_PERIOD_MS);
                 }
-                while (check(SelPress)) {
-                    vTaskDelay(10 / portTICK_PERIOD_MS);
-                }
+                while (check(SelPress)) { vTaskDelay(10 / portTICK_PERIOD_MS); }
                 if (endingEarly) break; // Cancels  TV-B-Gone
                 displayTextLine("Running, Wait");
             }

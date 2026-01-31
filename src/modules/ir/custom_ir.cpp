@@ -4,13 +4,228 @@
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
 #include "core/settings.h"
-#include "core/type_convertion.h"
 #include "ir_utils.h"
-#include <IRutils.h>
+#include <driver/rmt_tx.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <vector>
 
 uint32_t swap32(uint32_t value) {
     return ((value & 0x000000FF) << 24) | ((value & 0x0000FF00) << 8) | ((value & 0x00FF0000) >> 8) |
            ((value & 0xFF000000) >> 24);
+}
+
+static uint64_t reverseBits(uint64_t value, uint8_t nbits) {
+    uint64_t out = 0;
+    for (uint8_t i = 0; i < nbits; i++) {
+        out = (out << 1) | (value & 0x1);
+        value >>= 1;
+    }
+    return out;
+}
+
+struct LevelDuration {
+    bool level = false;
+    uint16_t duration = 0;
+};
+
+static rmt_channel_handle_t ir_tx_chan = NULL;
+static rmt_encoder_handle_t ir_tx_encoder = NULL;
+static uint32_t ir_tx_freq_hz = 0;
+static float ir_tx_duty = -1.0f;
+static bool ir_tx_invert = false;
+
+static void ensure_ir_tx(uint32_t carrier_hz, float duty_cycle, bool invert) {
+    if (ir_tx_chan == NULL) {
+        rmt_tx_channel_config_t tx_cfg = {};
+        tx_cfg.gpio_num = gpio_num_t(bruceConfigPins.irTx);
+        tx_cfg.clk_src = RMT_CLK_SRC_DEFAULT;
+        tx_cfg.resolution_hz = 1000000; // 1 tick = 1us
+        tx_cfg.mem_block_symbols = 64;
+        tx_cfg.trans_queue_depth = 1;
+        ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_cfg, &ir_tx_chan));
+        ESP_ERROR_CHECK(rmt_enable(ir_tx_chan));
+    }
+
+    if (ir_tx_encoder == NULL) {
+        rmt_copy_encoder_config_t encoder_cfg = {};
+        ESP_ERROR_CHECK(rmt_new_copy_encoder(&encoder_cfg, &ir_tx_encoder));
+    }
+
+    if (carrier_hz != ir_tx_freq_hz || duty_cycle != ir_tx_duty || invert != ir_tx_invert) {
+        rmt_carrier_config_t carrier_cfg = {};
+        carrier_cfg.frequency_hz = carrier_hz;
+        carrier_cfg.duty_cycle = duty_cycle;
+        carrier_cfg.flags.polarity_active_low = invert;
+        ESP_ERROR_CHECK(rmt_apply_carrier(ir_tx_chan, &carrier_cfg));
+        ir_tx_freq_hz = carrier_hz;
+        ir_tx_duty = duty_cycle;
+        ir_tx_invert = invert;
+    }
+}
+
+static void appendLevel(std::vector<LevelDuration> &levels, bool level, uint32_t duration_us) {
+    while (duration_us > 0) {
+        uint16_t chunk = duration_us > 32767 ? 32767 : static_cast<uint16_t>(duration_us);
+        levels.push_back({level, chunk});
+        duration_us -= chunk;
+    }
+}
+
+static std::vector<uint16_t> levelsToDurations(const std::vector<LevelDuration> &levels) {
+    std::vector<uint16_t> durations;
+    bool started = false;
+    for (const auto &entry : levels) {
+        if (!started) {
+            if (!entry.level) continue; // skip leading spaces
+            started = true;
+        }
+
+        if (durations.empty()) {
+            durations.push_back(entry.duration);
+            continue;
+        }
+
+        bool is_mark = entry.level;
+        bool last_is_mark = (durations.size() % 2 == 1);
+        if (is_mark == last_is_mark) {
+            uint32_t merged = durations.back() + entry.duration;
+            if (merged > 0xFFFF) merged = 0xFFFF;
+            durations.back() = static_cast<uint16_t>(merged);
+        } else {
+            durations.push_back(entry.duration);
+        }
+    }
+
+    if (durations.size() % 2 != 0) durations.push_back(1); // pad trailing space
+    return durations;
+}
+
+static bool rmtSendDurations(
+    const std::vector<uint16_t> &durations, uint32_t carrier_hz, float duty_cycle, bool invert = false
+) {
+    if (durations.empty()) return false;
+
+    ensure_ir_tx(carrier_hz, duty_cycle, invert);
+
+    std::vector<LevelDuration> levels;
+    bool lvl = true;
+    for (size_t i = 0; i < durations.size(); i++) {
+        appendLevel(levels, lvl, durations[i]);
+        lvl = !lvl;
+    }
+
+    if (levels.size() % 2 != 0) levels.push_back({false, 1});
+
+    std::vector<rmt_symbol_word_t> symbols;
+    symbols.reserve((levels.size() + 1) / 2);
+    for (size_t i = 0; i < levels.size(); i += 2) {
+        rmt_symbol_word_t sym = {};
+        sym.level0 = levels[i].level;
+        sym.duration0 = levels[i].duration;
+        sym.level1 = levels[i + 1].level;
+        sym.duration1 = levels[i + 1].duration;
+        symbols.push_back(sym);
+    }
+
+    rmt_transmit_config_t tx_trans_cfg = {};
+    tx_trans_cfg.loop_count = 0;
+    ESP_ERROR_CHECK(rmt_transmit(
+        ir_tx_chan,
+        ir_tx_encoder,
+        symbols.data(),
+        symbols.size() * sizeof(rmt_symbol_word_t),
+        &tx_trans_cfg
+    ));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(ir_tx_chan, portMAX_DELAY));
+
+    return true;
+}
+
+static uint32_t parseHexString(String value) {
+    value.replace(" ", "");
+    if (value.isEmpty()) return 0;
+    return strtoul(value.c_str(), nullptr, 16);
+}
+
+static std::vector<uint16_t> buildPulseDistanceTimings(
+    uint64_t data, uint8_t nbits, const IRProtocolInfo &spec
+) {
+    std::vector<uint16_t> out;
+    if (spec.header_mark) {
+        out.push_back(spec.header_mark);
+        out.push_back(spec.header_space);
+    }
+
+    for (uint8_t i = 0; i < nbits; i++) {
+        uint8_t shift = spec.lsb_first ? i : (nbits - 1 - i);
+        bool bit = (data >> shift) & 0x1;
+        uint16_t mark = spec.one_mark ? spec.one_mark : spec.zero_mark;
+        out.push_back(mark);
+        out.push_back(bit ? spec.one_space : spec.zero_space);
+    }
+
+    if (spec.trailer_mark) {
+        out.push_back(spec.trailer_mark);
+        if (spec.trailer_space) out.push_back(spec.trailer_space);
+    }
+
+    if (out.size() % 2 != 0) out.push_back(1);
+    return out;
+}
+
+static std::vector<uint16_t> buildPulseWidthTimings(
+    uint64_t data, uint8_t nbits, const IRProtocolInfo &spec
+) {
+    std::vector<uint16_t> out;
+    if (spec.header_mark) {
+        out.push_back(spec.header_mark);
+        out.push_back(spec.header_space);
+    }
+
+    for (uint8_t i = 0; i < nbits; i++) {
+        uint8_t shift = spec.lsb_first ? i : (nbits - 1 - i);
+        bool bit = (data >> shift) & 0x1;
+        out.push_back(bit ? spec.one_mark : spec.zero_mark);
+        out.push_back(spec.zero_space);
+    }
+
+    if (spec.trailer_mark) {
+        out.push_back(spec.trailer_mark);
+        if (spec.trailer_space) out.push_back(spec.trailer_space);
+    }
+
+    if (out.size() % 2 != 0) out.push_back(1);
+    return out;
+}
+
+static void appendManchester(std::vector<LevelDuration> &levels, bool bit, uint16_t unit) {
+    if (bit) {
+        appendLevel(levels, true, unit);
+        appendLevel(levels, false, unit);
+    } else {
+        appendLevel(levels, false, unit);
+        appendLevel(levels, true, unit);
+    }
+}
+
+static std::vector<uint16_t> buildBiphaseTimings(
+    const std::vector<bool> &bits, uint16_t unit, bool double_toggle = false, int toggle_index = -1,
+    uint16_t header_mark = 0, uint16_t header_space = 0
+) {
+    std::vector<LevelDuration> levels;
+    if (header_mark) {
+        appendLevel(levels, true, header_mark);
+        appendLevel(levels, false, header_space);
+    }
+
+    for (size_t i = 0; i < bits.size(); i++) {
+        uint16_t bit_unit = unit;
+        if (double_toggle && static_cast<int>(i) == toggle_index) bit_unit = unit * 2;
+        appendManchester(levels, bits[i], bit_unit);
+    }
+
+    return levelsToDurations(levels);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,23 +505,25 @@ void sendIRCommand(IRCode *code, bool hideDefaultUI) {
         sendSonyCommand(code->address, code->command, 20, hideDefaultUI);
     else if (code->protocol.equalsIgnoreCase("Kaseikyo"))
         sendKaseikyoCommand(code->address, code->command, hideDefaultUI);
-    // Others protocols of IRRemoteESP8266, not related to Flipper Zero IR File Format
-    else if (code->protocol != "" && code->data != "" &&
-             strToDecodeType(code->protocol.c_str()) != decode_type_t::UNKNOWN)
-        sendDecodedCommand(code->protocol, code->data, code->bits, hideDefaultUI);
+    else sendDecodedCommand(code->protocol, code->data, code->bits, hideDefaultUI);
 }
 
 void sendNECCommand(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "NEC", IREncodingType::PulseDistance, 38000, 0.33f, 9000, 4500, 560, 1690, 560, 560, 560, 0, true, 0, 32
+    };
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
     uint16_t addressValue = strtoul(address.substring(0, 2).c_str(), nullptr, 16);
     uint16_t commandValue = strtoul(command.substring(0, 2).c_str(), nullptr, 16);
-    uint64_t data = irsend.encodeNEC(addressValue, commandValue);
-    irsend.sendNEC(data, 32);
+    uint32_t data = (addressValue & 0xFF) | ((~addressValue & 0xFF) << 8) |
+                    ((commandValue & 0xFF) << 16) | ((~commandValue & 0xFF) << 24);
+    std::vector<uint16_t> timings = buildPulseDistanceTimings(data, spec.nbits, spec);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendNEC(data, 32); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -319,8 +536,22 @@ void sendNECCommand(String address, String command, bool hideDefaultUI) {
 }
 
 void sendNECextCommand(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "NECext",
+        IREncodingType::PulseDistance,
+        38000,
+        0.33f,
+        9000,
+        4500,
+        560,
+        1690,
+        560,
+        560,
+        560,
+        0,
+        true,
+        0,
+        32};
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
 
     int first_zero_byte_pos = address.indexOf("00", 2);
@@ -343,10 +574,13 @@ void sendNECextCommand(String address, String command, bool hideDefaultUI) {
     uint16_t lsbCommand = reverseBits(newCommand, 16);
 
     uint32_t data = ((uint32_t)lsbAddress << 16) | lsbCommand;
-    irsend.sendNEC(data, 32); // Sends MSB first
+    std::vector<uint16_t> timings = buildPulseDistanceTimings(data, spec.nbits, spec);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendNEC(data, 32); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -358,16 +592,29 @@ void sendNECextCommand(String address, String command, bool hideDefaultUI) {
 }
 
 void sendRC5Command(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx, true); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {"RC5", IREncodingType::Biphase, 36000, 0.33f, 0, 0, 0, 0, 0, 0, 0, 0, false, 889, 14};
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
     uint8_t addressValue = strtoul(address.substring(0, 2).c_str(), nullptr, 16);
     uint8_t commandValue = strtoul(command.substring(0, 2).c_str(), nullptr, 16);
-    uint16_t data = irsend.encodeRC5(addressValue, commandValue);
-    irsend.sendRC5(data, 13);
+
+    bool field = commandValue <= 0x3F;
+    uint8_t rc5_command = commandValue & 0x3F;
+
+    std::vector<bool> bits;
+    bits.push_back(true);
+    bits.push_back(true);
+    bits.push_back(false); // toggle bit (static)
+    bits.push_back(field);
+    for (int i = 4; i >= 0; i--) bits.push_back((addressValue >> i) & 0x1);
+    for (int i = 5; i >= 0; i--) bits.push_back((rc5_command >> i) & 0x1);
+
+    std::vector<uint16_t> timings = buildBiphaseTimings(bits, spec.unit);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendRC5(data, 13); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
     Serial.println(
         "Sent RC5 Command" + (bruceConfigPins.irTxRepeats > 0
@@ -378,19 +625,45 @@ void sendRC5Command(String address, String command, bool hideDefaultUI) {
 }
 
 void sendRC6Command(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx, true); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "RC6",
+        IREncodingType::Biphase,
+        36000,
+        0.33f,
+        2666,
+        889,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        false,
+        444,
+        20};
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
     address.replace(" ", "");
     command.replace(" ", "");
     uint32_t addressValue = strtoul(address.substring(0, 2).c_str(), nullptr, 16);
     uint32_t commandValue = strtoul(command.substring(0, 2).c_str(), nullptr, 16);
-    uint64_t data = irsend.encodeRC6(addressValue, commandValue);
 
-    irsend.sendRC6(data, 20);
+    std::vector<bool> bits;
+    // RC6-0: mode bits 000, toggle bit, address (8), command (8)
+    bits.push_back(false);
+    bits.push_back(false);
+    bits.push_back(false);
+    bits.push_back(false); // toggle bit (static)
+    for (int i = 7; i >= 0; i--) bits.push_back((addressValue >> i) & 0x1);
+    for (int i = 7; i >= 0; i--) bits.push_back((commandValue >> i) & 0x1);
+
+    std::vector<uint16_t> timings =
+        buildBiphaseTimings(bits, spec.unit, true, 3, spec.header_mark, spec.header_space);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendRC6(data, 20); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -402,17 +675,31 @@ void sendRC6Command(String address, String command, bool hideDefaultUI) {
 }
 
 void sendSamsungCommand(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "Samsung32", IREncodingType::PulseDistance, 38000, 0.33f, 4500, 4500, 560, 1690, 560, 560, 560, 0, true, 0, 32
+    };
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
-    uint8_t addressValue = strtoul(address.substring(0, 2).c_str(), nullptr, 16);
-    uint8_t commandValue = strtoul(command.substring(0, 2).c_str(), nullptr, 16);
-    uint64_t data = irsend.encodeSAMSUNG(addressValue, commandValue);
+    String address_clean = address;
+    String command_clean = command;
+    address_clean.replace(" ", "");
+    command_clean.replace(" ", "");
 
-    irsend.sendSAMSUNG(data, 32);
+    uint32_t addressValue = parseHexString(address);
+    uint32_t commandValue = parseHexString(command);
+
+    uint16_t address16 =
+        (address_clean.length() > 2) ? (addressValue & 0xFFFF) : ((addressValue & 0xFF) << 8) | (addressValue & 0xFF);
+    uint16_t command16 =
+        (command_clean.length() > 2) ? (commandValue & 0xFFFF) : ((commandValue & 0xFF) << 8) | (commandValue & 0xFF);
+
+    uint32_t data = (uint32_t)address16 | ((uint32_t)command16 << 16);
+    std::vector<uint16_t> timings = buildPulseDistanceTimings(data, spec.nbits, spec);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendSAMSUNG(data, 32); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -424,8 +711,9 @@ void sendSamsungCommand(String address, String command, bool hideDefaultUI) {
 }
 
 void sendSonyCommand(String address, String command, uint8_t nbits, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "SIRC", IREncodingType::PulseWidth, 40000, 0.33f, 2400, 600, 1200, 0, 600, 600, 0, 0, true, 0, nbits
+    };
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
 
     address.replace(" ", "");
@@ -456,11 +744,13 @@ void sendSonyCommand(String address, String command, uint8_t nbits, bool hideDef
     // SIRC protocol bit order is LSB First
     data = reverseBits(data, nbits);
 
-    // 1 initial + 2 repeat
-    irsend.sendSony(data, nbits, 2); // Sends MSB First
+    std::vector<uint16_t> timings = buildPulseWidthTimings(data, nbits, spec);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendSony(data, nbits, 2); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -472,8 +762,22 @@ void sendSonyCommand(String address, String command, uint8_t nbits, bool hideDef
 }
 
 void sendKaseikyoCommand(String address, String command, bool hideDefaultUI) {
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
+    const IRProtocolInfo spec = {
+        "Kaseikyo",
+        IREncodingType::PulseDistance,
+        37000,
+        0.33f,
+        3400,
+        1750,
+        500,
+        1300,
+        500,
+        400,
+        500,
+        0,
+        true,
+        0,
+        48};
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
 
     address.replace(" ", "");
@@ -511,10 +815,13 @@ void sendKaseikyoCommand(String address, String command, bool hideDefaultUI) {
     // LSB First --> MSB First
     uint64_t msb_data = reverseBits(lsb_data, 48);
 
-    irsend.sendPanasonic64(msb_data, 48); // Sends MSB First
+    std::vector<uint16_t> timings = buildPulseDistanceTimings(msb_data, spec.nbits, spec);
+    rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
 
     if (bruceConfigPins.irTxRepeats > 0) {
-        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.sendPanasonic64(msb_data, 48); }
+        for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
+            rmtSendDurations(timings, spec.carrier_hz, spec.duty_cycle);
+        }
     }
 
     Serial.println(
@@ -526,62 +833,12 @@ void sendKaseikyoCommand(String address, String command, bool hideDefaultUI) {
 }
 
 bool sendDecodedCommand(String protocol, String value, uint8_t bits, bool hideDefaultUI) {
-    // https://github.com/crankyoldgit/IRremoteESP8266/blob/master/examples/SmartIRRepeater/SmartIRRepeater.ino
-#if !defined(LITE_VERSION)
-    decode_type_t type = strToDecodeType(protocol.c_str());
-    if (type == decode_type_t::UNKNOWN) return false;
-
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
-    bool success = false;
-    if (!hideDefaultUI) { displayTextLine("Sending.."); }
-
-    if (hasACState(type)) {
-        // need to send the state (still passed from value)
-        uint8_t state[bits / 8] = {0};
-        uint16_t state_pos = 0;
-        for (uint16_t i = 0; i < value.length(); i += 3) {
-            // parse  value -> state
-            uint8_t highNibble = hexCharToDecimal(value[i]);
-            uint8_t lowNibble = hexCharToDecimal(value[i + 1]);
-            state[state_pos] = (highNibble << 4) | lowNibble;
-            state_pos++;
-        }
-        // success = irsend.send(type, state, bits / 8);
-        success = irsend.send(type, state, state_pos); // safer
-
-        if (bruceConfigPins.irTxRepeats > 0) {
-            for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
-                irsend.send(type, state, state_pos);
-            }
-        }
-
-    } else {
-        value.replace(" ", "");
-        uint64_t value_int = strtoull(value.c_str(), nullptr, 16);
-
-        success =
-            irsend.send(type, value_int, bits); // bool send(const decode_type_t type, const uint64_t data,
-                                                // const uint16_t nbits, const uint16_t repeat = kNoRepeat);
-
-        if (bruceConfigPins.irTxRepeats > 0) {
-            for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) { irsend.send(type, value_int, bits); }
-        }
-    }
-
-    delay(20);
-    Serial.println(
-        "Sent Decoded Command" + (bruceConfigPins.irTxRepeats > 0
-                                      ? " (1 initial + " + String(bruceConfigPins.irTxRepeats) + " repeats)"
-                                      : "")
-    );
-    digitalWrite(bruceConfigPins.irTx, LED_OFF);
-    return success;
-#else
-    if (!hideDefaultUI) { displayTextLine("Unavailable on this Version"); }
-    delay(1000);
+    (void)protocol;
+    (void)value;
+    (void)bits;
+    if (!hideDefaultUI) { displayTextLine("Protocol not supported"); }
+    delay(500);
     return false;
-#endif
 }
 
 void sendRawCommand(uint16_t frequency, String rawData, bool hideDefaultUI) {
@@ -589,8 +846,6 @@ void sendRawCommand(uint16_t frequency, String rawData, bool hideDefaultUI) {
     PPM.enableOTG();
 #endif
 
-    IRsend irsend(bruceConfigPins.irTx); // Set the GPIO to be used to sending the message.
-    irsend.begin();
     if (!hideDefaultUI) { displayTextLine("Sending.."); }
 
     uint16_t dataBufferSize = 1;
@@ -614,12 +869,15 @@ void sendRawCommand(uint16_t frequency, String rawData, bool hideDefaultUI) {
     // Serial.println(dataBuffer[count-1]);
     // Serial.println(dataBuffer[0]);
 
-    // Send raw command
-    irsend.sendRaw(dataBuffer, count, frequency);
+    std::vector<uint16_t> timings;
+    timings.reserve(count);
+    for (uint16_t i = 0; i < count; i++) timings.push_back(dataBuffer[i]);
+    if (timings.size() % 2 != 0) timings.push_back(1);
+    rmtSendDurations(timings, frequency, 0.33f);
 
     if (bruceConfigPins.irTxRepeats > 0) {
         for (uint8_t i = 1; i <= bruceConfigPins.irTxRepeats; i++) {
-            irsend.sendRaw(dataBuffer, count, frequency);
+            rmtSendDurations(timings, frequency, 0.33f);
         }
     }
 

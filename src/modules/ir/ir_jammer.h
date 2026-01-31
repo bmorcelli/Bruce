@@ -1,14 +1,10 @@
 /**
  * IR Jammer Header File
- * Defines the structure and functions for IR signal jamming operations
- * on ESP8266-based hardware with IRremoteESP8266 library.
+ * Defines the structure and functions for IR signal jamming operations.
  */
 
 #include <Arduino.h>
 #include <FS.h>
-#include <IRremoteESP8266.h>
-#include <IRsend.h>
-#include <IRutils.h>
 #include <SD.h>
 #include <globals.h>
 
@@ -69,9 +65,8 @@ void initJammerState(JammerState &state);
 
 /**
  * Configure hardware for IR transmission
- * @param irsend Reference to IRsend object that controls the IR LED
  */
-void setupJammer(IRsend &irsend);
+void setupJammer();
 
 /**
  * Display the jammer interface on the device screen
@@ -88,44 +83,38 @@ void handleJammerInput(JammerState &state);
 /**
  * Execute the currently selected jamming mode
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performJamming(JammerState &state, IRsend &irsend);
+void performJamming(JammerState &state);
 
 /**
  * Implement basic jamming mode with fixed timing
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performBasicJamming(JammerState &state, IRsend &irsend);
+void performBasicJamming(JammerState &state);
 
 /**
  * Implement enhanced jamming with independent mark/space timing
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performEnhancedBasicJamming(JammerState &state, IRsend &irsend);
+void performEnhancedBasicJamming(JammerState &state);
 
 /**
  * Implement jamming with continuously varying timing values
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performSweepJamming(JammerState &state, IRsend &irsend);
+void performSweepJamming(JammerState &state);
 
 /**
  * Implement jamming with randomized patterns
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performRandomJamming(JammerState &state, IRsend &irsend);
+void performRandomJamming(JammerState &state);
 
 /**
  * Implement jamming with minimal empty packets
  * @param state Current jammer configuration
- * @param irsend IR transmitter interface
  */
-void performEmptyJamming(JammerState &state, IRsend &irsend);
+void performEmptyJamming(JammerState &state);
 
 /**
  * Update pattern arrays based on current settings
@@ -135,9 +124,8 @@ void updatePatterns(JammerState &state);
 
 /**
  * Clean up resources when exiting jammer mode
- * @param irsend IR transmitter interface to reset
  */
-void cleanupJammer(IRsend &irsend);
+void cleanupJammer();
 
 /**
  * Update the maxSettings value based on the current mode

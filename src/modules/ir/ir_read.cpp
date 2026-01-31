@@ -13,14 +13,61 @@
 #include "core/sd_functions.h"
 #include "core/settings.h"
 #include "ir_utils.h"
-#include <IRrecv.h>
-#include <IRutils.h>
 #include <globals.h>
+#include <driver/rmt_rx.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <assert.h>
+#include <vector>
 
 /* Dont touch this */
 // #define MAX_RAWBUF_SIZE 300
 #define IR_FREQUENCY 38000
 #define DUTY_CYCLE 0.330000
+
+static String build_raw_from_rx(const rmt_rx_done_event_data_t &rx_data) {
+    std::vector<uint16_t> durations;
+    durations.reserve(rx_data.num_symbols * 2);
+
+    auto append_duration = [&](bool level, uint16_t duration) {
+        if (duration == 0) return;
+        if (durations.empty() && !level) return; // skip leading spaces
+
+        bool last_is_mark = (durations.size() % 2 == 1);
+        if (!durations.empty() && level == last_is_mark) {
+            uint32_t merged = durations.back() + duration;
+            if (merged > 0xFFFF) merged = 0xFFFF;
+            durations.back() = static_cast<uint16_t>(merged);
+        } else {
+            durations.push_back(duration);
+        }
+    };
+
+    for (size_t i = 0; i < rx_data.num_symbols; i++) {
+        const rmt_symbol_word_t &sym = rx_data.received_symbols[i];
+        append_duration(sym.level0, sym.duration0);
+        append_duration(sym.level1, sym.duration1);
+    }
+
+    if (durations.size() % 2 != 0) durations.push_back(1);
+
+    String signal_code = "";
+    for (size_t i = 0; i < durations.size(); i++) {
+        signal_code += String(durations[i]);
+        if (i + 1 < durations.size()) signal_code += " ";
+    }
+    signal_code.trim();
+    return signal_code;
+}
+
+static bool ir_rmt_rx_done_callback(
+    rmt_channel_t *channel, const rmt_rx_done_event_data_t *edata, void *user_data
+) {
+    BaseType_t high_task_wakeup = pdFALSE;
+    QueueHandle_t receive_queue = (QueueHandle_t)user_data;
+    xQueueSendFromISR(receive_queue, edata, &high_task_wakeup);
+    return high_task_wakeup == pdTRUE;
+}
 
 String uint32ToString(uint32_t value) {
     char buffer[12] = {0}; // 8 hex digits + 3 spaces + 1 null terminator
@@ -58,8 +105,6 @@ IrRead::IrRead(bool headless_mode, bool raw_mode) {
 bool quickloop = false;
 
 void IrRead::setup() {
-    irrecv.enableIRIn();
-
 #ifdef USE_BOOST /// ENABLE 5V OUTPUT
     PPM.enableOTG();
 #endif
@@ -72,6 +117,7 @@ void IrRead::setup() {
     if (count == 0) gsetIrRxPin(true); // Open dialog to choose irRx pin
 
     setup_ir_pin(bruceConfigPins.irRx, INPUT_PULLUP);
+    init_rx();
     if (headless) return;
     // else
     returnToMenu = true; // make sure menu is redrawn when quitting in any point
@@ -125,6 +171,7 @@ void IrRead::loop() {
 #ifdef USE_BOOST /// DISABLE 5V OUTPUT
             PPM.disableOTG();
 #endif
+            deinit_rx();
             break;
         }
         if (check(NextPress)) save_signal();
@@ -181,8 +228,12 @@ void IrRead::display_btn_options() {
 }
 
 void IrRead::read_signal() {
-    if (_read_signal || !irrecv.decode(&results)) return;
+    if (_read_signal || rx_queue == NULL) return;
 
+    rmt_rx_done_event_data_t rx_data;
+    if (xQueueReceive(rx_queue, &rx_data, 0) != pdPASS) return;
+
+    last_raw_signal = build_raw_from_rx(rx_data);
     _read_signal = true;
 
     // Always switches to RAW data, regardless of the decoding result
@@ -203,7 +254,7 @@ void IrRead::read_signal() {
 
 void IrRead::discard_signal() {
     if (!_read_signal) return;
-    irrecv.resume();
+    restart_rx();
     begin();
 }
 
@@ -221,113 +272,63 @@ void IrRead::save_signal() {
     delay(100);
 }
 
-String IrRead::parse_state_signal() {
-    String r = "";
-    uint16_t state_len = (results.bits) / 8;
-    for (uint16_t i = 0; i < state_len; i++) {
-        // r += uint64ToString(results.state[i], 16) + " ";
-        r += ((results.state[i] < 0x10) ? "0" : ""); // adds 0 padding if necessary
-        r += String(results.state[i], HEX) + " ";
-    }
-    r.toUpperCase();
-    return r;
+String IrRead::parse_raw_signal() {
+    return last_raw_signal;
 }
 
-String IrRead::parse_raw_signal() {
+void IrRead::init_rx() {
+    if (rx_channel != NULL) return;
 
-    rawcode = resultToRawArray(&results);
-    raw_data_len = getCorrectedRawLength(&results);
+    rmt_rx_channel_config_t rx_channel_cfg = {};
+    rx_channel_cfg.gpio_num = gpio_num_t(bruceConfigPins.irRx);
+    rx_channel_cfg.clk_src = RMT_CLK_SRC_DEFAULT;
+    rx_channel_cfg.resolution_hz = 1000000; // 1 tick = 1us
+    rx_channel_cfg.mem_block_symbols = 64;
+    rx_channel_cfg.intr_priority = 0;
+    rx_channel_cfg.flags.invert_in = true;  // IR demodulators are typically active-low
+    rx_channel_cfg.flags.with_dma = false;
+    rx_channel_cfg.flags.allow_pd = false;
+    rx_channel_cfg.flags.io_loop_back = false;
 
-    String signal_code = "";
+    ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
 
-    for (uint16_t i = 0; i < raw_data_len; i++) { signal_code += String(rawcode[i]) + " "; }
+    rx_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
+    assert(rx_queue);
 
-    delete[] rawcode;
-    rawcode = nullptr;
-    signal_code.trim();
+    rmt_rx_event_callbacks_t cbs = {
+        .on_recv_done = ir_rmt_rx_done_callback,
+    };
+    ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, rx_queue));
+    ESP_ERROR_CHECK(rmt_enable(rx_channel));
 
-    return signal_code;
+    rx_config.signal_range_min_ns = 1000;      // 1us
+    rx_config.signal_range_max_ns = 30000000;  // 30ms
+    restart_rx();
+}
+
+void IrRead::restart_rx() {
+    if (rx_channel == NULL) return;
+    ESP_ERROR_CHECK(rmt_receive(rx_channel, rx_buffer, sizeof(rx_buffer), &rx_config));
+    _read_signal = false;
+}
+
+void IrRead::deinit_rx() {
+    if (rx_channel == NULL) return;
+    rmt_disable(rx_channel);
+    rmt_del_channel(rx_channel);
+    rx_channel = NULL;
+    if (rx_queue != NULL) {
+        vQueueDelete(rx_queue);
+        rx_queue = NULL;
+    }
 }
 
 void IrRead::append_to_file_str(String btn_name) {
     strDeviceContent += "name: " + btn_name + "\n";
-
-    if (raw) {
-        strDeviceContent += "type: raw\n";
-        strDeviceContent += "frequency: " + String(IR_FREQUENCY) + "\n";
-        strDeviceContent += "duty_cycle: " + String(DUTY_CYCLE) + "\n";
-        strDeviceContent += "data: " + parse_raw_signal() + "\n";
-    } else {
-        // parsed signal  https://github.com/jamisonderek/flipper-zero-tutorials/wiki/Infrared
-        strDeviceContent += "type: parsed\n";
-        switch (results.decode_type) {
-            case decode_type_t::RC5: {
-                if (results.command > 0x3F) strDeviceContent += "protocol: RC5X\n";
-                else strDeviceContent += "protocol: RC5\n";
-                break;
-            }
-            case decode_type_t::RC6: {
-                strDeviceContent += "protocol: RC6\n";
-                break;
-            }
-            case decode_type_t::SAMSUNG: {
-                strDeviceContent += "protocol: Samsung32\n";
-                break;
-            }
-            case decode_type_t::SONY: {
-                // check address and command ranges to find the exact protocol
-                if (results.address > 0xFF) strDeviceContent += "protocol: SIRC20\n";
-                else if (results.address > 0x1F) strDeviceContent += "protocol: SIRC15\n";
-                else strDeviceContent += "protocol: SIRC\n";
-                break;
-            }
-            case decode_type_t::NEC: {
-                // check address and command ranges to find the exact protocol
-                if (results.address > 0xFFFF) strDeviceContent += "protocol: NEC42ext\n";
-                else if (results.address > 0xFF1F) strDeviceContent += "protocol: NECext\n";
-                else if (results.address > 0xFF) strDeviceContent += "protocol: NEC42\n";
-                else strDeviceContent += "protocol: NEC\n";
-                break;
-            }
-            case decode_type_t::UNKNOWN: {
-                Serial.print("unknown protocol, try raw mode");
-                return;
-            }
-            default: {
-                strDeviceContent += "protocol: " + typeToString(results.decode_type, results.repeat) + "\n";
-                break;
-            }
-        }
-
-        strDeviceContent += "address: " + uint32ToString(results.address) + "\n";
-        strDeviceContent += "command: " + uint32ToString(results.command) + "\n";
-
-        // extra fields not supported on flipper
-        strDeviceContent += "bits: " + String(results.bits) + "\n";
-        if (hasACState(results.decode_type)) strDeviceContent += "state: " + parse_state_signal() + "\n";
-        else if (results.bits > 32)
-            strDeviceContent += "value: " + uint32ToString(results.value) + " " +
-                                uint32ToString(results.value >> 32) + "\n"; // MEMO: from uint64_t
-        else strDeviceContent += "value: " + uint32ToStringInverted(results.value) + "\n";
-
-        /*
-        Serial.println(results.bits);
-        Serial.println(results.address);
-        Serial.println(results.command);
-        Serial.println(results.overflow);
-        Serial.println(results.repeat);
-        Serial.println("value:");
-        serialPrintUint64(results.address, HEX);
-        serialPrintUint64(results.command, HEX);
-        Serial.print("resultToHexidecimal: ");
-        Serial.println(resultToHexidecimal(&results));
-        Serial.println(results.value);
-        String value = uint32ToString(results.value ) + " " + uint32ToString(results.value>> 32);
-        value.replace(" ", "");
-        uint64_t value_int = strtoull(value.c_str(), nullptr, 16);
-        Serial.println(value_int);
-        */
-    }
+    strDeviceContent += "type: raw\n";
+    strDeviceContent += "frequency: " + String(IR_FREQUENCY) + "\n";
+    strDeviceContent += "duty_cycle: " + String(DUTY_CYCLE) + "\n";
+    strDeviceContent += "data: " + parse_raw_signal() + "\n";
     strDeviceContent += "#\n";
 }
 
@@ -365,31 +366,27 @@ void IrRead::save_device() {
 
     delay(1000);
 
-    irrecv.resume();
+    restart_rx();
     begin();
 }
 
 String IrRead::loop_headless(int max_loops) {
-
-    while (!irrecv.decode(&results)) { // MEMO: default timeout is 15ms
+    if (rx_queue == NULL) init_rx();
+    rmt_rx_done_event_data_t rx_data;
+    while (xQueueReceive(rx_queue, &rx_data, pdMS_TO_TICKS(1000)) != pdPASS) {
         max_loops -= 1;
         if (max_loops <= 0) {
             Serial.println("timeout");
-            return ""; // nothing received
+            return "";
         }
-        delay(1000);
-        // delay(50);
     }
 
-    irrecv.disableIRIn();
+    raw = true;
+    last_raw_signal = build_raw_from_rx(rx_data);
 
-    if (!raw && results.decode_type == decode_type_t::UNKNOWN) {
-        Serial.println("# decoding failed, try raw mode");
-        return "";
+    if (rx_data.num_symbols >= (sizeof(rx_buffer) / sizeof(rx_buffer[0])) - 1) {
+        displayWarning("buffer overflow, data may be truncated", true);
     }
-
-    if (results.overflow) displayWarning("buffer overflow, data may be truncated", true);
-    // TODO: check results.repeat
 
     String r = "Filetype: IR signals file\n";
     r += "Version: 1\n";
@@ -400,6 +397,7 @@ String IrRead::loop_headless(int max_loops) {
     append_to_file_str("Unknown"); // writes on strDeviceContent
     r += strDeviceContent;
 
+    restart_rx();
     return r;
 }
 

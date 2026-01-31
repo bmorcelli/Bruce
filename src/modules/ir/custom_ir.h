@@ -1,8 +1,6 @@
 
 #include <Arduino.h>
 #include <FS.h>
-#include <IRremoteESP8266.h>
-#include <IRsend.h>
 #include <SD.h>
 #include <globals.h>
 
@@ -35,6 +33,30 @@ struct IRCode {
     uint16_t frequency = 0;
     // float duty_cycle;
     String filepath = "";
+};
+
+enum class IREncodingType : uint8_t {
+    PulseDistance,
+    PulseWidth,
+    Biphase,
+};
+
+struct IRProtocolInfo {
+    const char *name = "";
+    IREncodingType encoding = IREncodingType::PulseDistance;
+    uint32_t carrier_hz = 38000;
+    float duty_cycle = 0.33f;
+    uint16_t header_mark = 0;
+    uint16_t header_space = 0;
+    uint16_t one_mark = 0;
+    uint16_t one_space = 0;
+    uint16_t zero_mark = 0;
+    uint16_t zero_space = 0;
+    uint16_t trailer_mark = 0;
+    uint16_t trailer_space = 0;
+    bool lsb_first = true;
+    uint16_t unit = 0; // base time for biphase protocols
+    uint8_t nbits = 0;
 };
 
 // Custom IR

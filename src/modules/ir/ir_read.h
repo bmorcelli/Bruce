@@ -6,14 +6,13 @@
  * @date 2024-07-17
  */
 
-#include <IRrecv.h>
+#include <driver/rmt_rx.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <globals.h>
 
 class IrRead {
 public:
-    // IRrecv irrecv = IRrecv(bruceConfigPins.irRx);
-    IRrecv irrecv = IRrecv(bruceConfigPins.irRx, SAFE_STACK_BUFFER_SIZE / 2, 50);
-
     /////////////////////////////////////////////////////////////////////////////////////
     // Constructor
     /////////////////////////////////////////////////////////////////////////////////////
@@ -30,14 +29,16 @@ public:
 
 private:
     bool _read_signal = false;
-    decode_results results;
-    uint16_t *rawcode;
-    uint16_t raw_data_len;
     int signals_read = 0;
     int button_pos = 0;
     String strDeviceContent = "";
     bool headless = false;
     bool raw = false;
+    String last_raw_signal = "";
+    rmt_channel_handle_t rx_channel = NULL;
+    QueueHandle_t rx_queue = NULL;
+    rmt_symbol_word_t rx_buffer[256];
+    rmt_receive_config_t rx_config = {};
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Display functions
@@ -57,7 +58,9 @@ private:
     void append_to_file_str(String btn_name);
     bool write_file(String filename, FS *fs);
     String parse_raw_signal();
-    String parse_state_signal();
+    void init_rx();
+    void restart_rx();
+    void deinit_rx();
     /////////////////////////////////////////////////////////////////////////////////////
     // Quick Remotes
     /////////////////////////////////////////////////////////////////////////////////////
