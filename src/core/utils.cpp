@@ -263,6 +263,15 @@ void i2c_bulk_write(TwoWire *wire, uint8_t addr, const uint8_t *bulk_data) {
     }
 }
 
+String formatTimeDecimal(uint32_t totalMillis) {
+    uint16_t minutes = totalMillis / 60000;
+    float seconds = (totalMillis % 60000) / 1000.0;
+
+    char buffer[10];
+    sprintf(buffer, "%02d:%06.3f", minutes, seconds);
+    return String(buffer);
+}
+
 void printMemoryUsage(const char *msg) {
     Serial.printf(
         "%s:\nPSRAM: [Free: %lu, max alloc: %lu],\nRAM: [Free: %lu, "

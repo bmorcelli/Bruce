@@ -486,7 +486,7 @@ void setWifiStartupConfig() {
 **********************************************************************/
 void addEvilWifiMenu() {
     String apName = keyboard("", 30, "Evil Portal SSID");
-    bruceConfig.addEvilWifiName(apName);
+    if (apName != "\x1B") bruceConfig.addEvilWifiName(apName);
 }
 
 /*********************************************************************
@@ -511,7 +511,7 @@ void removeEvilWifiMenu() {
 **********************************************************************/
 void setEvilEndpointCreds() {
     String userInput = keyboard(bruceConfig.evilPortalEndpoints.getCredsEndpoint, 30, "Evil creds endpoint");
-    bruceConfig.setEvilEndpointCreds(userInput);
+    if (userInput != "\x1B") bruceConfig.setEvilEndpointCreds(userInput);
 }
 
 /*********************************************************************
@@ -520,7 +520,7 @@ void setEvilEndpointCreds() {
 **********************************************************************/
 void setEvilEndpointSsid() {
     String userInput = keyboard(bruceConfig.evilPortalEndpoints.setSsidEndpoint, 30, "Evil creds endpoint");
-    bruceConfig.setEvilEndpointSsid(userInput);
+    if (userInput != "\x1B") bruceConfig.setEvilEndpointSsid(userInput);
 }
 
 /*********************************************************************
@@ -695,6 +695,7 @@ void setRFModuleMenu() {
 void setRFFreqMenu() {
     float result = 433.92;
     String freq_str = num_keyboard(String(bruceConfigPins.rfFreq), 10, "Default frequency:");
+    if (freq_str == "\x1B") return;
     if (freq_str.length() > 1) {
         result = freq_str.toFloat();          // returns 0 if not valid
         if (result >= 280 && result <= 928) { // TODO: check valid freq according to current module?
@@ -745,7 +746,7 @@ void setRFIDModuleMenu() {
 **********************************************************************/
 void addMifareKeyMenu() {
     String key = keyboard("", 12, "MIFARE key");
-    bruceConfig.addMifareKey(key);
+    if (key != "\x1B") bruceConfig.addMifareKey(key);
 }
 
 /*********************************************************************
@@ -1243,29 +1244,6 @@ void setGpsBaudrateMenu() {
 }
 
 /*********************************************************************
-**  Function: setBleNameMenu
-**  Handles Menu to set BLE Gap Name
-**********************************************************************/
-void setBleNameMenu() {
-    const String defaultBleName = "Keyboard_" + String((uint8_t)(ESP.getEfuseMac() >> 32), HEX);
-
-    const bool isDefault = bruceConfigPins.bleName == defaultBleName;
-
-    options = {
-        {"Default", [=]() { bruceConfigPins.setBleName(defaultBleName); }, isDefault },
-        {"Custom",
-         [=]() {
-             String newBleName = keyboard(bruceConfigPins.bleName, 30, "BLE Device Name:");
-             if (!newBleName.isEmpty()) bruceConfigPins.setBleName(newBleName);
-             else displayError("BLE Name cannot be empty", true);
-         },                                                                !isDefault},
-    };
-    addOptionToMainMenu();
-
-    loopOptions(options, isDefault ? 0 : 1);
-}
-
-/*********************************************************************
 **  Function: setWifiApSsidMenu
 **  Handles Menu to set the WiFi AP SSID
 **********************************************************************/
@@ -1279,8 +1257,10 @@ void setWifiApSsidMenu() {
         {"Custom",
          [=]() {
              String newSsid = keyboard(bruceConfig.wifiAp.ssid, 32, "WiFi AP SSID:");
-             if (!newSsid.isEmpty()) bruceConfig.setWifiApCreds(newSsid, bruceConfig.wifiAp.pwd);
-             else displayError("SSID cannot be empty", true);
+             if (newSsid != "\x1B") {
+                 if (!newSsid.isEmpty()) bruceConfig.setWifiApCreds(newSsid, bruceConfig.wifiAp.pwd);
+                 else displayError("SSID cannot be empty", true);
+             }
          },                                                                         !isDefault},
     };
     addOptionToMainMenu();
@@ -1302,8 +1282,10 @@ void setWifiApPasswordMenu() {
         {"Custom",
          [=]() {
              String newPassword = keyboard(bruceConfig.wifiAp.pwd, 32, "WiFi AP Password:", true);
-             if (!newPassword.isEmpty()) bruceConfig.setWifiApCreds(bruceConfig.wifiAp.ssid, newPassword);
-             else displayError("Password cannot be empty", true);
+             if (newPassword != "\x1B") {
+                 if (!newPassword.isEmpty()) bruceConfig.setWifiApCreds(bruceConfig.wifiAp.ssid, newPassword);
+                 else displayError("Password cannot be empty", true);
+             }
          },                                                                          !isDefault},
     };
     addOptionToMainMenu();
@@ -1331,8 +1313,7 @@ void setWifiApCredsMenu() {
 **********************************************************************/
 void setNetworkCredsMenu() {
     options = {
-        {"WiFi AP Creds", setWifiApCredsMenu},
-        {"BLE Name",      setBleNameMenu    },
+        {"WiFi AP Creds", setWifiApCredsMenu}
     };
     addOptionToMainMenu();
 
@@ -1347,6 +1328,7 @@ void setBadUSBBLEMenu() {
     options = {
         {"Keyboard Layout", setBadUSBBLEKeyboardLayoutMenu},
         {"Key Delay",       setBadUSBBLEKeyDelayMenu      },
+        {"Show Output",     setBadUSBBLEShowOutputMenu    },
     };
     addOptionToMainMenu();
 
@@ -1390,12 +1372,29 @@ void setBadUSBBLEKeyboardLayoutMenu() {
 **********************************************************************/
 void setBadUSBBLEKeyDelayMenu() {
     String delayStr = num_keyboard(String(bruceConfig.badUSBBLEKeyDelay), 3, "Key Delay (ms):");
-    uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
-    if (delayVal >= 25 && delayVal <= 500) {
-        bruceConfig.setBadUSBBLEKeyDelay(delayVal);
-    } else if (delayVal != 0) {
-        displayError("Invalid key delay value (25 to 500)", true);
+    if (delayStr != "\x1B") {
+        uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
+        if (delayVal >= 0 && delayVal <= 500) {
+            bruceConfig.setBadUSBBLEKeyDelay(delayVal);
+        } else if (delayVal != 0) {
+            displayError("Invalid key delay value (0 to 500)", true);
+        }
     }
+}
+
+/*********************************************************************
+**  Function: setBadUSBBLEShowOutputMenu
+**  Main Menu for setting Bad USB/BLE Show Output
+**********************************************************************/
+void setBadUSBBLEShowOutputMenu() {
+    options.clear();
+    options = {
+        {"Enable",  [&]() { bruceConfig.setBadUSBBLEShowOutput(true); } },
+        {"Disable", [&]() { bruceConfig.setBadUSBBLEShowOutput(false); }},
+    };
+    addOptionToMainMenu();
+
+    loopOptions(options, bruceConfig.badUSBBLEShowOutput ? 0 : 1);
 }
 
 /*********************************************************************
@@ -1414,6 +1413,7 @@ void setMacAddressMenu() {
         {"Set Custom MAC",
          [&]() {
              String newMAC = keyboard(bruceConfig.wifiMAC, 17, "XX:YY:ZZ:AA:BB:CC");
+             if (newMAC == "\x1B") return;
              if (newMAC.length() == 17) {
                  bruceConfig.setWifiMAC(newMAC);
              } else {

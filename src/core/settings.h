@@ -93,6 +93,7 @@ void setNetworkCredsMenu();
 void setBadUSBBLEMenu();
 void setBadUSBBLEKeyboardLayoutMenu();
 void setBadUSBBLEKeyDelayMenu();
+void setBadUSBBLEShowOutputMenu();
 
 void setSPIPinsMenu(BruceConfigPins::SPIPins &value);
 
