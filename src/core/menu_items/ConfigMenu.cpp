@@ -14,6 +14,7 @@
 **  Main Config menu entry point
 **********************************************************************/
 void ConfigMenu::optionsMenu() {
+    returnToMenu = false;
     while (true) {
         // Check if we need to exit to Main Menu (e.g., DevMode disabled)
         if (returnToMenu) {
