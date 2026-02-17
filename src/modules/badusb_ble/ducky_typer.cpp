@@ -454,7 +454,7 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
                     // Set appropriate delay for this STRING command - 5ms instead of defaultStringDelay
-                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : 5;
+                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : defaultStringDelay;
                     _hid->setDelay(currentDelay);
 
                     _hid->print(Argument);
