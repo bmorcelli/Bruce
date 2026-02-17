@@ -12,6 +12,9 @@
 uint8_t _Ask_for_restart = 0;
 int currentOutputY = 0;
 
+// Global variable to manage script termination
+volatile bool stopScript = false;
+
 #if !defined(USB_as_HID)
 HardwareSerial mySerial(1);
 #endif
@@ -170,6 +173,23 @@ const uint8_t *keyboardLayouts[] = {
     KeyboardLayout_tr_TR  // 13
 };
 
+/**
+ * An interruptible delay that regularly checks if the user wants to stop the script.
+ * @param ms
+ * @return true if the timeout ended normally, false if interrupted by ESC
+ */
+bool interruptibleDelay(uint32_t ms) {
+    uint32_t start = millis();
+    while (millis() - start < ms) {
+        if (check(EscPress)) {
+            stopScript = true;
+            return false;
+        }
+        delay(10);
+    }
+    return true;
+}
+
 void ducky_startKb(HIDInterface *&hid, bool ble) {
     Serial.printf("\nducky_startKb before hid==null: BLE: %d\n", ble);
     if (hid == nullptr) {
@@ -324,6 +344,9 @@ EXIT:
 
 // Parses a file to run in the badUSBBLE
 void key_input(FS fs, String bad_script, HIDInterface *_hid) {
+    // Reset the stop flag at the beginning of the script
+    stopScript = false;
+
     if (!fs.exists(bad_script) || bad_script == "") return;
     File payloadFile = fs.open(bad_script, "r");
     if (!payloadFile) return;
@@ -368,6 +391,12 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
     uint32_t startMillisBADUSBBLE = millis();
 
     while (payloadFile.available()) {
+        // Check if the user wants to stop the script
+        if (stopScript || check(EscPress)) {
+            stopScript = true;
+            printStatusBadUSBBLE("Stopped by user");
+            goto EXIT;
+        }
 
         previousMillis = millis(); // resets DimScreen
         if (check(SelPress)) {
@@ -407,6 +436,13 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
         uint16_t i;
         uint16_t repeatCount = RepeatTmp.toInt();
         for (i = 0; i < repeatCount; i++) {
+            // Check if the user wants to stop during the repetitions.
+            if (stopScript || check(EscPress)) {
+                stopScript = true;
+                printStatusBadUSBBLE("Stopped by user");
+                goto EXIT;
+            }
+
             DuckyCommand *PriCmd = findDuckyCommand(Cmd);
             DuckyCommand *ArgCmd = findDuckyCommand(Argument.c_str());
 
@@ -417,8 +453,8 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 }
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
-                    // Set appropriate delay for this STRING command
-                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : defaultStringDelay;
+                    // Set appropriate delay for this STRING command - 5ms instead of defaultStringDelay
+                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : 5;
                     _hid->setDelay(currentDelay);
 
                     _hid->print(Argument);
@@ -431,20 +467,35 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 else if (PriCmd->type == DuckyCommandType_WaitForButtonPress) {
                     printStatusBadUSBBLE("Waiting for button press");
                     bool waitSelect = false;
-                    while (!waitSelect) {
+                    while (!waitSelect && !stopScript) {
+                        if (check(EscPress)) {
+                            stopScript = true;
+                            break;
+                        }
                         waitSelect = check(SelPress);
                         delay(50); // Small delay to prevent excessive CPU usage
+                    }
+                    if (stopScript) {
+                        printStatusBadUSBBLE("Stopped by user");
+                        goto EXIT;
                     }
                     printStatusBadUSBBLE("Running");
                     tft.setTextSize(1);
                 }
                 // DELAY and DEFAULTDELAY are processed here
                 else if (PriCmd->type == DuckyCommandType_Delay) {
-                    if ((int)PriCmd->key > 0) delay(DEF_DELAY); // Default delay is 10ms
-                    else {
-                        int delayTime = Argument.toInt();
-                        if (delayTime > 0) delay(delayTime);
-                        else delay(DEF_DELAY);
+                    int delayTime = DEF_DELAY;
+                    if ((int)PriCmd->key > 0) {
+                        delayTime = DEF_DELAY; // Default delay is 100ms
+                    } else {
+                        delayTime = Argument.toInt();
+                        if (delayTime <= 0) delayTime = DEF_DELAY;
+                    }
+
+                    // Use the interruptible delay
+                    if (!interruptibleDelay(delayTime)) {
+                        printStatusBadUSBBLE("Stopped by user");
+                        goto EXIT;
                     }
                 }
                 // ALTCHAR command is processed here
