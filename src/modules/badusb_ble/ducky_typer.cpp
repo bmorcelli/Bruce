@@ -454,7 +454,7 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
                     // Set appropriate delay for this STRING command
-                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : defaultStringDelay;
+                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : 5;
                     _hid->setDelay(currentDelay);
 
                     _hid->print(Argument);
@@ -552,8 +552,8 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
             } else if (PriCmd->type != DuckyCommandType_Comment) {
                 printTFTBadUSBBLE(Command, bruceConfig.priColor);
                 if (Argument.length() > 0) {
-                    printTFTBadUSBBLE(" " + Argument, (ArgCmd == nullptr ? TFT_WHITE : NULL), true);
-                } else printTFTBadUSBBLE("", NULL, true);
+                    printTFTBadUSBBLE(" " + Argument, (ArgCmd == nullptr ? TFT_WHITE : TFT_BLACK), true);
+                } else printTFTBadUSBBLE("", TFT_BLACK, true);
             } else if (PriCmd->type == DuckyCommandType_Comment) {
                 printTFTBadUSBBLE(Argument, TFT_DARKGREEN, true);
             }

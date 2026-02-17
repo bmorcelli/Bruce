@@ -46,7 +46,7 @@ void sendAltString(HIDInterface *hid, const String &text);
 
 void printHeaderBadUSBBLE(String bad_script);
 void printStatusBadUSBBLE(String status);
-void printTFTBadUSBBLE(String text, uint16_t color = NULL, bool newline = false);
+void printTFTBadUSBBLE(String text, uint16_t color = 0, bool newline = false);
 
 void printDecimalTime(uint32_t milliseconds);
 
