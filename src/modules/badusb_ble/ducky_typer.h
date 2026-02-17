@@ -15,7 +15,6 @@
 extern HIDInterface *hid_usb;
 extern HIDInterface *hid_ble;
 extern uint8_t _Ask_for_restart;
-extern volatile bool stopScript; // Flag pour arrêter l'exécution du script
 
 struct DuckyCommand;
 struct DuckyCombination;
@@ -52,7 +51,6 @@ void printDecimalTime(uint32_t milliseconds);
 
 bool waitForButtonPress();
 bool handlePauseResume();
-bool interruptibleDelay(uint32_t ms); // Delay interruptible qui vérifie le bouton ESC
 
 // Presenter mode - press button to advance slides
 void PresenterMode(HIDInterface *&hid, bool ble = true);
