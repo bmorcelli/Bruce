@@ -454,37 +454,12 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
                     // Set appropriate delay for this STRING command
-                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : 5;
+                    // BLE needs more time between keystrokes than USB
+                    int baseDelay = (_hid == hid_ble) ? 15 : 5;
+                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : baseDelay;
                     _hid->setDelay(currentDelay);
 
-                    // BLE doesn't apply keyboard layout tables in print() — it always
-                    // uses US QWERTY internally. So for BLE + non-US layout we manually
-                    // translate each character through the layout table (same logic as
-                    // USBHIDKeyboard does internally for USB).
-                    // Layout table format (arduino-esp32): 2 bytes per ASCII char
-                    //   byte 0: keycode (ASCII of the physical key to press, US position)
-                    //   byte 1: modifier flags (0x02=Shift, 0x40=AltGr/RAlt, 0x42=both)
-                    if (_hid == hid_ble && bruceConfig.badUSBBLEKeyboardLayout != 0) {
-                        const uint8_t *layout = keyboardLayouts[bruceConfig.badUSBBLEKeyboardLayout];
-                        for (int idx = 0; idx < Argument.length(); idx++) {
-                            uint8_t c = (uint8_t)Argument[idx];
-                            if (c < 128) {
-                                uint8_t keycode  = pgm_read_byte(layout + c * 2);
-                                uint8_t modifier = pgm_read_byte(layout + c * 2 + 1);
-                                if (modifier & 0x02) _hid->press(KEY_LEFT_SHIFT);
-                                if (modifier & 0x40) _hid->press(KEY_RIGHT_ALT);
-                                _hid->press((char)keycode);
-                                _hid->releaseAll();
-                                if (currentDelay > 0) delay(currentDelay);
-                            } else {
-                                // Extended ASCII (>127): fall back to direct print
-                                _hid->print(String((char)c));
-                            }
-                        }
-                    } else {
-                        _hid->print(Argument);
-                    }
-
+                    _hid->print(Argument);
                     if (strcmp(PriCmd->command, "STRINGLN") == 0) _hid->println();
 
                     // Reset one-time delay after use
