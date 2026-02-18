@@ -454,8 +454,8 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
                     // Set appropriate delay for this STRING command
-                    // BLE needs more time between keystrokes than USB
-                    int baseDelay = (_hid == hid_ble) ? 15 : 5;
+                    // USB and BLE each have their own configurable string delay
+                    int baseDelay = (_hid == hid_ble) ? bruceConfig.badUSBBLEStringDelay : bruceConfig.badUSBStringDelay;
                     int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : baseDelay;
                     _hid->setDelay(currentDelay);
 
