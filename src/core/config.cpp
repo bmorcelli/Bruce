@@ -22,6 +22,7 @@ JsonDocument BruceConfig::toJson() const {
     setting["soundVolume"] = soundVolume;
     setting["wifiAtStartup"] = wifiAtStartup;
     setting["instantBoot"] = instantBoot;
+    setting["keyboardLang"] = keyboardLang;
 
 #ifdef HAS_RGB_LED
     setting["ledBright"] = ledBright;
@@ -66,6 +67,8 @@ JsonDocument BruceConfig::toJson() const {
 
     setting["badUSBBLEKeyboardLayout"] = badUSBBLEKeyboardLayout;
     setting["badUSBBLEKeyDelay"] = badUSBBLEKeyDelay;
+    setting["badUSBStringDelay"] = badUSBStringDelay;
+    setting["badUSBBLEStringDelay"] = badUSBBLEStringDelay;
     setting["badUSBBLEShowOutput"] = badUSBBLEShowOutput;
 
     JsonArray dm = setting["disabledMenus"].to<JsonArray>();
@@ -207,6 +210,11 @@ void BruceConfig::fromFile(bool checkFS) {
     } else {
         count++;
         log_e("Fail");
+    }
+    if (!setting["keyboardLang"].isNull()) {
+        keyboardLang = setting["keyboardLang"].as<String>();
+    } else {
+        keyboardLang = "QWERTY";
     }
 
 #ifdef HAS_RGB_LED
@@ -369,6 +377,12 @@ void BruceConfig::fromFile(bool checkFS) {
 
     if (!setting["badUSBBLEKeyDelay"].isNull()) {
         badUSBBLEKeyDelay = setting["badUSBBLEKeyDelay"].as<int>();
+    }
+    if (!setting["badUSBStringDelay"].isNull()) {
+        badUSBStringDelay = setting["badUSBStringDelay"].as<int>();
+    }
+    if (!setting["badUSBBLEStringDelay"].isNull()) {
+        badUSBBLEStringDelay = setting["badUSBBLEStringDelay"].as<int>();
     } else {
         count++;
         log_e("Fail");
@@ -461,6 +475,8 @@ void BruceConfig::validateConfig() {
     validateColorInverted();
     validateBadUSBBLEKeyboardLayout();
     validateBadUSBBLEKeyDelay();
+    validateBadUSBStringDelay();
+    validateBadUSBBLEStringDelay();
     validateEvilEndpointCreds();
     validateEvilEndpointSsid();
     validateEvilPasswordMode();
@@ -756,6 +772,28 @@ void BruceConfig::setBadUSBBLEKeyDelay(uint16_t value) {
 void BruceConfig::validateBadUSBBLEKeyDelay() {
     if (badUSBBLEKeyDelay < 0) badUSBBLEKeyDelay = 0;
     if (badUSBBLEKeyDelay > 500) badUSBBLEKeyDelay = 500;
+}
+
+void BruceConfig::setBadUSBBLEStringDelay(uint16_t value) {
+    badUSBBLEStringDelay = value;
+    validateBadUSBBLEStringDelay();
+    saveFile();
+}
+
+void BruceConfig::validateBadUSBBLEStringDelay() {
+    if (badUSBBLEStringDelay < 0) badUSBBLEStringDelay = 0;
+    if (badUSBBLEStringDelay > 500) badUSBBLEStringDelay = 500;
+}
+
+void BruceConfig::setBadUSBStringDelay(uint16_t value) {
+    badUSBStringDelay = value;
+    validateBadUSBStringDelay();
+    saveFile();
+}
+
+void BruceConfig::validateBadUSBStringDelay() {
+    if (badUSBStringDelay < 0) badUSBStringDelay = 0;
+    if (badUSBStringDelay > 500) badUSBStringDelay = 500;
 }
 
 void BruceConfig::setBadUSBBLEShowOutput(bool value) {

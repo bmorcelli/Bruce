@@ -1328,9 +1328,10 @@ void setNetworkCredsMenu() {
 **********************************************************************/
 void setBadUSBBLEMenu() {
     options = {
-        {"Keyboard Layout", setBadUSBBLEKeyboardLayoutMenu},
-        {"Key Delay",       setBadUSBBLEKeyDelayMenu      },
-        {"Show Output",     setBadUSBBLEShowOutputMenu    },
+        {"Keyboard Layout",   setBadUSBBLEKeyboardLayoutMenu},
+        {"Key Delay",         setBadUSBBLEKeyDelayMenu      },
+        {"String Write Delay",setBadUSBBLEStringDelayMenu   },
+        {"Show Output",       setBadUSBBLEShowOutputMenu    },
     };
     addOptionToMainMenu();
 
@@ -1380,6 +1381,51 @@ void setBadUSBBLEKeyDelayMenu() {
             bruceConfig.setBadUSBBLEKeyDelay(delayVal);
         } else if (delayVal != 0) {
             displayError("Invalid key delay value (0 to 500)", true);
+        }
+    }
+}
+
+/*********************************************************************
+**  Function: setBadUSBBLEStringDelayMenu
+**  Submenu to choose USB or BLE string delay
+**********************************************************************/
+void setBadUSBBLEStringDelayMenu() {
+    options = {
+        {String("USB (") + String(bruceConfig.badUSBStringDelay) + "ms)", setBadUSBStringDelayMenu    },
+        {String("BLE (") + String(bruceConfig.badUSBBLEStringDelay) + "ms)", setBadUSBBLEStringDelayBLEMenu},
+    };
+    addOptionToMainMenu();
+    loopOptions(options);
+}
+
+/*********************************************************************
+**  Function: setBadUSBStringDelayMenu
+**  Set USB STRING command delay
+**********************************************************************/
+void setBadUSBStringDelayMenu() {
+    String delayStr = num_keyboard(String(bruceConfig.badUSBStringDelay), 3, "USB String Delay (ms):");
+    if (delayStr != "\x1B") {
+        uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
+        if (delayVal >= 0 && delayVal <= 500) {
+            bruceConfig.setBadUSBStringDelay(delayVal);
+        } else if (delayVal != 0) {
+            displayError("Invalid delay value (0 to 500)", true);
+        }
+    }
+}
+
+/*********************************************************************
+**  Function: setBadUSBBLEStringDelayBLEMenu
+**  Set BLE STRING command delay
+**********************************************************************/
+void setBadUSBBLEStringDelayBLEMenu() {
+    String delayStr = num_keyboard(String(bruceConfig.badUSBBLEStringDelay), 3, "BLE String Delay (ms):");
+    if (delayStr != "\x1B") {
+        uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
+        if (delayVal >= 0 && delayVal <= 500) {
+            bruceConfig.setBadUSBBLEStringDelay(delayVal);
+        } else if (delayVal != 0) {
+            displayError("Invalid delay value (0 to 500)", true);
         }
     }
 }
