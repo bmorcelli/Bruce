@@ -356,9 +356,12 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
     String Argument = "";
     String RepeatTmp = "";
 
-    // String delay variables
-    static int nextStringDelay = -1; // One-time delay for next STRING command (-1 = use default)
-    static int defaultStringDelay = bruceConfig.badUSBBLEKeyDelay; // Default delay for all STRING commands
+    // String delay variables — NOT static, refreshed from config on every script run
+    int nextStringDelay = -1; // One-time delay for next STRING command (-1 = use default)
+    // String Delay setting overrides Key Delay for STRING commands when > 0
+    int usbStringDelay   = (bruceConfig.badUSBStringDelay > 0)    ? bruceConfig.badUSBStringDelay    : bruceConfig.badUSBBLEKeyDelay;
+    int bleStringDelay   = (bruceConfig.badUSBBLEStringDelay > 0)  ? bruceConfig.badUSBBLEStringDelay  : bruceConfig.badUSBBLEKeyDelay;
+    int defaultStringDelay = (_hid == hid_ble) ? bleStringDelay : usbStringDelay;
     currentOutputY = 0;
 
     _hid->releaseAll();
@@ -453,17 +456,15 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
                 }
                 // STRING and STRINGLN are processed here
                 else if (PriCmd->type == DuckyCommandType_Print) {
-                    // Set appropriate delay for this STRING command
-                    // USB and BLE each have their own configurable string delay
-                    int baseDelay = (_hid == hid_ble) ? bruceConfig.badUSBBLEStringDelay : bruceConfig.badUSBStringDelay;
-                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : baseDelay;
+                    int currentDelay = (nextStringDelay >= 0) ? nextStringDelay : defaultStringDelay;
                     _hid->setDelay(currentDelay);
 
                     _hid->print(Argument);
                     if (strcmp(PriCmd->command, "STRINGLN") == 0) _hid->println();
 
-                    // Reset one-time delay after use
+                    // Reset one-time delay and restore Key Delay for subsequent commands
                     if (nextStringDelay >= 0) { nextStringDelay = -1; }
+                    _hid->setDelay(bruceConfig.badUSBBLEKeyDelay);
                 }
                 // WAIT_FOR_BUTTON_PRESS is processed here
                 else if (PriCmd->type == DuckyCommandType_WaitForButtonPress) {
