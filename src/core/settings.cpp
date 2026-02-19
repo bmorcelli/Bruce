@@ -3,6 +3,7 @@
 #include "core/wifi/wifi_common.h"
 #include "current_year.h"
 #include "display.h"
+#include "modules/badusb_ble/ducky_typer.h"
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "modules/bjs_interpreter/interpreter.h"
 #endif
@@ -1377,7 +1378,7 @@ void setBadUSBBLEKeyDelayMenu() {
     String delayStr = num_keyboard(String(bruceConfig.badUSBBLEKeyDelay), 3, "Key Delay (ms):");
     if (delayStr != "\x1B") {
         uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
-        if (delayVal >= 0 && delayVal <= 500) {
+        if (delayVal <= 500) {
             bruceConfig.setBadUSBBLEKeyDelay(delayVal);
         } else if (delayVal != 0) {
             displayError("Invalid key delay value (0 to 500)", true);
@@ -1406,7 +1407,7 @@ void setBadUSBStringDelayMenu() {
     String delayStr = num_keyboard(String(bruceConfig.badUSBStringDelay), 3, "USB String Delay (ms):");
     if (delayStr != "\x1B") {
         uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
-        if (delayVal >= 0 && delayVal <= 500) {
+        if (delayVal <= 500) {
             bruceConfig.setBadUSBStringDelay(delayVal);
         } else if (delayVal != 0) {
             displayError("Invalid delay value (0 to 500)", true);
@@ -1422,7 +1423,7 @@ void setBadUSBBLEStringDelayBLEMenu() {
     String delayStr = num_keyboard(String(bruceConfig.badUSBBLEStringDelay), 3, "BLE String Delay (ms):");
     if (delayStr != "\x1B") {
         uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
-        if (delayVal >= 0 && delayVal <= 500) {
+        if (delayVal <= 500) {
             bruceConfig.setBadUSBBLEStringDelay(delayVal);
         } else if (delayVal != 0) {
             displayError("Invalid delay value (0 to 500)", true);
@@ -1681,9 +1682,13 @@ BLE_API bleApi;
 static bool ble_api_enabled = false;
 
 void enableBLEAPI() {
+    // Only block if BLE keyboard is currently instanciated
+    if (hid_ble != nullptr) {
+        displayWarning("BLE Keyboard is active.\nRestart device first.", true);
+        return;
+    }
+
     if (!ble_api_enabled) {
-        // displayWarning("BLE API require huge amount of RAM.");
-        // displayWarning("Some features may stop working.");
         Serial.println(ESP.getFreeHeap());
         bleApi.setup();
         Serial.println(ESP.getFreeHeap());
