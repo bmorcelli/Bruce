@@ -14,6 +14,7 @@ JsonDocument BruceConfig::toJson() const {
 
     setting["dimmerSet"] = dimmerSet;
     setting["bright"] = bright;
+    setting["einkRefreshMs"] = einkRefreshMs;
     setting["automaticTimeUpdateViaNTP"] = automaticTimeUpdateViaNTP;
     setting["tmz"] = tmz;
     setting["dst"] = dst;
@@ -156,6 +157,12 @@ void BruceConfig::fromFile(bool checkFS) {
     }
     if (!setting["bright"].isNull()) {
         bright = setting["bright"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["einkRefreshMs"].isNull()) {
+        einkRefreshMs = setting["einkRefreshMs"].as<int>();
     } else {
         count++;
         log_e("Fail");
@@ -444,6 +451,7 @@ void BruceConfig::factoryReset() {
 void BruceConfig::validateConfig() {
     validateDimmerValue();
     validateBrightValue();
+    validateEinkRefreshMs();
     validateTmzValue();
     validateSoundEnabledValue();
     validateSoundVolumeValue();
@@ -464,6 +472,12 @@ void BruceConfig::validateConfig() {
     validateEvilEndpointCreds();
     validateEvilEndpointSsid();
     validateEvilPasswordMode();
+#if defined(HAS_EINK)
+    priColor = 0xFFFF;
+    secColor = 0xFFFF;
+    bgColor = 0x0000;
+    colorInverted = 0;
+#endif
 }
 
 void BruceConfig::setUiColor(uint16_t primary, uint16_t *secondary, uint16_t *background) {
@@ -490,6 +504,17 @@ void BruceConfig::setBright(uint8_t value) {
 
 void BruceConfig::validateBrightValue() {
     if (bright > 100) bright = 100;
+}
+
+void BruceConfig::setEinkRefreshMs(int value) {
+    einkRefreshMs = value;
+    validateEinkRefreshMs();
+    saveFile();
+}
+
+void BruceConfig::validateEinkRefreshMs() {
+    if (einkRefreshMs < 0) einkRefreshMs = 0;
+    if (einkRefreshMs > 600000) einkRefreshMs = 600000;
 }
 
 void BruceConfig::setAutomaticTimeUpdateViaNTP(bool value) {
@@ -735,6 +760,7 @@ void BruceConfig::setColorInverted(int value) {
 
 void BruceConfig::validateColorInverted() {
     if (colorInverted > 1) colorInverted = 1;
+    if (colorInverted < 0) colorInverted = 0;
 }
 
 void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {

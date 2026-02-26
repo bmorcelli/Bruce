@@ -14,6 +14,15 @@ void fadeOutScreen(int startValue) {
 }
 
 void checkPowerSaveTime() {
+#if defined(HAS_EINK)
+    // E-ink displays don't need dimmer logic; just check for full sleep
+    if (bruceConfig.dimmerSet == 0) return;
+    unsigned long elapsed = millis() - previousMillis;
+    int dimmerSetMs = bruceConfig.dimmerSet * 1000;
+    if (elapsed >= (dimmerSetMs + SCREEN_OFF_DELAY) && !isScreenOff && !isSleeping) {
+        isScreenOff = true;
+    }
+#else
     if (bruceConfig.dimmerSet == 0) return;
 
     unsigned long elapsed = millis() - previousMillis;
@@ -27,17 +36,18 @@ void checkPowerSaveTime() {
         isScreenOff = true;
         fadeOutScreen(startDimmerBright);
     }
+#endif
 }
 
 void sleepModeOn() {
     isSleeping = true;
     setCpuFrequencyMhz(80);
 
+#if !defined(HAS_EINK)
     int startDimmerBright = bruceConfig.bright / 3;
-
     fadeOutScreen(startDimmerBright);
-
     panelSleep(true); //  power down screen
+#endif
 
     disableCore0WDT();
 #if SOC_CPU_CORES_NUM > 1
@@ -51,9 +61,11 @@ void sleepModeOff() {
     isSleeping = false;
     setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
 
+#if !defined(HAS_EINK)
     panelSleep(false); // wake the screen back up
-
     getBrightness();
+#endif
+
     enableCore0WDT();
 #if SOC_CPU_CORES_NUM > 1
     enableCore1WDT();

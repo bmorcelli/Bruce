@@ -190,6 +190,7 @@ void printTitle(String title);
 void printSubtitle(String subtitle, bool withLine = true);
 void printFootnote(String text);
 void printCenterFootnote(String text);
+void einkFlushIfDirty(uint32_t minIntervalMs = 0xFFFFFFFFu);
 
 Opt_Coord listFiles(int index, std::vector<FileList> fileList);
 

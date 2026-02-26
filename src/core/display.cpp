@@ -26,11 +26,27 @@ void panelSleep(bool on) {
 }
 
 bool __attribute__((weak)) isCharging() { return false; }
+
+void einkFlushIfDirty(uint32_t minIntervalMs) {
+#if defined(HAS_EINK)
+    uint32_t interval = minIntervalMs;
+    if (minIntervalMs == 0xFFFFFFFFu) {
+        if (bruceConfig.einkRefreshMs == 0) return;
+        interval = static_cast<uint32_t>(bruceConfig.einkRefreshMs);
+    }
+    tft.flushEinkIfDirty(interval);
+#endif
+}
 /***************************************************************************************
 ** Function name: displayScrollingText
 ** Description:   Scroll large texts into screen
 ***************************************************************************************/
 void displayScrollingText(const String &text, Opt_Coord &coord) {
+#if defined(HAS_EINK)
+    (void)text;
+    (void)coord;
+    return;
+#endif
     int len = text.length();
     String displayText = text + "        "; // Add spaces for smooth looping
     int scrollLen = len + 8;                // Full text plus space buffer
@@ -115,14 +131,6 @@ bool wakeUpScreen() {
     previousMillis = millis();
     if (isScreenOff) {
         isScreenOff = false;
-        dimmer = false;
-        getBrightness();
-        vTaskDelay(pdMS_TO_TICKS(200));
-        return true;
-    } else if (dimmer) {
-        dimmer = false;
-        getBrightness();
-        vTaskDelay(pdMS_TO_TICKS(200));
         return true;
     }
     return false;
@@ -156,6 +164,7 @@ void displayRedStripe(String text, uint16_t fgcolor, uint16_t bgcolor) {
             tft.drawCentreString(text.substring(text_size / 2), tftWidth / 2, tftHeight / 2 + 1);
         }
     }
+    einkFlushIfDirty(0);
 }
 
 void drawButton(
@@ -251,6 +260,7 @@ int8_t displayMessage(
                 );
             }
             redraw = false;
+            einkFlushIfDirty(0);
         }
 
         delay(10);
@@ -539,6 +549,8 @@ int loopOptions(
             displayScrollingText(txt, coord);
         }
 
+        einkFlushIfDirty(0);
+
         // Checks ESC Press first, to not exit after PrevPress is processed
         // PrevPress condition is a StickCPlus workaround, as it uses the same button for Prev and Esc
         // Same happens to Core and some other boards
@@ -560,6 +572,7 @@ int loopOptions(
 #ifndef HAS_ENCODER // T-Embed doesn't need it
             LongPress = true;
             while (PrevPress && menuType != MENU_TYPE_MAIN) {
+#if !defined(HAS_EINK)
                 if (millis() - _tmp > 200)
                     tft.drawArc(
                         tftWidth / 2,
@@ -571,11 +584,14 @@ int loopOptions(
                         getColorVariation(bruceConfig.priColor),
                         bruceConfig.bgColor
                     );
+#endif
                 vTaskDelay(10 / portTICK_RATE_MS);
             }
+#if !defined(HAS_EINK)
             tft.drawArc(
                 tftWidth / 2, tftHeight / 2, 25, 15, 0, 360, bruceConfig.bgColor, bruceConfig.bgColor
             );
+#endif
             LongPress = false;
 #endif
             if (millis() - _tmp > 700) { // longpress detected to exit
@@ -808,13 +824,20 @@ void drawStatusBar() {
 
     if (clock_set) {
         int clock_fontsize = 1; // Font size of the clock / BRUCE + BRUCE_VERSION
-        setTftDisplay(12, 12, bruceConfig.priColor, clock_fontsize, bruceConfig.bgColor);
-        tft.fillRect(12, 12, 100, clock_fontsize * LH, bruceConfig.bgColor);
+        int clock_x = 12;
+        int clock_y = 12;
+#if defined(HAS_EINK)
+        clock_fontsize = 2;
+        clock_y = 8;
+#endif
+        setTftDisplay(clock_x, clock_y, bruceConfig.priColor, clock_fontsize, bruceConfig.bgColor);
 #if defined(HAS_RTC)
         updateTimeStr(_rtc.getTimeStruct());
 #else
         updateTimeStr(rtc.getTimeStruct());
 #endif
+        int clock_width = tft.textWidth(timeStr);
+        tft.fillRect(clock_x, clock_y, clock_width + 4, clock_fontsize * LH, bruceConfig.bgColor);
         tft.print(timeStr);
     } else {
         setTftDisplay(12, 12, bruceConfig.priColor, 1, bruceConfig.bgColor);

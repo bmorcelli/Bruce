@@ -86,7 +86,11 @@ void updateTimeStr(struct tm timeInfo) {
     if (bruceConfig.clock24hr) {
         // Use 24 hour format
         snprintf(
+#if defined(HAS_EINK)
+            timeStr, sizeof(timeStr), "%02d:%02d", timeInfo.tm_hour, timeInfo.tm_min
+#else
             timeStr, sizeof(timeStr), "%02d:%02d:%02d", timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec
+#endif
         );
     } else {
         // Use 12 hour format with AM/PM
@@ -96,7 +100,20 @@ void updateTimeStr(struct tm timeInfo) {
         const char *ampm = (timeInfo.tm_hour < 12) ? "AM" : "PM";
 
         snprintf(
-            timeStr, sizeof(timeStr), "%02d:%02d:%02d %s", hour12, timeInfo.tm_min, timeInfo.tm_sec, ampm
+            timeStr,
+            sizeof(timeStr),
+#if defined(HAS_EINK)
+            "%02d:%02d %s",
+            hour12,
+            timeInfo.tm_min,
+            ampm
+#else
+            "%02d:%02d:%02d %s",
+            hour12,
+            timeInfo.tm_min,
+            timeInfo.tm_sec,
+            ampm
+#endif
         );
     }
 }
@@ -140,7 +157,11 @@ void showDeviceInfo() {
     area.addLine("Rotation: " + String(ROTATION));
     area.addLine("Width: " + String(tftWidth) + "px");
     area.addLine("Height: " + String(tftHeight) + "px");
+#if defined(HAS_EINK)
+    area.addLine("Refresh: " + String(bruceConfig.einkRefreshMs) + "ms");
+#else
     area.addLine("Brightness: " + String(bruceConfig.bright) + "%");
+#endif
     area.addLine("");
 #endif
 

@@ -38,6 +38,7 @@ public:
     //  Settings
     int dimmerSet = 10;
     int bright = 100;
+    int einkRefreshMs = 15000;
     bool automaticTimeUpdateViaNTP = true;
     float tmz = 0;
     bool dst = false;
@@ -119,6 +120,8 @@ public:
     void validateDimmerValue();
     void setBright(uint8_t value);
     void validateBrightValue();
+    void setEinkRefreshMs(int value);
+    void validateEinkRefreshMs();
     void setAutomaticTimeUpdateViaNTP(bool value);
     void setTmz(float value);
     void validateTmzValue();

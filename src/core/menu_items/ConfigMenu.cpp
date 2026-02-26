@@ -59,11 +59,17 @@ void ConfigMenu::optionsMenu() {
 void ConfigMenu::displayUIMenu() {
     while (true) {
         std::vector<Option> localOptions = {
-            {"Brightness",  [this]() { setBrightnessMenu(); }               },
-            {"Dim Time",    [this]() { setDimmerTimeMenu(); }               },
+#if defined(HAS_EINK)
+            {"Refresh",     [this]() { setEinkRefreshMenu(); }              },
+#else
+            {"Brightness", [this]() { setBrightnessMenu(); }},
+#endif
+            {"B/W Invert",  [this]() { setBWInvertMenu(); }                 },
             {"Orientation", [this]() { lambdaHelper(gsetRotation, true)(); }},
+#if !defined(HAS_EINK)
             {"UI Color",    [this]() { setUIColor(); }                      },
             {"UI Theme",    [this]() { setTheme(); }                        },
+#endif
             {"Back",        []() {}                                         },
         };
 

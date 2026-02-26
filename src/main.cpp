@@ -214,6 +214,9 @@ void begin_tft() {
     tft.setRotation(bruceConfigPins.rotation); // sometimes it misses the first command
     tft.invertDisplay(bruceConfig.colorInverted);
     tft.setRotation(bruceConfigPins.rotation);
+#if defined(HAS_EINK)
+    tft.setAutoDisplay(false);
+#endif
     tftWidth = tft.width();
 #ifdef HAS_TOUCH
     tftHeight = tft.height() - 20;
@@ -222,6 +225,9 @@ void begin_tft() {
 #endif
     resetTftDisplay();
     setBrightness(bruceConfig.bright, false);
+#if defined(HAS_EINK)
+    einkFlushIfDirty(0);
+#endif
 }
 
 /*********************************************************************
@@ -246,6 +252,14 @@ void boot_screen() {
  **  Draw boot screen
  *********************************************************************/
 void boot_screen_anim() {
+#if defined(HAS_EINK)
+    boot_screen();
+    einkFlushIfDirty(0);
+    delay(500);
+    tft.fillScreen(bruceConfig.bgColor);
+    einkFlushIfDirty(0);
+    return;
+#endif
     boot_screen();
     int i = millis();
     // checks for boot.jpg in SD and LittleFS for customization
@@ -437,8 +451,14 @@ void setup() {
     tft.init();
     tft.setRotation(bruceConfigPins.rotation);
     tft.fillScreen(TFT_BLACK);
+#if defined(HAS_EINK)
+    tft.fillScreen(TFT_WHITE);
+    // bruceConfig is not read yet.. just to show something on screen due to long boot time
+    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+#else
     // bruceConfig is not read yet.. just to show something on screen due to long boot time
     tft.setTextColor(TFT_PURPLE, TFT_BLACK);
+#endif
     tft.drawCentreString("Booting", tft.width() / 2, tft.height() / 2, 1);
 #else
     tft.begin();
@@ -480,11 +500,13 @@ void setup() {
     );
     // #endif
 #if defined(HAS_SCREEN)
+#if !defined(HAS_EINK)
     bruceConfig.openThemeFile(bruceConfig.themeFS(), bruceConfig.themePath, false);
-    if (!bruceConfig.instantBoot) {
-        boot_screen_anim();
-        startup_sound();
-    }
+#else
+    tft.fillScreen(0xFFFF);
+    einkFlushIfDirty(0);
+#endif
+    if (!bruceConfig.instantBoot) { startup_sound(); }
     if (bruceConfig.wifiAtStartup) {
         log_i("Loading Wifi at Startup");
         xTaskCreate(
@@ -526,6 +548,9 @@ void loop() {
     }
 #endif
     tft.fillScreen(bruceConfig.bgColor);
+#if defined(HAS_EINK)
+    einkFlushIfDirty(0);
+#endif
 
     mainMenu.begin();
     delay(1);
