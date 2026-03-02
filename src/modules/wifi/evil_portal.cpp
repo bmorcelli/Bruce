@@ -302,20 +302,15 @@ void EvilPortal::loop() {
                 displayTextLine("Shutting down...");
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
-                // Step 1: Stop web server first
+                // Stop web server first
                 webServer.end();
                 vTaskDelay(200 / portTICK_PERIOD_MS);
                 
-                // Step 2: Stop DNS
+                // Stop DNS
                 dnsServer.stop();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
-                // Step 3: Disconnect WiFi
-                wifiDisconnect();
-                vTaskDelay(200 / portTICK_PERIOD_MS);
-                
-                // Step 4: Return - let C++ handle the rest
-                // _captiveHandler will be destroyed naturally with the object
+                // Return - let wifi_common handle WiFi state
                 return;
             }
             shouldRedraw = true;
