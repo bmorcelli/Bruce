@@ -51,6 +51,11 @@ private:
     bool _verifyPwd;
     bool _autoMode;
     bool _backgroundMode; // New flag for background operation
+    
+    // WiFi state tracking - store original mode before portal starts
+    wifi_mode_t _originalWifiMode;
+    bool _wifiWasConnected;
+    
     AsyncWebServer webServer;
 
     DNSServer dnsServer;
