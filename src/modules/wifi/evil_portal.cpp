@@ -15,6 +15,11 @@ EvilPortal::EvilPortal(
 )
     : apName(tssid), _channel(channel), _deauth(deauth), _verifyPwd(verifyPwd), _autoMode(autoMode),
       _backgroundMode(backgroundMode), webServer(80) {
+    
+    // Store original WiFi state before making any changes
+    _originalWifiMode = WiFi.getMode();
+    _wifiWasConnected = (WiFi.status() == WL_CONNECTED);
+    
     if (!setup()) return;
     // Now stop WebUI cleanly before starting WiFi mode
     cleanlyStopWebUiForWiFiFeature();
@@ -310,7 +315,14 @@ void EvilPortal::loop() {
                 dnsServer.stop();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
-                // Return - let wifi_common handle WiFi state
+                // Restore original WiFi state
+                if (_originalWifiMode == WIFI_OFF || _originalWifiMode == WIFI_MODE_NULL) {
+                    WiFi.mode(WIFI_OFF);
+                } else {
+                    WiFi.mode(_originalWifiMode);
+                }
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                
                 return;
             }
             shouldRedraw = true;
