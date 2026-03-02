@@ -267,7 +267,6 @@ void EvilPortal::loop() {
     int lastDeauthTime = millis();
     bool shouldRedraw = true;
     bool exitPortal = false;
-    int debugChoice = 0;
 
     while (true) {
         if (shouldRedraw) {
@@ -294,116 +293,29 @@ void EvilPortal::loop() {
 
         if (check(EscPress)) {
             options = {
-                {"Exit Portal (Placeholder)", [&exitPortal]() { exitPortal = true; }},
-                {"Debug Menu", [this, &shouldRedraw, &debugChoice, &exitPortal]() {
-                    std::vector<Option> debugOptions = {
-                        {"Handler First", [&debugChoice, &exitPortal]() { debugChoice = 1; }},
-                        {"Handler Last", [&debugChoice, &exitPortal]() { debugChoice = 2; }},
-                        {"WiFi First", [&debugChoice, &exitPortal]() { debugChoice = 3; }},
-                        {"Back", [&debugChoice]() { debugChoice = 0; }}
-                    };
-                    loopOptions(debugOptions);
-                    if (debugChoice == 1) {
-                        // Handler removed first
-                        drawMainBorderWithTitle("DEBUG: HANDLER FIRST");
-                        padprintln("Step 1: Remove handler");
-                        if (_captiveHandler) {
-                            webServer.removeHandler(_captiveHandler);
-                            delete _captiveHandler;
-                            _captiveHandler = nullptr;
-                        }
-                        padprintln("Handler removed - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 2: Stop web server");
-                        webServer.end();
-                        vTaskDelay(200);
-                        padprintln("Web server stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 3: Stop DNS");
-                        dnsServer.stop();
-                        vTaskDelay(100);
-                        padprintln("DNS stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 4: Disconnect WiFi");
-                        wifiDisconnect();
-                        padprintln("WiFi disconnected - Press SEL to exit");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        exitPortal = true;
-                    }
-                    else if (debugChoice == 2) {
-                        // Handler removed last
-                        drawMainBorderWithTitle("DEBUG: HANDLER LAST");
-                        padprintln("Step 1: Stop web server");
-                        webServer.end();
-                        vTaskDelay(200);
-                        padprintln("Web server stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 2: Stop DNS");
-                        dnsServer.stop();
-                        vTaskDelay(100);
-                        padprintln("DNS stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 3: Remove handler");
-                        if (_captiveHandler) {
-                            webServer.removeHandler(_captiveHandler);
-                            delete _captiveHandler;
-                            _captiveHandler = nullptr;
-                        }
-                        padprintln("Handler removed - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 4: Disconnect WiFi");
-                        wifiDisconnect();
-                        padprintln("WiFi disconnected - Press SEL to exit");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        exitPortal = true;
-                    }
-                    else if (debugChoice == 3) {
-                        // WiFi disconnected first
-                        drawMainBorderWithTitle("DEBUG: WIFI FIRST");
-                        padprintln("Step 1: Disconnect WiFi");
-                        wifiDisconnect();
-                        vTaskDelay(300);
-                        padprintln("WiFi disconnected - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 2: Stop DNS");
-                        dnsServer.stop();
-                        vTaskDelay(100);
-                        padprintln("DNS stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 3: Stop web server");
-                        webServer.end();
-                        vTaskDelay(200);
-                        padprintln("Web server stopped - Press SEL");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        padprintln("Step 4: Remove handler");
-                        if (_captiveHandler) {
-                            webServer.removeHandler(_captiveHandler);
-                            delete _captiveHandler;
-                            _captiveHandler = nullptr;
-                        }
-                        padprintln("Handler removed - Press SEL to exit");
-                        while(!check(SelPress)) { vTaskDelay(50); }
-                        
-                        exitPortal = true;
-                    }
-                    shouldRedraw = true;
-                }},
-                {"Resume", [this, &shouldRedraw]() { shouldRedraw = true; }}
+                {"Exit Portal", [&exitPortal]() { exitPortal = true; }},
+                {"Resume", [&shouldRedraw]() { shouldRedraw = true; }}
             };
             
             loopOptions(options);
             if (exitPortal) {
+                displayTextLine("Shutting down...");
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                
+                // Step 1: Stop web server first
+                webServer.end();
+                vTaskDelay(200 / portTICK_PERIOD_MS);
+                
+                // Step 2: Stop DNS
+                dnsServer.stop();
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                
+                // Step 3: Disconnect WiFi
+                wifiDisconnect();
+                vTaskDelay(200 / portTICK_PERIOD_MS);
+                
+                // Step 4: Return - let C++ handle the rest
+                // _captiveHandler will be destroyed naturally with the object
                 return;
             }
             shouldRedraw = true;
