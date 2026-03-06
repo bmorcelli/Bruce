@@ -93,7 +93,6 @@ void USBHIDKeyboard::sendReport(KeyReport *keys) {
     report.modifier = keys->modifiers;
     memcpy(report.keycode, keys->keys, 6);
     hid.SendReport(HID_REPORT_ID_KEYBOARD, &report, sizeof(report));
-    delay(this->_delay_ms);
 }
 
 void USBHIDKeyboard::setShiftKeyReports(bool set) { shiftKeyReports = set; }

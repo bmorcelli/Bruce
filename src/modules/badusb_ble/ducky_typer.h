@@ -15,7 +15,6 @@
 extern HIDInterface *hid_usb;
 extern HIDInterface *hid_ble;
 extern uint8_t _Ask_for_restart;
-extern volatile bool stopScript; // Flag to stop script execution
 
 struct DuckyCommand;
 struct DuckyCombination;
@@ -46,13 +45,12 @@ void sendAltString(HIDInterface *hid, const String &text);
 
 void printHeaderBadUSBBLE(String bad_script);
 void printStatusBadUSBBLE(String status);
-void printTFTBadUSBBLE(String text, uint16_t color = 0, bool newline = false);
+void printTFTBadUSBBLE(String text, uint16_t color = TFT_WHITE, bool newline = false);
 
 void printDecimalTime(uint32_t milliseconds);
 
 bool waitForButtonPress();
 bool handlePauseResume();
-bool interruptibleDelay(uint32_t ms); // Interruptible delay that checks the ESC button
 
 // Presenter mode - press button to advance slides
 void PresenterMode(HIDInterface *&hid, bool ble = true);
