@@ -1,7 +1,7 @@
 #include "serial_commands.h"
 #include "core/display.h"
 #include "core/mykeyboard.h"
-
+#ifndef CONFIG_IDF_TARGET_ESP32P4
 EspSerialCmd::EspSerialCmd() {}
 
 void EspSerialCmd::sendCommands() {
@@ -164,3 +164,4 @@ void EspSerialCmd::displaySentFooter() {
     padprintln("");
     padprintln("Press [ESC] to leave");
 }
+#endif

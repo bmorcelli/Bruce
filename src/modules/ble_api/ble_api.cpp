@@ -21,7 +21,9 @@ public:
 
 void BLE_API::setup() {
     NimBLEDevice::init("Bruce");
+#ifndef CONFIG_IDF_TARGET_ESP32P4
     NimBLEDevice::setPower(ESP_PWR_LVL_P9); // 9 dBm, tweak if you want
+#endif
 
     pServer = NimBLEDevice::createServer();
     pServer->advertiseOnDisconnect(true);

@@ -1,7 +1,7 @@
 #include "esp_connection.h"
 #include "core/display.h"
 #include <WiFi.h>
-
+#ifndef CONFIG_IDF_TARGET_ESP32P4
 // Initialize the static instance pointer
 EspConnection *EspConnection::instance = nullptr;
 std::vector<Option> peerOptions;
@@ -209,3 +209,4 @@ void EspConnection::onDataSentStatic(const wifi_tx_info_t *info, esp_now_send_st
 void EspConnection::onDataRecvStatic(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
     if (instance) instance->onDataRecv(info->src_addr, incomingData, len);
 }
+#endif

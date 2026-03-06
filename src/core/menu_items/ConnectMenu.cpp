@@ -1,6 +1,8 @@
 #include "ConnectMenu.h"
+#ifndef CONFIG_IDF_TARGET_ESP32P4
 #include "core/connect/file_sharing.h"
 #include "core/connect/serial_commands.h"
+#endif
 #include "core/display.h"
 #include "core/settings.h"
 #include "core/utils.h"
@@ -8,12 +10,14 @@
 
 void ConnectMenu::optionsMenu() {
     options = {
+#ifndef CONFIG_IDF_TARGET_ESP32P4
 #ifndef LITE_VERSION
         {"Send File", [=]() { FileSharing().sendFile(); }        },
         {"Recv File", [=]() { FileSharing().receiveFile(); }     },
 
         {"Send Cmds", [=]() { EspSerialCmd().sendCommands(); }   },
         {"Recv Cmds", [=]() { EspSerialCmd().receiveCommands(); }},
+#endif
 #endif
     };
     addOptionToMainMenu();

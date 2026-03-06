@@ -1,6 +1,7 @@
 #include "file_sharing.h"
 #include "core/display.h"
 #include <SD.h>
+#ifndef CONFIG_IDF_TARGET_ESP32P4
 FileSharing::FileSharing() {}
 
 void FileSharing::sendFile() {
@@ -173,3 +174,4 @@ void FileSharing::createFilename(FS *fs, FileSharing::Message fileMessage) {
 
     recvFileName = messageFilepath + "/" + filename + ext;
 }
+#endif

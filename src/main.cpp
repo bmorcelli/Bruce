@@ -1,6 +1,4 @@
 #include "core/main_menu.h"
-#include <globals.h>
-
 #include "core/powerSave.h"
 #include "core/serial_commands/cli.h"
 #include "core/utils.h"
@@ -9,6 +7,7 @@
 #include "esp_task_wdt.h"
 #include "esp_wifi.h"
 #include <functional>
+#include <globals.h>
 #include <string>
 #include <vector>
 io_expander ioExpander;
