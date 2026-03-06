@@ -5,7 +5,6 @@
 #include "esp_netif_net_stack.h"
 #include "modules/wifi/sniffer.h"
 #include "modules/wifi/tcp_utils.h"
-#include "modules/wifi/socks4_proxy.h"
 #include <globals.h>
 #include <modules/ethernet/ARPScanner.h>
 // #include "modules/wifi/responder.h"
@@ -94,15 +93,6 @@ uint32_t listenTCPCallback(cmd *c) {
     return true;
 }
 
-uint32_t socks4ProxyCallback(cmd *c) {
-    if (!wifiConnected) {
-        Serial.println("Connect to a WiFi first.");
-        return false;
-    }
-    socks4Proxy(1080);
-    return true;
-}
-
 /*
 uint32_t responderCallback(cmd *c) {
     if (!wifiConnected) {
@@ -131,8 +121,6 @@ void createWifiCommands(SimpleCLI *cli) {
 
     Command listenTCPCmd =
         cli->addCommand("listen", listenTCPCallback); // TODO: make possible to select port to open via Serial
-
-    Command socks4Cmd = cli->addCommand("socks4", socks4ProxyCallback);
 
     Command snifferCmd =
         cli->addCommand("sniffer", snifferCallback); // TODO: be able to exit from it from Serial
