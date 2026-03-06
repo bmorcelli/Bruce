@@ -86,6 +86,8 @@ public:
     int colorInverted = 1;
     int badUSBBLEKeyboardLayout = 0;
     uint16_t badUSBBLEKeyDelay = 10;
+    uint16_t badUSBStringDelay = 5;
+    uint16_t badUSBBLEStringDelay = 15;
     bool badUSBBLEShowOutput = true;
 
     std::vector<String> disabledMenus = {};
@@ -183,6 +185,10 @@ public:
     void validateBadUSBBLEKeyboardLayout();
     void setBadUSBBLEKeyDelay(uint16_t value);
     void validateBadUSBBLEKeyDelay();
+    void setBadUSBStringDelay(uint16_t value);
+    void validateBadUSBStringDelay();
+    void setBadUSBBLEStringDelay(uint16_t value);
+    void validateBadUSBBLEStringDelay();
     void setBadUSBBLEShowOutput(bool value);
     void addDisabledMenu(String value);
     // TODO: removeDisabledMenu(String value);
