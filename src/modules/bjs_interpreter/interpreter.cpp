@@ -29,8 +29,25 @@ void interpreterHandler(void *pvParameters) {
     tft.setTextColor(TFT_WHITE);
     bool psramAvailable = psramFound();
 
-    size_t mem_size = psramAvailable ? 65536 : 32768;
+    // Use build-time override if set, otherwise 512KB for PSRAM, 32KB without
+#ifdef BJS_HEAP_SIZE
+    size_t mem_size = BJS_HEAP_SIZE;
+#else
+    size_t mem_size = psramAvailable ? (512 * 1024) : 32768;
+#endif
     uint8_t *mem_buf = psramAvailable ? (uint8_t *)ps_malloc(mem_size) : (uint8_t *)malloc(mem_size);
+    if (!mem_buf) {
+        // Fallback: try smaller allocation
+        mem_size = psramAvailable ? 65536 : 32768;
+        mem_buf = psramAvailable ? (uint8_t *)ps_malloc(mem_size) : (uint8_t *)malloc(mem_size);
+    }
+    if (!mem_buf) {
+        log_e("Failed to allocate JS heap");
+        interpreter_state = -1;
+        vTaskDelete(NULL);
+        return;
+    }
+    log_i("JS heap: %u bytes (%s)", mem_size, psramAvailable ? "PSRAM" : "internal");
     JSContext *ctx = JS_NewContext(mem_buf, mem_size, &js_stdlib);
     JS_SetLogFunc(ctx, js_log_func);
 
