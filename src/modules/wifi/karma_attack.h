@@ -1,6 +1,7 @@
 #ifndef KARMA_ATTACK_H
 #define KARMA_ATTACK_H
 #ifndef LITE_VERSION
+#include "evil_portal.h"
 #include <Arduino.h>
 #include <FS.h>
 #include <map>
@@ -138,7 +139,7 @@ struct BackgroundPortal {
     EvilPortal *instance;             // Portal instance
     String portalId;                  // Unique ID for file naming
     String ssid;                      // SSID being spoofed
-    uint8_t channel;                  // Channel this portal runs on
+    uint8_t channel;                   // Channel this portal runs on
     unsigned long lastHeartbeat;      // Last time we checked this portal
     unsigned long launchTime;         // When portal was launched
     bool hasCreds;                    // Whether credentials captured

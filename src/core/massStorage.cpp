@@ -1,5 +1,5 @@
-#if defined(SOC_USB_OTG_SUPPORTED)
 #include "massStorage.h"
+#if defined(SOC_USB_OTG_SUPPORTED)
 #include "core/display.h"
 #include <USB.h>
 bool MassStorage::shouldStop = false;
