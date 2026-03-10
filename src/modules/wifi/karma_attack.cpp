@@ -23,11 +23,32 @@
 #include <map>
 #include <queue>
 #include <set>
+#include <string.h>
 #include <vector>
 
 void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type);
 void saveHandshakeToFile(const HandshakeCapture &hs);
 void forceFullRedraw();
+
+static void copyStringToBuffer(char *dest, size_t destSize, const String &src) {
+    if (destSize == 0) return;
+    strncpy(dest, src.c_str(), destSize - 1);
+    dest[destSize - 1] = '\0';
+}
+
+static bool probeSSIDEquals(const ProbeRequest &probe, const char *value) {
+    return strcmp(probe.ssid, value) == 0;
+}
+
+static bool probeSSIDEmpty(const ProbeRequest &probe) { return probe.ssid[0] == '\0'; }
+
+static void freeProbeFrame(ProbeRequest &probe) {
+    if (probe.frame != nullptr) {
+        free(probe.frame);
+        probe.frame = nullptr;
+    }
+    probe.frame_len = 0;
+}
 
 #ifndef KARMA_CHANNELS
 #define KARMA_CHANNELS
@@ -770,7 +791,7 @@ void analyzeClientBehavior(const ProbeRequest &probe) {
         behavior.probedSSIDs.push_back(probe.ssid);
         behavior.favoriteChannel = probe.channel;
         behavior.lastKarmaAttempt = 0;
-        behavior.isVulnerable = (probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*");
+        behavior.isVulnerable = (!probeSSIDEmpty(probe) && !probeSSIDEquals(probe, "*WILDCARD*"));
         clientBehaviors[probe.fingerprint] = behavior;
         uniqueClients++;
     } else {
@@ -790,7 +811,7 @@ void analyzeClientBehavior(const ProbeRequest &probe) {
                 break;
             }
         }
-        if (!ssidExists && probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*" &&
+        if (!ssidExists && !probeSSIDEmpty(probe) && !probeSSIDEquals(probe, "*WILDCARD*") &&
             behavior.probedSSIDs.size() < 5) {
             behavior.probedSSIDs.push_back(probe.ssid);
             if (behavior.probedSSIDs.size() >= VULNERABLE_THRESHOLD) behavior.isVulnerable = true;
@@ -811,7 +832,7 @@ uint8_t calculateAttackPriority(const ClientBehavior &client, const ProbeRequest
     if (sinceLast < 5000) score += 15;
     else if (sinceLast < 15000) score += 10;
     else if (sinceLast < 30000) score += 5;
-    if (probe.ssid == "*WILDCARD*") score = 0;
+    if (probeSSIDEquals(probe, "*WILDCARD*")) score = 0;
     return min(score, (uint8_t)100);
 }
 
@@ -1206,12 +1227,13 @@ void processResponseQueue() {
 }
 
 void queueProbeResponse(const ProbeRequest &probe, const RSNInfo &rsn) {
-    if (macBlacklist.find(probe.mac) != macBlacklist.end()) {
-        if (millis() - macBlacklist[probe.mac] < 60000) return;
-        else macBlacklist.erase(probe.mac);
+    String probeMac = probe.mac;
+    if (macBlacklist.find(probeMac) != macBlacklist.end()) {
+        if (millis() - macBlacklist[probeMac] < 60000) return;
+        else macBlacklist.erase(probeMac);
     }
     if (responseQueue.size() >= 10) return;
-    if (probe.ssid == "*WILDCARD*") return;
+    if (probeSSIDEquals(probe, "*WILDCARD*")) return;
     ProbeResponseTask task;
     task.ssid = probe.ssid;
     task.targetMAC = probe.mac;
@@ -1855,7 +1877,7 @@ void saveProbesToPCAP(FS &fs) {
         int idx = bufferWrapped ? (probeBufferIndex + i) % MAX_PROBE_BUFFER : i;
         const ProbeRequest &probe = probeBuffer[idx];
 
-        if (probe.frame_len == 0) continue;
+        if (probe.frame_len == 0 || probe.frame == nullptr) continue;
 
         uint32_t ts_sec = probe.timestamp / 1000;
         uint32_t ts_usec = (probe.timestamp % 1000) * 1000;
@@ -1968,23 +1990,27 @@ void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
     RSNInfo rsn = extractRSNInfo(pkt->payload, pkt->rx_ctrl.sig_len);
     bool hasRSNInfo = (rsn.akmSuite > 0 || rsn.pairwiseCipher > 0);
 
-    ProbeRequest probe;
-    probe.mac = mac;
-    probe.ssid = ssid;
+    ProbeRequest probe = {};
+    copyStringToBuffer(probe.mac, sizeof(probe.mac), mac);
+    copyStringToBuffer(probe.ssid, sizeof(probe.ssid), ssid);
     probe.rssi = ctrl.rssi;
     probe.timestamp = millis();
     probe.channel = pgm_read_byte(&karma_channels[channl % 14]);
     probe.fingerprint = fingerprint;
+    probe.frame = nullptr;
 
     if (hasRSNInfo) {
         probe.frame_len = pkt->rx_ctrl.sig_len;
-        if (probe.frame_len > 128) probe.frame_len = 128;
-        memcpy(probe.frame, pkt->payload, probe.frame_len);
+        if (probe.frame_len > PROBE_FRAME_CAPTURE_LEN) probe.frame_len = PROBE_FRAME_CAPTURE_LEN;
+        probe.frame = (uint8_t *)malloc(probe.frame_len);
+        if (probe.frame != nullptr) memcpy(probe.frame, pkt->payload, probe.frame_len);
+        else probe.frame_len = 0;
         pmkidCaptured++;
     } else {
         probe.frame_len = 0;
     }
 
+    freeProbeFrame(probeBuffer[probeBufferIndex]);
     probeBuffer[probeBufferIndex] = probe;
     probeBufferIndex = (probeBufferIndex + 1) % MAX_PROBE_BUFFER;
     if (probeBufferIndex == 0) bufferWrapped = true;
@@ -2084,7 +2110,11 @@ void clearProbes() {
         vRingbufferDelete(macRingBuffer);
         initMACCache();
     }
-    for (int i = 0; i < MAX_PROBE_BUFFER; i++) { probeBuffer[i].frame_len = 0; }
+    for (int i = 0; i < MAX_PROBE_BUFFER; i++) {
+        freeProbeFrame(probeBuffer[i]);
+        probeBuffer[i].mac[0] = '\0';
+        probeBuffer[i].ssid[0] = '\0';
+    }
 }
 
 std::vector<ProbeRequest> getUniqueProbes() {
@@ -2096,11 +2126,14 @@ std::vector<ProbeRequest> getUniqueProbes() {
     for (int i = 0; i < count; i++) {
         int idx = (start + i) % MAX_PROBE_BUFFER;
         const ProbeRequest &probe = probeBuffer[idx];
-        if (probe.ssid.isEmpty() || probe.ssid == "*WILDCARD*") continue;
-        String key = String(probe.fingerprint) + ":" + probe.ssid;
+        if (probeSSIDEmpty(probe) || probeSSIDEquals(probe, "*WILDCARD*")) continue;
+        String key = String(probe.fingerprint) + ":" + String(probe.ssid);
         if (seen.find(key) == seen.end()) {
             seen.insert(key);
-            unique.push_back(probe);
+            ProbeRequest copy = probe;
+            copy.frame = nullptr;
+            copy.frame_len = 0;
+            unique.push_back(copy);
             if (unique.size() >= 10) break;
         }
     }
@@ -2269,7 +2302,11 @@ void karma_setup() {
     pmkidCaptured = 0;
     assocBlocked = 0;
 
-    for (int i = 0; i < MAX_PROBE_BUFFER; i++) { probeBuffer[i].frame_len = 0; }
+    for (int i = 0; i < MAX_PROBE_BUFFER; i++) {
+        freeProbeFrame(probeBuffer[i]);
+        probeBuffer[i].mac[0] = '\0';
+        probeBuffer[i].ssid[0] = '\0';
+    }
 
     if (macRingBuffer) vRingbufferDelete(macRingBuffer);
     initMACCache();
@@ -2764,15 +2801,15 @@ void karma_setup() {
                          }
                      }
                      for (const auto &probe : uniqueProbes) {
-                         String itemText =
-                             probe.ssid + " (" + String(probe.rssi) + "|ch" + String(probe.channel) + ")";
-                         if (itemText.length() > 40) itemText = itemText.substring(0, 37) + "...";
-                         karmaOptions.push_back({itemText.c_str(), [=, &probe]() {
-                                                     launchManualEvilPortal(
-                                                         probe.ssid,
-                                                         probe.channel,
-                                                         selectedTemplate.verifyPassword
-                                                     );
+                          String itemText =
+                              String(probe.ssid) + " (" + String(probe.rssi) + "|ch" + String(probe.channel) + ")";
+                          if (itemText.length() > 40) itemText = itemText.substring(0, 37) + "...";
+                          karmaOptions.push_back({itemText.c_str(), [=, &probe]() {
+                                                      launchManualEvilPortal(
+                                                          String(probe.ssid),
+                                                          probe.channel,
+                                                          selectedTemplate.verifyPassword
+                                                      );
                                                      screenNeedsRedraw = true;
                                                  }});
                      }
@@ -3053,17 +3090,16 @@ void saveProbesToFile(FS &fs, bool compressed) {
             for (int i = 0; i < count; i++) {
                 int idx = bufferWrapped ? (probeBufferIndex + i) % MAX_PROBE_BUFFER : i;
                 const ProbeRequest &probe = probeBuffer[idx];
-                if (probe.ssid.isEmpty() || probe.ssid == "*WILDCARD*") continue;
+                if (probeSSIDEmpty(probe) || probeSSIDEquals(probe, "*WILDCARD*")) continue;
                 uint32_t timestamp = probe.timestamp;
                 file.write((uint8_t *)&timestamp, 4);
-                file.write((uint8_t *)probe.mac.c_str(), 17);
+                file.write((uint8_t *)probe.mac, 17);
                 int8_t rssi = (int8_t)probe.rssi;
                 file.write((uint8_t *)&rssi, 1);
                 file.write((uint8_t *)&probe.channel, 1);
-                uint8_t ssidLen = (uint8_t)probe.ssid.length();
+                uint8_t ssidLen = (uint8_t)strlen(probe.ssid);
                 file.write(&ssidLen, 1);
-                if (ssidLen > 0 && probe.ssid != "*HIDDEN*")
-                    file.write((uint8_t *)probe.ssid.c_str(), ssidLen);
+                if (ssidLen > 0 && !probeSSIDEquals(probe, "*HIDDEN*")) file.write((uint8_t *)probe.ssid, ssidLen);
             }
             file.close();
         }
@@ -3076,14 +3112,14 @@ void saveProbesToFile(FS &fs, bool compressed) {
             for (int i = 0; i < count; i++) {
                 int idx = bufferWrapped ? (probeBufferIndex + i) % MAX_PROBE_BUFFER : i;
                 const ProbeRequest &probe = probeBuffer[idx];
-                if (probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*") {
+                if (!probeSSIDEmpty(probe) && !probeSSIDEquals(probe, "*WILDCARD*")) {
                     file.printf(
                         "%lu,%s,%d,%d,\"%s\"\n",
                         probe.timestamp,
-                        probe.mac.c_str(),
+                        probe.mac,
                         probe.rssi,
                         probe.channel,
-                        probe.ssid.c_str()
+                        probe.ssid
                     );
                 }
             }

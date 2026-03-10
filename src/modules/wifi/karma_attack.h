@@ -56,16 +56,21 @@ typedef struct {
     uint8_t ieCount;            // Number of IEs
 } ClientFingerprint;
 
+constexpr size_t PROBE_MAC_STR_LEN = 18;
+constexpr size_t PROBE_SSID_MAX_LEN = 32;
+constexpr size_t PROBE_SSID_BUF_LEN = PROBE_SSID_MAX_LEN + 1;
+constexpr size_t PROBE_FRAME_CAPTURE_LEN = 128;
+
 // Probe request data structure
 typedef struct {
-    String mac;
-    String ssid;
-    int rssi;
-    unsigned long timestamp;
+    char mac[PROBE_MAC_STR_LEN];
+    char ssid[PROBE_SSID_BUF_LEN];
+    int8_t rssi;
+    uint32_t timestamp;
     uint8_t channel;
-    uint8_t frame[128];
     uint16_t frame_len;
     uint32_t fingerprint; // Hash of IE parameters for device tracking
+    uint8_t *frame;
 } ProbeRequest;
 
 // Client behavior tracking (keyed by fingerprint, not MAC)
