@@ -59,6 +59,10 @@ private:
     bool isSleeping = false;
     bool logging = false;
     bool _logging = false;
+#if defined(HAS_EINK)
+    bool einkDirty = false;
+    uint32_t lastEinkFlushMs = 0;
+#endif
     void clearLog();
     bool async_serial = false;
     TaskHandle_t asyncSerialTask = NULL;
@@ -85,6 +89,10 @@ private:
         return textbgcolor;
 #endif
     }
+    String sanitizeText(const String &s) const;
+
+    void markDirty();
+    static uint16_t mapColor(uint32_t color);
 
 public:
     tft_logger(int16_t w = TFT_WIDTH, int16_t h = TFT_HEIGHT);
@@ -102,10 +110,14 @@ public:
     void removeOverlappedImages(int x, int y, int center, int ms);
 
     void fillScreen(int32_t color);
+    void drawPixel(int32_t x, int32_t y, int32_t color);
+    void setTextColor(uint16_t fg);
+    void setTextColor(uint16_t fg, uint16_t bg);
     void startAsyncSerial();
     void stopAsyncSerial();
     void getTftInfo();
     void imageToBin(uint8_t fs, String file, int x, int y, bool center, int Ms);
+    bool flushEinkIfDirty(uint32_t minIntervalMs = 250);
 
     void drawLine(int32_t x, int32_t y, int32_t x1, int32_t y1, int32_t color);
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);

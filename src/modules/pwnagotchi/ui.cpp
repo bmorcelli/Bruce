@@ -149,11 +149,19 @@ void drawMood(String face, String phrase, bool broken) {
     // draw screen
     tft.drawPixel(0, 0, 0);
     tft.fillRect(0, canvas_top_h + 10, display_w, canvas_bot_h - 40, bruceConfig.bgColor);
+#ifdef SMOOTH_FONT
     tft.drawCentreString(face, canvas_center_x, canvas_h / 3, SMOOTH_FONT);
+#else
+    tft.drawCentreString(face, canvas_center_x, canvas_h / 3);
+#endif
     // prepare canvas
     tft.setTextDatum(BC_DATUM);
     tft.setTextSize(1);
     // draw screen
     tft.drawPixel(0, 0, 0);
+#ifdef SMOOTH_FONT
     tft.drawCentreString(phrase, canvas_center_x, canvas_h - 30, SMOOTH_FONT);
+#else
+    tft.drawCentreString(phrase, canvas_center_x, canvas_h - 30);
+#endif
 }

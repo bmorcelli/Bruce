@@ -3,7 +3,7 @@
 # :shark: Bruce
 
 Bruce is a versatile ESP32 firmware that supports a ton of offensive features focusing on facilitating Red Team operations.
-It also supports M5stack and Lilygo products and works great with Cardputer, Sticks, M5Cores, T-Decks and T-Embeds.
+It also supports M5stack and Lilygo products and works great with Cardputer, Sticks, M5Cores, CoreInk, T-Decks and T-Embeds.
 
 **Check our fully open-source hardware too:** https://bruce.computer/boards
 
@@ -221,6 +221,7 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 | [M5Stack M5Core BASIC](https://shop.m5stack.com/products/basic-core-iot-development-kit)    | :ok:        | :ok:       | :ok:       | :ok:        | :ok:  | :ok:¹     | :x:     | Tone      | :x:        | :x:       |
 | [M5Stack M5Core2](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit-v1-1)    | :ok:        | :ok:          | :ok:        | :ok:        | :ok:  | :ok:¹     | :x:     | :x:       | :x:        | :x:       |
 | [M5Stack M5CoreS3](https://shop.m5stack.com/products/m5stack-cores3-esp32s3-lotdevelopment-kit)/[SE](https://shop.m5stack.com/products/m5stack-cores3-se-iot-controller-w-o-battery-bottom)     | :ok:        | :ok:         | :ok:        | :ok:        | :x:   | :ok:      | :x:     | :x:       | :x:        | :x:       |
+| [M5Stack CoreInk](https://shop.m5stack.com/products/m5stack-esp32-core-ink-development-kit1-54-elnk-display)    | :ok:        | :ok:       | :ok:       | :ok:        | :x:  | :ok:¹     | :x:     | :x:       | :ok:        | :x:       |
 | [JCZN CYD&#x2011;2432S028](https://www.aliexpress.us/item/3256804774970998.html)       | :ok:      | :ok:     | :ok:       | :ok:      | :x:   | :ok:¹     | :x:     | :x:       | :x:        | :x:²      |
 | [Lilygo T&#x2011;Embed CC1101](https://lilygo.cc/products/t-embed-cc1101)   | :ok:      | :ok:         | :ok:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :ok:       | :x:       |
 | [Lilygo T&#x2011;Embed](https://lilygo.cc/products/t-embed)          | :ok:       | :ok:      | :ok:       | :ok:      | :ok:  | :ok:      | :ok:    | :ok:      | :x:        | :x:       |
@@ -236,6 +237,44 @@ Also, [read our FAQ](https://github.com/pr3y/Bruce/wiki/FAQ)
 ¹ Core, CYD and StickCs Bad-USB: [here](https://github.com/pr3y/Bruce/wiki/Others#badusb)
 
 *LITE_VERSION*: TelNet, SSH, WireGuard, ScanHosts, RawSniffer, Brucegotchi, BLEBacon, BLEScan and Interpreter are NOT available for M5Launcher Compatibility
+
+
+## :desktop_computer: E-Ink Display Optimizations (M5Stack CoreInk)
+
+The M5Stack CoreInk features a 200x200 pixel e-ink display that requires special optimizations for an optimal user experience. This fork includes several key enhancements specifically designed for e-ink displays:
+
+### Display & Power Management
+- **No Backlight Control**: E-ink displays don't have backlights, so brightness controls are disabled
+- **Screen Timeout Disabled**: Screen dimming and auto-off features are bypassed as they don't apply to e-ink
+- **Optimized Sleep Mode**: Power saving mode is adapted to work without display backlight control
+- **LED Feedback**: Input button presses trigger brief LED pulses to provide immediate feedback (since display updates are slower)
+
+### Refresh Rate Control
+- **Configurable Refresh Intervals**: Choose from manual, 15s, 30s, 60s, or 5-minute automatic refresh rates
+  - Access via: Config → Display & UI → Refresh
+  - Manual mode (0ms): Display only updates when explicitly flushed by the application
+  - Timed modes: Display automatically flushes at specified intervals to reduce ghosting
+- **Intelligent Flush System**: Menu navigation uses a 300ms minimum flush interval to balance responsiveness with display longevity
+
+### Visual Optimizations
+- **Black & White Theme**: Colors are automatically forced to pure black (0x0000) on white (0xFFFF) background for maximum contrast
+- **Simplified Time Display**: Clock shows HH:MM format instead of HH:MM:SS to reduce unnecessary refreshes
+- **Disabled Scrolling Text**: Text scrolling animations are disabled as they consume excessive refresh cycles
+- **Inverted Color Default**: Color inversion is disabled by default (compared to stock Bruce) for natural e-ink appearance
+
+### Input Handling
+- **Rocker Navigation**: Uses the 3-button rocker switch (left/right for navigation, center for select)
+  - Short press center button: Select
+  - Long press center button (800ms+): Back/Escape
+  - Configurable inversion via Config → Display & UI → Rocker Invert
+
+### Hardware Support
+- **Battery Monitoring**: Full battery level reporting and charging status detection
+- **I2C Grove Connector**: Pin 21 (SDA) and Pin 22 (SCL) for external modules
+- **BadUSB Support**: Via Grove connector pins
+- **No Onboard SD Card**: External SD card adapters can be connected via I2C or SPI
+
+These optimizations ensure Bruce runs efficiently on the CoreInk while preserving battery life and extending the lifespan of the e-ink display.
 
 
 ## :sparkles: Why and how does it look?
