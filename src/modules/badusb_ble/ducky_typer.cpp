@@ -1,3 +1,4 @@
+#if !defined(LITE_VERSION)
 #include "ducky_typer.h"
 #include "core/display.h"
 #include "core/mykeyboard.h"
@@ -501,8 +502,8 @@ void key_input(FS fs, String bad_script, HIDInterface *_hid) {
             } else if (PriCmd->type != DuckyCommandType_Comment) {
                 printTFTBadUSBBLE(Command, bruceConfig.priColor);
                 if (Argument.length() > 0) {
-                    printTFTBadUSBBLE(" " + Argument, (ArgCmd == nullptr ? TFT_WHITE : NULL), true);
-                } else printTFTBadUSBBLE("", NULL, true);
+                    printTFTBadUSBBLE(" " + Argument, (ArgCmd == nullptr ? TFT_WHITE : TFT_WHITE), true);
+                } else printTFTBadUSBBLE("", TFT_WHITE, true);
             } else if (PriCmd->type == DuckyCommandType_Comment) {
                 printTFTBadUSBBLE(Argument, TFT_DARKGREEN, true);
             }
@@ -1059,3 +1060,4 @@ void PresenterMode(HIDInterface *&hid, bool ble) {
     hid->releaseAll();
     returnToMenu = true;
 }
+#endif
