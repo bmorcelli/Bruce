@@ -7,7 +7,6 @@
 #include "fastpair_crypto.h"
 #include "modules/NRF24/nrf_jammer_api.h"
 #include <SD.h>
-#include <TFT_eSPI.h>
 #include <esp_heap_caps.h>
 #include <globals.h>
 

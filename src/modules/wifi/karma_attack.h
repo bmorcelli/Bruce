@@ -25,7 +25,7 @@ struct BroadcastConfig {
     bool rotateChannels = true;         // Auto-rotate channels
     uint32_t channelHopInterval = 5000; // ms between channel hops
     bool respondToProbes = true;        // Launch attacks on probe responses
-    uint8_t maxActiveAttacks = 3;       // Max simultaneous attacks
+    uint8_t maxActiveAttacks = 3;       // Max queued auto-attacks
     bool prioritizeResponses = true;    // Focus on SSIDs that get responses
 };
 
@@ -56,16 +56,21 @@ typedef struct {
     uint8_t ieCount;            // Number of IEs
 } ClientFingerprint;
 
+constexpr size_t PROBE_MAC_STR_LEN = 18;
+constexpr size_t PROBE_SSID_MAX_LEN = 32;
+constexpr size_t PROBE_SSID_BUF_LEN = PROBE_SSID_MAX_LEN + 1;
+constexpr size_t PROBE_FRAME_CAPTURE_LEN = 128;
+
 // Probe request data structure
 typedef struct {
-    String mac;
-    String ssid;
-    int rssi;
-    unsigned long timestamp;
+    char mac[PROBE_MAC_STR_LEN];
+    char ssid[PROBE_SSID_BUF_LEN];
+    int8_t rssi;
+    uint32_t timestamp;
     uint8_t channel;
-    uint8_t frame[128];
     uint16_t frame_len;
     uint32_t fingerprint; // Hash of IE parameters for device tracking
+    uint8_t *frame;
 } ProbeRequest;
 
 // Client behavior tracking (keyed by fingerprint, not MAC)
@@ -134,7 +139,7 @@ typedef struct {
     uint32_t probeCount;
 } PendingPortal;
 
-// Background portal instance for multi-portal management
+// Single active portal instance
 struct BackgroundPortal {
     EvilPortal *instance;             // Portal instance
     String portalId;                  // Unique ID for file naming
@@ -144,10 +149,7 @@ struct BackgroundPortal {
     unsigned long launchTime;         // When portal was launched
     bool hasCreds;                    // Whether credentials captured
     String capturedPassword;          // Captured password if any
-    bool victimConnected;             // Whether a victim is actively connected
-    unsigned long lastClientActivity; // Last time victim interacted
     uint32_t clientFingerprint;       // Fingerprint of connected victim
-    bool markedForRemoval;            // Flag for cleanup after capture
 };
 
 // Karma configuration
@@ -237,10 +239,10 @@ private:
 // SSID Database class
 class SSIDDatabase {
 private:
-    static std::vector<String> ssidCache;
-    static bool cacheLoaded;
     static String currentFilename;
     static bool useLittleFS;
+    static FS *openSourceFs();
+    static bool readNextEntry(File &file, String &line);
     static bool loadFromFile();
 
 public:
@@ -305,23 +307,6 @@ void savePortalCredentials(
 String getDisplayName(const String &fullPath, bool isSD);
 void matchAPSignal(uint8_t channel);
 void setChannelWithSecond(uint8_t channel); // Helper for channel setting
-
-// External variables
-extern std::map<uint32_t, ClientBehavior> clientBehaviors; // Keyed by fingerprint
-extern ProbeRequest probeBuffer[200];
-extern uint16_t probeBufferIndex;
-extern bool bufferWrapped;
-extern KarmaConfig karmaConfig;
-extern AttackConfig attackConfig;
-extern ActiveBroadcastAttack broadcastAttack;
-extern bool screenNeedsRedraw;
-extern uint32_t pmkidCaptured;
-extern uint32_t assocBlocked;
-extern std::vector<BackgroundPortal *> activePortals; // Note: pointer vector
-extern KarmaMode currentMode;
-extern bool karmaPaused;
-extern bool handshakeCaptureEnabled;
-extern std::vector<HandshakeCapture> handshakeBuffer;
 
 #endif
 #endif
