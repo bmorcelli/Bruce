@@ -90,6 +90,9 @@ public:
     SPIClass &getSPIinstance() const;
     void writecommand(uint8_t c);
 
+    void display();
+    void setAutoDisplay(bool enabled);
+
     uint32_t getTextColor() const;
     uint32_t getTextBgColor() const;
     uint8_t getTextSize() const;
@@ -102,7 +105,7 @@ private:
         if (!data) return;
         for (int32_t row = 0; row < h; ++row) {
             for (int32_t col = 0; col < w; ++col) {
-                uint16_t color = data[row * w + col];
+                uint16_t color = normalizeColor(data[row * w + col]);
                 if (_swapBytes) color = static_cast<uint16_t>((color >> 8) | (color << 8));
                 M5.Display.drawPixel(x + col, y + row, color);
             }
@@ -110,6 +113,7 @@ private:
     }
 
     int16_t drawAlignedString(const String &s, int32_t x, int32_t y, uint8_t datum);
+    uint16_t normalizeColor(uint32_t color) const;
 
     uint16_t _height = TFT_HEIGHT;
     uint16_t _width = TFT_WIDTH;

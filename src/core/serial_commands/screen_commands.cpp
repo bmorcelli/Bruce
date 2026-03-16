@@ -3,6 +3,7 @@
 #include "core/utils.h" // time
 #include <globals.h>
 
+#if !defined(HAS_EINK)
 uint32_t brightnessCallback(cmd *c) {
     // backlight brightness adjust (range 0-255) https://docs.flipper.net/development/cli/#XQQAI
     // e.g. "led br 127"
@@ -81,6 +82,7 @@ uint32_t hexColorCallback(cmd *c) {
     bruceConfig.priColor = hexColor; // change global var, dont save in config
     return true;
 }
+#endif
 
 uint32_t clockCallback(cmd *c) {
 #if defined(HAS_RTC)
@@ -98,6 +100,7 @@ void createScreenCommands(SimpleCLI *cli) {
 
     Command screenCmd = cli->addCompositeCmd("screen");
 
+#if !defined(HAS_EINK)
     Command brightCmd = screenCmd.addCommand("br/ight/ness", brightnessCallback);
     brightCmd.addPosArg("value");
 
@@ -108,4 +111,5 @@ void createScreenCommands(SimpleCLI *cli) {
     rgbColorCmd.addPosArg("blue");
     Command hexColorCmd = colorCmd.addCommand("hex", hexColorCallback);
     hexColorCmd.addPosArg("value");
+#endif
 }
