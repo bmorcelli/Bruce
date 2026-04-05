@@ -65,7 +65,7 @@ int gsetRotation(bool set) {
     options = {
         {"Default",         [&]() { result = ROTATION; }                        },
         {"Landscape (180)", [&]() { result = ROTATION + mask; }                 },
-#if TFT_WIDTH >= 170 && TFT_HEIGHT >= 240
+#if (TFT_WIDTH >= 170 && TFT_HEIGHT >= 240) || (TFT_WIDTH == 200 && TFT_HEIGHT == 200)
         {"Portrait (+90)",  [&]() { result = ROTATION > 0 ? ROTATION - 1 : 3; } },
         {"Portrait (-90)",  [&]() { result = ROTATION == 3 ? 0 : ROTATION + 1; }},
 
@@ -159,6 +159,25 @@ void setBrightnessMenu() {
     setBrightness(bruceConfig.bright, false);
 }
 
+void setEinkRefreshMenu() {
+    int idx = 0;
+    if (bruceConfig.einkRefreshMs == 0) idx = 0;
+    else if (bruceConfig.einkRefreshMs == 15000) idx = 1;
+    else if (bruceConfig.einkRefreshMs == 30000) idx = 2;
+    else if (bruceConfig.einkRefreshMs == 60000) idx = 3;
+    else if (bruceConfig.einkRefreshMs == 300000) idx = 4;
+
+    options = {
+        {"Manual", [=]() { bruceConfig.setEinkRefreshMs(0); }     },
+        {"15s",    [=]() { bruceConfig.setEinkRefreshMs(15000); } },
+        {"30s",    [=]() { bruceConfig.setEinkRefreshMs(30000); } },
+        {"60s",    [=]() { bruceConfig.setEinkRefreshMs(60000); } },
+        {"5m",     [=]() { bruceConfig.setEinkRefreshMs(300000); }},
+    };
+    addOptionToMainMenu();
+    loopOptions(options, MENU_TYPE_REGULAR, "", idx);
+}
+
 /*********************************************************************
 **  Function: setSleepMode
 **  Turn screen off and reduces cpu clock
@@ -175,22 +194,24 @@ void setSleepMode() {
 }
 
 /*********************************************************************
-**  Function: setDimmerTimeMenu
-**  Handles Menu to set dimmer time
+**  Function: setBWInvertMenu
+**  Handles Menu to set B/W color inversion
 **********************************************************************/
-void setDimmerTimeMenu() {
-    int idx = 0;
-    if (bruceConfig.dimmerSet == 10) idx = 0;
-    else if (bruceConfig.dimmerSet == 20) idx = 1;
-    else if (bruceConfig.dimmerSet == 30) idx = 2;
-    else if (bruceConfig.dimmerSet == 60) idx = 3;
-    else if (bruceConfig.dimmerSet == 0) idx = 4;
+void setBWInvertMenu() {
+    int idx = bruceConfig.colorInverted ? 0 : 1;
     options = {
-        {"10s",      [=]() { bruceConfig.setDimmer(10); }, bruceConfig.dimmerSet == 10},
-        {"20s",      [=]() { bruceConfig.setDimmer(20); }, bruceConfig.dimmerSet == 20},
-        {"30s",      [=]() { bruceConfig.setDimmer(30); }, bruceConfig.dimmerSet == 30},
-        {"60s",      [=]() { bruceConfig.setDimmer(60); }, bruceConfig.dimmerSet == 60},
-        {"Disabled", [=]() { bruceConfig.setDimmer(0); },  bruceConfig.dimmerSet == 0 },
+        {"Enable",
+         [=]() {
+             bruceConfig.setColorInverted(1);
+             tft.invertDisplay(bruceConfig.colorInverted);
+             einkFlushIfDirty(0);
+         }, bruceConfig.colorInverted == 1},
+        {"Disable",
+         [=]() {
+             bruceConfig.setColorInverted(0);
+             tft.invertDisplay(bruceConfig.colorInverted);
+             einkFlushIfDirty(0);
+         }, bruceConfig.colorInverted == 0},
     };
     loopOptions(options, idx);
 }
@@ -200,6 +221,11 @@ void setDimmerTimeMenu() {
 **  Set and store main UI color
 **********************************************************************/
 void setUIColor() {
+#if defined(HAS_EINK)
+    bruceConfig.setUiColor(0x0000, nullptr, nullptr);
+    tft.invertDisplay(0);
+    return;
+#endif
 
     while (1) {
         options.clear();
@@ -999,6 +1025,9 @@ void runClockLoop(bool showMenuHint) {
                 hintVisible = false;
             }
             tmp = millis();
+#if defined(HAS_EINK)
+            einkFlushIfDirty();
+#endif
         }
 
         // Checks to exit the loop

@@ -90,6 +90,11 @@ bool BruceTheme::openThemeFile(FS *fs, String filepath, bool overwriteConfigSett
         if (!_th["priColor"].isNull()) { _priColor = strtoul(_th["priColor"], nullptr, 16); }
         if (!_th["secColor"].isNull()) { _secColor = strtoul(_th["secColor"], nullptr, 16); }
         if (!_th["bgColor"].isNull()) { _bgColor = strtoul(_th["bgColor"], nullptr, 16); }
+#if defined(HAS_EINK)
+        _priColor = 0xFFFF;
+        _secColor = 0xFFFF;
+        _bgColor = 0x0000;
+#endif
         _setUiColor(_priColor, &_secColor, &_bgColor);
 
 #ifdef HAS_RGB_LED
@@ -118,7 +123,16 @@ bool BruceTheme::validateImgFile(FS *fs, String filepath) {
 }
 
 void BruceTheme::_setUiColor(uint16_t primary, uint16_t *secondary, uint16_t *background) {
+#if defined(HAS_EINK)
+    (void)primary;
+    (void)secondary;
+    (void)background;
+    priColor = 0xFFFF;
+    secColor = 0xFFFF;
+    bgColor = 0x0000;
+#else
     priColor = primary;
     secColor = secondary == nullptr ? primary - 0x2000 : *secondary;
     bgColor = background == nullptr ? 0x0 : *background;
+#endif
 }

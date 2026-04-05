@@ -15,6 +15,7 @@ void getBrightness();
 int gsetRotation(bool set = false);
 
 void setBrightnessMenu();
+void setEinkRefreshMenu();
 
 void setUIColor();
 
@@ -58,7 +59,7 @@ void addMifareKeyMenu();
 
 void setSleepMode();
 
-void setDimmerTimeMenu();
+void setBWInvertMenu();
 
 void setClock();
 
