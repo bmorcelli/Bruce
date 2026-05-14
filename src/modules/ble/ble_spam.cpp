@@ -731,7 +731,7 @@ static BleSpamListMetrics bleSpamGetListMetrics(int footerLines) {
     metrics.list_y = BORDER_PAD_Y + FM * LH + 4;
     metrics.list_w = tftWidth - 20;
     int footer_h = footerLines * (FP * LH + 4);
-    metrics.footer_y = tftHeight - footer_h - 4;
+    metrics.footer_y = tftHeight - footer_h - 10;
     metrics.list_h = metrics.footer_y - metrics.list_y - 2;
     metrics.row_h = max(12, FP * LH + 4);
     metrics.visible_rows = max(1, metrics.list_h / metrics.row_h);
@@ -797,7 +797,7 @@ static void bleSpamRenderList(
 
     if (footer != nullptr) {
         tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-        tft.fillRect(8, metrics.footer_y, tftWidth - 16, FP * LH + 4, bruceConfig.bgColor);
+        tft.fillRect(8, metrics.footer_y, tftWidth - 16, FP * LH, bruceConfig.bgColor);
         tft.drawCentreString(footer, tftWidth / 2, metrics.footer_y + 2, 1);
     }
 }
@@ -1299,7 +1299,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
             tft.drawCentreString("[ Start ]", tftWidth / 2, startRowY + 2, 1);
 
             tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-            int footerY = tftHeight - FP * LH - 6;
+            int footerY = tftHeight - FP * LH - 12;
             tft.fillRect(8, footerY, tftWidth - 16, FP * LH + 4, bruceConfig.bgColor);
             tft.drawCentreString("Click=Select  ESC=Back", tftWidth / 2, footerY + 2, 1);
 
@@ -1395,7 +1395,7 @@ static void bleSpamRenderRunningScreen(
         tft.drawFastHLine(8, configStartY + rowH * 3 - 2, tftWidth - 16, bruceConfig.priColor);
 
         tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-        int footerY = tftHeight - FP * LH - 6;
+        int footerY = tftHeight - FP * LH - 12;
         tft.fillRect(8, footerY, tftWidth - 16, FP * LH + 4, bruceConfig.bgColor);
         tft.drawCentreString("Click=Edit  ESC=Stop", tftWidth / 2, footerY + 2, 1);
     }
@@ -1451,7 +1451,7 @@ static bool bleSpamStoppedPrompt(const BleSpamSelection &selection, uint32_t sen
                 tft.drawString(buf, 12, statsY + 2, 1);
 
                 tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-                int footerY = tftHeight - FP * LH - 6;
+                int footerY = tftHeight - FP * LH - 12;
                 tft.fillRect(8, footerY, tftWidth - 16, FP * LH + 4, bruceConfig.bgColor);
                 tft.drawCentreString("Click=Select  ESC=Back", tftWidth / 2, footerY + 2, 1);
                 layoutDrawn = true;
