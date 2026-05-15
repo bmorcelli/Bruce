@@ -33,6 +33,12 @@ void ConfigMenu::optionsMenu() {
             {"Power",         [this]() { powerMenu(); }    },
         };
 
+#if !defined(LITE_VERSION)
+        if (!appStoreInstalled()) {
+            localOptions.push_back({"Install App Store", []() { installAppStoreJS(); }});
+        }
+#endif
+
         if (bruceConfig.devMode) {
             localOptions.push_back({"Dev Mode", [this]() { devMenu(); }});
         }
