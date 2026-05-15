@@ -771,7 +771,7 @@ static const char *BLE_SPAM_ANDROID_DEVICES[] = {"Pixel Fast Pair", "Generic And
 // Windows: indices 0..3 are presets, 4 = Random/All, 5 = custom name (handled dynamically)
 static const char *BLE_SPAM_WINDOWS_PRESETS[] = {
     "Generic Swift Pair",
-    "Never gonna give you up",
+    "Never Gonna Give You Up",
     "Bill Nye's iPhone",
     "Skibidi Toilet",
     "67",
@@ -780,7 +780,7 @@ static const char *BLE_SPAM_WINDOWS_PRESETS[] = {
 
 // BLE Beacon: indices 0..N are presets, then Random/All, then saved custom names, then Add New
 static const char *BLE_SPAM_BEACON_PRESETS[] = {
-    "Never gonna give you up", "Bill Nye's iPhone", "Skibidi Toilet", "67", "FBI Surveillance Van"
+    "NeverGonnaGiveYoUp", "Bill Nye's iPhone", "Skibidi Toilet", "67", "FBISurveillanceVan"
 };
 static const char *BLE_SPAM_SAMSUNG_DEVICES[] = {
     "Galaxy Buds", "Galaxy Watch", "Generic Samsung", "Random / All"
@@ -1489,7 +1489,6 @@ static bool bleSpamBuildAdvertisementData(
                 // Custom saved name
                 name = bleSpamBeaconName;
             }
-            uint8_t nameLen = (uint8_t)min((int)name.length(), 20);
 
             uint8_t packet[31];
             uint8_t i = 0;
@@ -1498,19 +1497,27 @@ static bool bleSpamBuildAdvertisementData(
             packet[i++] = 0x02;
             packet[i++] = 0x01;
             packet[i++] = 0x06;
-            // Complete list of 16-bit UUIDs: HID service
+
+            // UUIDs
             packet[i++] = 0x03;
             packet[i++] = 0x03;
             packet[i++] = 0x12;
             packet[i++] = 0x18;
-            // Appearance: HID Keyboard (0x0180 in little-endian = 0x80, 0x01)
+
+            // Appearance
             packet[i++] = 0x03;
             packet[i++] = 0x19;
             packet[i++] = 0x80;
             packet[i++] = 0x01;
-            // Complete Local Name
+
+            // Compute remaining space
+            uint8_t maxNameLen = 31 - i - 2; // -2 for length + type
+            uint8_t nameLen = min((uint8_t)name.length(), maxNameLen);
+
+            // Name
             packet[i++] = nameLen + 1;
             packet[i++] = 0x09;
+
             memcpy(&packet[i], name.c_str(), nameLen);
             i += nameLen;
 
