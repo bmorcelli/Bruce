@@ -780,12 +780,7 @@ static const char *BLE_SPAM_WINDOWS_PRESETS[] = {
 
 // BLE Beacon: indices 0..N are presets, then Random/All, then saved custom names, then Add New
 static const char *BLE_SPAM_BEACON_PRESETS[] = {
-    "FBI Surveillance Van",
-    "CIA Mobile Unit",
-    "NSA Field Device",
-    "Definitely Not A Speaker",
-    "Your Neighbour's Printer",
-    "Free Candy Van WiFi"
+    "Never gonna give you up", "Bill Nye's iPhone", "Skibidi Toilet", "67", "FBI Surveillance Van"
 };
 static const char *BLE_SPAM_SAMSUNG_DEVICES[] = {
     "Galaxy Buds", "Galaxy Watch", "Generic Samsung", "Random / All"
