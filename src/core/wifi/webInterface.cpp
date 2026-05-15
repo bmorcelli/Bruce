@@ -60,9 +60,7 @@ void stopWebUi() {
 **********************************************************************/
 void cleanlyStopWebUiForWiFiFeature() {
     // Only proceed if WebUI is active
-    if (!isWebUIActive && !server) {
-        return;
-    }
+    if (!isWebUIActive && !server) { return; }
 
     // Brief notification (non-blocking)
     Serial.println("Stopping WebUI for WiFi feature...");
@@ -465,8 +463,9 @@ void configureWebServer() {
             uint64_t LittleFSUsedBytes = LittleFS.usedBytes();
             uint64_t SDTotalBytes = SD.totalBytes();
             uint64_t SDUsedBytes = SD.usedBytes();
-            sprintf(
+            snprintf(
                 response_body,
+                sizeof(response_body),
                 "{\"%s\":\"%s\",\"SD\":{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":\"%s\"},"
                 "\"LittleFS\":{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":\"%s\"}}",
                 "BRUCE_VERSION",
