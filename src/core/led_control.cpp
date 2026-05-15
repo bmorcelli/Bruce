@@ -591,18 +591,18 @@ void setLedEffectConfig() {
                  setLedEffect(LED_EFFECT_RAINBOW_BREATHE);
                  return false;
              }                                                                        },
-            {"Fire",
-             [=]() { bruceConfig.setLedEffect(LED_EFFECT_FIRE); },
-             bruceConfig.ledEffect == LED_EFFECT_FIRE,
-             [](void *pointer,                                                                         bool shouldRender) {
-                 setLedEffect(LED_EFFECT_FIRE);
-                 return false;
-             }                                                                        },
             {"Disco",
              [=]() { bruceConfig.setLedEffect(LED_EFFECT_DISCO); },
              bruceConfig.ledEffect == LED_EFFECT_DISCO,
              [](void *pointer,                                                                         bool shouldRender) {
                  setLedEffect(LED_EFFECT_DISCO);
+                 return false;
+             }                                                                        },
+            {"Fire",
+             [=]() { bruceConfig.setLedEffect(LED_EFFECT_FIRE); },
+             bruceConfig.ledEffect == LED_EFFECT_FIRE,
+             [](void *pointer,                                                                         bool shouldRender) {
+                 setLedEffect(LED_EFFECT_FIRE);
                  return false;
              }                                                                        },
 #endif
