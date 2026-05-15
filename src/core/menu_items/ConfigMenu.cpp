@@ -1,11 +1,11 @@
 #include "ConfigMenu.h"
+#include "../mykeyboard.h"
 #include "core/display.h"
 #include "core/i2c_finder.h"
 #include "core/main_menu.h"
 #include "core/settings.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h"
-#include "../mykeyboard.h"
 #ifdef HAS_RGB_LED
 #include "core/led_control.h"
 #endif
@@ -171,7 +171,7 @@ void ConfigMenu::systemMenu() {
             {"Startup App",                                                         [this]() { setStartupApp(); }        },
             {"Hide/Show Apps",                                                      [this]() { mainMenu.hideAppsMenu(); }},
             {"Clock",                                                               [this]() { setClock(); }             },
-            {String("Keyboard Language: ") + bruceConfig.keyboardLang,             [this]() { setKeyboardLanguage(); }  },
+            {String("Keyboard Language: ") + bruceConfig.keyboardLang,              [this]() { setKeyboardLanguage(); }  },
             {"Advanced",                                                            [this]() { advancedMenu(); }         },
             {"Back",                                                                []() {}                              },
         };
