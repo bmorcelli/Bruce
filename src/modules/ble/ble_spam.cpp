@@ -912,14 +912,14 @@ static BleSpamListMetrics bleSpamGetListMetrics(int footerLines) {
 }
 
 static String bleSpamTruncateText(const String &text, int maxWidth) {
-    if (tft.textWidth(text, 1) <= maxWidth) return text;
+    if (tft.textWidth(text.c_str()) <= maxWidth) return text;
 
     String trimmed = text;
     const String ellipsis = "...";
-    int maxTextWidth = maxWidth - tft.textWidth(ellipsis, 1);
+    int maxTextWidth = maxWidth - tft.textWidth(ellipsis.c_str());
     if (maxTextWidth <= 0) return ellipsis;
 
-    while (trimmed.length() > 0 && tft.textWidth(trimmed, 1) > maxTextWidth) {
+    while (trimmed.length() > 0 && tft.textWidth(trimmed.c_str()) > maxTextWidth) {
         trimmed.remove(trimmed.length() - 1);
     }
     return trimmed + ellipsis;
