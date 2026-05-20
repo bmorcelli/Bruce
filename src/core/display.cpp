@@ -1626,14 +1626,14 @@ uint16_t getColorVariation(uint16_t color, int delta, int direction) {
 // May need to reverse subscript order if porting elsewhere.
 
 uint16_t read16(fs::File &f) {
-    uint16_t result;
+    uint16_t result = 0;                // Initialize to prevent undefined behavior
     ((uint8_t *)&result)[0] = f.read(); // LSB
     ((uint8_t *)&result)[1] = f.read(); // MSB
     return result;
 }
 
 uint32_t read32(fs::File &f) {
-    uint32_t result;
+    uint32_t result = 0;                // Initialize to prevent undefined behavior
     ((uint8_t *)&result)[0] = f.read(); // LSB
     ((uint8_t *)&result)[1] = f.read();
     ((uint8_t *)&result)[2] = f.read();

@@ -338,7 +338,9 @@ static String sanitizeSsid(const char *ssid) {
 
 static String macToHex(const uint8_t *mac) {
     char buffer[13] = {0};
-    sprintf(buffer, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    snprintf(
+        buffer, sizeof(buffer), "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    );
     return String(buffer);
 }
 
@@ -997,8 +999,8 @@ void sniffer_setup() {
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
     wifi_config_t wifi_config;
-    strcpy((char *)wifi_config.ap.ssid, "BruceSniffer");
-    strcpy((char *)wifi_config.ap.password, "brucenet");
+    strlcpy((char *)wifi_config.ap.ssid, "BruceSniffer", sizeof(wifi_config.ap.ssid));
+    strlcpy((char *)wifi_config.ap.password, "brucenet", sizeof(wifi_config.ap.password));
     wifi_config.ap.ssid_len = strlen("BruceSniffer");
     wifi_config.ap.channel = 1;                   // Channel
     wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK; // auth mode
