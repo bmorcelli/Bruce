@@ -303,6 +303,7 @@ void _setBrightness(uint8_t brightval) {
 **********************************************************************/
 void InputHandler(void) {
     static unsigned long tm = millis();
+    static unsigned long lastEncoderMoveMs = 0;
     static int posDifference = 0;
     static int lastPos = 0;
     bool sel = !BTN_ACT;
@@ -317,6 +318,10 @@ void InputHandler(void) {
     if (newPos != lastPos) {
         posDifference += (newPos - lastPos);
         lastPos = newPos;
+        lastEncoderMoveMs = millis();
+    } else if (posDifference != 0 && millis() - lastEncoderMoveMs > 30) {
+        // Drop any stale queued steps once the encoder has stopped moving.
+        posDifference = 0;
     }
 
     sel = digitalRead(SEL_BTN);
