@@ -12,6 +12,10 @@
 #include "../m5stack-cardputer/pins_arduino.h"
 #elif CYD_2432S028
 #include "../CYD-2432S028/pins_arduino.h"
+#elif ARDUINO_NESSO_N1
+#include "../arduino-nesso-n1/pins_arduino.h"
+#elif ARDUINO_M5STACK_DINMETER
+#include "../m5stack-dinmeter/pins_arduino.h"
 #elif ARDUINO_M5STACK_CORE
 #include "../m5stack-core/pins_arduino.h"
 #elif ARDUINO_M5STACK_CORES3
