@@ -1062,10 +1062,11 @@ void runSessionUiLoop(const String &title) {
     while (!returnToMenu && !isSessionClosed()) {
         String output = takeQueuedOutput();
         if (!output.isEmpty()) { renderSessionOutput(title, output); }
+        bool isDelPressed = false;
 
 #ifdef HAS_KEYBOARD
         keyStroke key = _getKeyPress();
-        bool isDelPressed = key.del;
+        isDelPressed = key.del;
         if (key.pressed) {
             unsigned long currentMillis = millis();
             if (currentMillis - lastKeyPressMillis >= debounceDelay) {
