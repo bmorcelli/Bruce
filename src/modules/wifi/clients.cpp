@@ -149,7 +149,7 @@ void startSessionLog(ClientProtocol protocol) {
     withClientLock([&]() {
         closeSessionLogUnlocked();
 
-        if (!sdcardMounted) return;
+        if (!bruceConfig.TerminalLog || !sdcardMounted) return;
 
         if (!SD.exists("/Bruce")) SD.mkdir("/Bruce");
         if (!SD.exists("/Bruce/Terminal")) SD.mkdir("/Bruce/Terminal");
@@ -538,7 +538,7 @@ bool trySyncLiveInputFromRemoteLine(const String &line, bool renderUpdatedPrompt
 
     bool awaiting = false;
     withClientLock([&]() { awaiting = awaitingTabDebugResponse; });
-    if (awaiting && payload == liveInput) return false;
+    if (awaiting && payload == liveInput) return true;
 
     syncCommandBufferFromRemote(payload);
     withClientLock([&]() { awaitingTabDebugResponse = false; });
@@ -1104,15 +1104,22 @@ void runSessionUiLoop(const String &title) {
                 if (key.del) EscPress = false;
                 if (key.del) {
                     size_t promptLength = getCommandPromptLength();
+                    String liveInput = getTerminalLiveInput();
+                    bool remoteLineAlreadyActive = !liveInput.isEmpty();
                     if (commandBuffer.length() > promptLength) {
                         commandBuffer.remove(commandBuffer.length() - 1);
-                        setTerminalLiveInput(getBufferedCommandInput());
+                        if (remoteLineAlreadyActive) {
+                            setTerminalLiveInput(getBufferedCommandInput());
+                            queueSessionCommand(String(char(0x7f)));
+                        }
                         tft.setCursor(tft.getCursorX() - 6, tft.getCursorY());
                         tft.print(" ");
                         tft.setCursor(tft.getCursorX() - 6, tft.getCursorY());
                     } else {
-                        setTerminalLiveInput("");
-                        queueSessionCommand(String(char(0x7f)));
+                        if (remoteLineAlreadyActive) {
+                            setTerminalLiveInput("");
+                            queueSessionCommand(String(char(0x7f)));
+                        }
                     }
                 } else if (key.enter) {
                     String input = getBufferedCommandInput();

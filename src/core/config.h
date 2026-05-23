@@ -65,6 +65,7 @@ public:
     std::map<String, String> wifi = {};
     std::set<String> evilWifiNames = {};
     String wifiMAC = ""; //@IncursioHack
+    bool TerminalLog = true;
 
     // EvilPortal
     EvilPortalEndpoints evilPortalEndpoints = {"/creds", "/ssid", true, true, true};
@@ -152,6 +153,7 @@ public:
     // Wifi
     void setWebUICreds(const String &usr, const String &pwd);
     void setWifiApCreds(const String &ssid, const String &pwd);
+    void setTerminalLog(bool value);
     void addWifiCredential(const String &ssid, const String &pwd);
     void addQrCodeEntry(const String &menuName, const String &content);
     void removeQrCodeEntry(const String &menuName);

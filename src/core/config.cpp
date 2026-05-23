@@ -43,6 +43,7 @@ JsonDocument BruceConfig::toJson() const {
     _wifiAp["ssid"] = wifiAp.ssid;
     _wifiAp["pwd"] = wifiAp.pwd;
     setting["wifiMAC"] = wifiMAC; //@IncursioHack
+    setting["TerminalLog"] = TerminalLog;
 
     JsonArray _evilWifiNames = setting["evilWifiNames"].to<JsonArray>();
     for (auto key : evilWifiNames) _evilWifiNames.add(key);
@@ -289,6 +290,12 @@ void BruceConfig::fromFile(bool checkFS) {
         wifiMAC = "";
         count++;
         log_e("wifiMAC not found, using default");
+    }
+    if (!setting["TerminalLog"].isNull()) {
+        TerminalLog = setting["TerminalLog"].as<bool>();
+    } else {
+        count++;
+        log_e("TerminalLog not found, using default");
     }
 
     // Wifi List
@@ -635,6 +642,11 @@ void BruceConfig::setWebUICreds(const String &usr, const String &pwd) {
 void BruceConfig::setWifiApCreds(const String &ssid, const String &pwd) {
     wifiAp.ssid = ssid;
     wifiAp.pwd = pwd;
+    saveFile();
+}
+
+void BruceConfig::setTerminalLog(bool value) {
+    TerminalLog = value;
     saveFile();
 }
 
