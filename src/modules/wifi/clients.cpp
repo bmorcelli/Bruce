@@ -9,6 +9,7 @@
 
 #include "core/display.h"
 #include "core/mykeyboard.h"
+#include "core/sd_functions.h"
 #include "core/wifi/wifi_common.h"
 #include <Arduino.h>
 #include <errno.h>
@@ -57,6 +58,9 @@ SemaphoreHandle_t clientStateMutex = nullptr;
 TaskHandle_t clientTaskHandle = nullptr;
 
 ClientProtocol activeProtocol = ClientProtocol::None;
+File sessionLogFile;
+bool sessionLogEnabled = false;
+String sessionLogPath = "";
 String queuedCommand = "";
 String queuedOutput = "";
 String queuedPromptPrefix = "> ";
@@ -89,11 +93,90 @@ bool initClientMutex() {
     return clientStateMutex != nullptr;
 }
 
+const char *getProtocolName(ClientProtocol protocol) {
+    switch (protocol) {
+        case ClientProtocol::SSH: return "SSH";
+        case ClientProtocol::Telnet: return "Telnet";
+        default: return "Terminal";
+    }
+}
+
+String sanitizeSessionLogComponent(String value) {
+    value.trim();
+    if (value.isEmpty()) return "unknown";
+
+    for (size_t i = 0; i < value.length(); ++i) {
+        char c = value[i];
+        bool allowed = isAlphaNumeric(c) || c == '.' || c == '-' || c == '_';
+        if (!allowed) value.setCharAt(i, '_');
+    }
+    return value;
+}
+
+void closeSessionLogUnlocked() {
+    if (sessionLogFile) {
+        sessionLogFile.flush();
+        sessionLogFile.close();
+    }
+    sessionLogEnabled = false;
+    sessionLogPath = "";
+}
+
+void appendSessionLogUnlocked(const char *data, size_t len) {
+    if (!sessionLogEnabled || !sessionLogFile || data == nullptr || len == 0) return;
+    sessionLogFile.write(reinterpret_cast<const uint8_t *>(data), len);
+    sessionLogFile.flush();
+}
+
 template <typename Fn> void withClientLock(Fn &&fn) {
     if (clientStateMutex && xSemaphoreTake(clientStateMutex, portMAX_DELAY)) {
         fn();
         xSemaphoreGive(clientStateMutex);
     }
+}
+
+void appendSessionLog(const String &text) {
+    if (text.isEmpty()) return;
+    withClientLock([&]() { appendSessionLogUnlocked(text.c_str(), text.length()); });
+}
+
+void appendSessionCommandToLog(const String &command) {
+    if (command.isEmpty()) return;
+    appendSessionLog("\n[CLIENT] " + command + "\n");
+}
+
+void startSessionLog(ClientProtocol protocol) {
+    withClientLock([&]() {
+        closeSessionLogUnlocked();
+
+        if (!sdcardMounted) return;
+
+        if (!SD.exists("/Bruce")) SD.mkdir("/Bruce");
+        if (!SD.exists("/Bruce/Terminal")) SD.mkdir("/Bruce/Terminal");
+
+        String basePath = "/Bruce/Terminal/" + String(getProtocolName(protocol)) + "-" +
+                          sanitizeSessionLogComponent(sessionHost);
+        for (uint16_t index = 1; index < 10000; ++index) {
+            String candidate = basePath + "_" + String(index) + ".log";
+            if (SD.exists(candidate)) continue;
+
+            sessionLogFile = SD.open(candidate, FILE_WRITE);
+            if (!sessionLogFile) return;
+
+            sessionLogEnabled = true;
+            sessionLogPath = candidate;
+
+            String header = "=== Bruce Terminal Session ===\n";
+            header += "Protocol: " + String(getProtocolName(protocol)) + "\n";
+            header += "Host: " + sessionHost + "\n";
+            if (!sessionUser.isEmpty()) header += "User: " + sessionUser + "\n";
+            header += "Port: " + String(sessionPort) + "\n";
+            header += "Started at millis: " + String(millis()) + "\n";
+            header += "==============================\n";
+            appendSessionLogUnlocked(header.c_str(), header.length());
+            return;
+        }
+    });
 }
 
 void setClientTaskHandle(TaskHandle_t handle) {
@@ -108,6 +191,7 @@ TaskHandle_t getClientTaskHandle() {
 
 void resetClientState(ClientProtocol protocol) {
     withClientLock([&]() {
+        closeSessionLogUnlocked();
         activeProtocol = protocol;
         queuedCommand = "";
         queuedOutput = "";
@@ -160,6 +244,8 @@ void appendSessionOutput(const char *data, size_t len) {
     if (len == 0 || data == nullptr) return;
     withClientLock([&]() {
         queuedOutput.reserve(queuedOutput.length() + len);
+        String normalizedOutput = "";
+        normalizedOutput.reserve(len);
         for (size_t i = 0; i < len; ++i) {
             uint8_t raw = static_cast<uint8_t>(data[i]);
             char c = static_cast<char>(raw);
@@ -200,8 +286,10 @@ void appendSessionOutput(const char *data, size_t len) {
                 }
             }
             if (c == '\r') {
-                if (!queuedOutput.isEmpty() && queuedOutput[queuedOutput.length() - 1] != '\n')
+                if (!queuedOutput.isEmpty() && queuedOutput[queuedOutput.length() - 1] != '\n') {
                     queuedOutput += '\n';
+                    normalizedOutput += '\n';
+                }
                 previousOutputWasCR = true;
                 continue;
             }
@@ -213,7 +301,9 @@ void appendSessionOutput(const char *data, size_t len) {
             if (c == '\t') c = ' ';
             if (raw < 0x20 && c != '\n') continue;
             queuedOutput += c;
+            normalizedOutput += c;
         }
+        appendSessionLogUnlocked(normalizedOutput.c_str(), normalizedOutput.length());
     });
 }
 
@@ -659,6 +749,9 @@ void finishSessionUi(const String &title) {
     String status = getSessionStatus();
     if (status.isEmpty()) { status = (title == "SSH") ? "SSH session closed." : "Telnet session closed."; }
 
+    appendSessionLog("\n[STATUS] " + status + "\n");
+    withClientLock([&]() { closeSessionLogUnlocked(); });
+
     if (didSessionFail()) displayError(status, true);
     else displayWarning(status, true);
 
@@ -1023,6 +1116,8 @@ void runSessionUiLoop(const String &title) {
                 } else if (key.enter) {
                     String input = getBufferedCommandInput();
                     String liveInput = getTerminalLiveInput();
+                    String loggedCommand = !liveInput.isEmpty() ? liveInput : input;
+                    appendSessionCommandToLog(loggedCommand);
                     if (input == "cls" || input == "clear") {
                         clearTerminalPendingState();
                         resetClientScreen(title.c_str());
@@ -1046,8 +1141,10 @@ void runSessionUiLoop(const String &title) {
             while (check(SelPress)) { yield(); }
 
             if (message == "cls") {
+                appendSessionCommandToLog(message);
                 resetClientScreen(title.c_str());
             } else {
+                appendSessionCommandToLog(message);
                 queueSessionCommand(message + "\r");
                 tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
                 tft.println("> " + message);
@@ -1123,6 +1220,7 @@ void ssh_setup(String host) {
         return;
     }
 
+    startSessionLog(ClientProtocol::SSH);
     runSessionUiLoop("SSH");
 }
 
@@ -1167,6 +1265,7 @@ void telnet_setup() {
         return;
     }
 
+    startSessionLog(ClientProtocol::Telnet);
     runSessionUiLoop("TELNET");
 }
 #endif
