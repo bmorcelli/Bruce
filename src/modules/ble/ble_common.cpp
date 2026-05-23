@@ -2,8 +2,8 @@
 #include "core/mykeyboard.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h"
-#include "modules/badusb_ble/ducky_typer.h"
 #include "esp_mac.h"
+#include "modules/badusb_ble/ducky_typer.h"
 #if !defined(LITE_VERSION)
 #include "BLE_Suite.h"
 #endif
@@ -98,8 +98,8 @@ void stopBLEStack() {
         BLEStateManager::deinitBLE(true);
     } else
 #endif
-        if (BLEDevice::getScan() != nullptr || BLEDevice::getAdvertising() != nullptr || BLEDevice::getServer() != nullptr
-            || BLEConnected || is_ble_inited) {
+        if (BLEDevice::getScan() != nullptr || BLEDevice::getAdvertising() != nullptr ||
+            BLEDevice::getServer() != nullptr || BLEConnected || is_ble_inited) {
         BLEDevice::deinit();
     }
 
@@ -113,9 +113,12 @@ void stopBLEStack() {
     bleDataTransferEnabled = false;
     is_ble_inited = false;
     BLEConnected = false;
-
-    delete hid_ble;
-    hid_ble = nullptr;
+#if !defined(LITE_VERSION)
+    if (hid_ble) {
+        delete hid_ble;
+        hid_ble = nullptr;
+    }
+#endif
 }
 
 void ble_scan_setup() {
