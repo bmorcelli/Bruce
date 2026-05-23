@@ -54,6 +54,7 @@ JsonDocument BruceConfig::toJson() const {
     _evilWifiEndpoints["showEndpoints"] = evilPortalEndpoints.showEndpoints;
     _evilWifiEndpoints["allowSetSsid"] = evilPortalEndpoints.allowSetSsid;
     _evilWifiEndpoints["allowGetCreds"] = evilPortalEndpoints.allowGetCreds;
+    _evilWifiEndpoints["gatewayIp"] = evilPortalGatewayIp;
 
     setting["evilWifiPasswordMode"] = evilPortalPasswordMode;
 
@@ -324,6 +325,11 @@ void BruceConfig::fromFile(bool checkFS) {
         evilPortalEndpoints.showEndpoints = evilPortalEndpointsObj["showEndpoints"].as<bool>();
         evilPortalEndpoints.allowSetSsid = evilPortalEndpointsObj["allowSetSsid"].as<bool>();
         evilPortalEndpoints.allowGetCreds = evilPortalEndpointsObj["allowGetCreds"].as<bool>();
+        if (!evilPortalEndpointsObj["gatewayIp"].isNull()) {
+            evilPortalGatewayIp = evilPortalEndpointsObj["gatewayIp"].as<String>();
+        } else {
+            evilPortalGatewayIp = "172.0.0.1";
+        }
     } else {
         count++;
         log_e("Fail");
@@ -484,6 +490,7 @@ void BruceConfig::validateConfig() {
     validateEvilEndpointCreds();
     validateEvilEndpointSsid();
     validateEvilPasswordMode();
+    validateEvilGatewayIp();
 }
 
 void BruceConfig::setUiColor(uint16_t primary, uint16_t *secondary, uint16_t *background) {
@@ -725,6 +732,17 @@ void BruceConfig::setEvilPasswordMode(EvilPortalPasswordMode value) {
 
 void BruceConfig::validateEvilPasswordMode() {
     if (evilPortalPasswordMode < 0 || evilPortalPasswordMode > 2) evilPortalPasswordMode = FULL_PASSWORD;
+}
+
+void BruceConfig::setEvilGatewayIp(String value) {
+    evilPortalGatewayIp = value;
+    validateEvilGatewayIp();
+    saveFile();
+}
+
+void BruceConfig::validateEvilGatewayIp() {
+    IPAddress gatewayIp;
+    if (!gatewayIp.fromString(evilPortalGatewayIp)) evilPortalGatewayIp = "172.0.0.1";
 }
 
 void BruceConfig::setStartupApp(String value) {

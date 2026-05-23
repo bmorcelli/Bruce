@@ -488,7 +488,7 @@ bool IrRead::write_file(String filename, FS *fs) {
             case 2: (*fs).remove("/BruceIR/" + filename + ".ir"); break;
             case 3:
                 filename = keyboard(filename, 30, "File name:");
-                if (filename == "\x1B") return;
+                if (filename == "\x1B") return false;
                 display_banner();
                 break;
         }

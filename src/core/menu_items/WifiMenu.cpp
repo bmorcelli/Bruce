@@ -115,6 +115,7 @@ void WifiMenu::configMenu() {
     wifiOptions.push_back({"Evil Wifi Settings", [this]() {
                                std::vector<Option> evilOptions;
 
+                               evilOptions.push_back({"Set Gateway IP", setEvilGatewayIp});
                                evilOptions.push_back({"Password Mode", setEvilPasswordMode});
                                evilOptions.push_back({"Rename /creds", setEvilEndpointCreds});
                                evilOptions.push_back({"Allow /creds access", setEvilAllowGetCreds});
