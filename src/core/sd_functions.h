@@ -58,6 +58,11 @@ bool checkLittleFsSizeNM(); // Don't display msg
 
 bool getFsStorage(FS *&fs);
 
+String projectFsPath(FS *fs, String path);
+String projectFsPath(FS &fs, String path);
+bool ensureFsDir(FS *fs, String path);
+void migrateLegacySdLayoutIfNeeded();
+
 void fileInfo(FS fs, String filepath);
 
 File createNewFile(FS *&fs, String filepath, String filename);

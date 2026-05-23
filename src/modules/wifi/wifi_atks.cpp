@@ -530,25 +530,19 @@ void capture_handshake(String tssid, String mac, uint8_t channel) {
     if (setupSdCard()) {
         fs = &SD;
         isLittleFS = false;
-        if (!SD.exists("/BrucePCAP/handshakes")) {
-            SD.mkdir("/BrucePCAP");
-            SD.mkdir("/BrucePCAP/handshakes");
-        }
-        hsExists = SD.exists(hsFileName);
+        ensureFsDir(&SD, "/BrucePCAP/handshakes");
+        hsExists = SD.exists(projectFsPath(&SD, hsFileName));
     } else {
         fs = &LittleFS;
         isLittleFS = true;
-        if (!LittleFS.exists("/BrucePCAP/handshakes")) {
-            LittleFS.mkdir("/BrucePCAP");
-            LittleFS.mkdir("/BrucePCAP/handshakes");
-        }
-        hsExists = LittleFS.exists(hsFileName);
+        ensureFsDir(&LittleFS, "/BrucePCAP/handshakes");
+        hsExists = LittleFS.exists(projectFsPath(&LittleFS, hsFileName));
     }
 
     // Register the file path so the sniffer knows to save the capture to it
-    String hsFilePath = String(hsFileName);
+    String hsFilePath = projectFsPath(fs, hsFileName);
     if (!hsExists) {
-        File hsFile = fs->open(hsFileName, FILE_WRITE);
+        File hsFile = fs->open(hsFilePath, FILE_WRITE);
         if (hsFile) {
             writeHeader(hsFile);
             hsFile.close();

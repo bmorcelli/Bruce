@@ -154,7 +154,7 @@ static const char *IBUTTON_DIR = "/BruceIButton";
 static IButtonResult saveKey() {
     FS *fs;
     if (!getFsStorage(fs)) return IBUTTON_FAILURE;
-    if (!fs->exists(IBUTTON_DIR)) fs->mkdir(IBUTTON_DIR);
+    if (!ensureFsDir(fs, IBUTTON_DIR)) return IBUTTON_FAILURE;
 
     char fname[48];
     snprintf(
@@ -170,7 +170,7 @@ static IButtonResult saveKey() {
         keyBuffer[5]
     );
 
-    String path = fname;
+    String path = projectFsPath(fs, fname);
     if (fs->exists(path)) {
         int n = 1;
         String base = path.substring(0, path.lastIndexOf('.'));

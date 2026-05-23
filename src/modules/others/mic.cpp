@@ -432,10 +432,11 @@ bool mic_record_wav_to_path(
         if (!fixedPath.startsWith("/")) fixedPath = "/" + fixedPath;
 
         // Creating folders if necessary
+        fixedPath = projectFsPath(fs, fixedPath);
         int lastSlash = fixedPath.lastIndexOf('/');
         if (lastSlash > 0) {
             String dir = fixedPath.substring(0, lastSlash);
-            if (!fs->exists(dir)) fs->mkdir(dir);
+            ensureFsDir(fs, dir);
         }
 
         File audioFile = fs->open(fixedPath, FILE_WRITE, true);
@@ -749,18 +750,16 @@ void mic_record_app() {
             goto cleanup_and_exit;
         }
 
-        if (!fs->exists("/BruceMIC")) {
-            if (!fs->mkdir("/BruceMIC")) {
-                displayError("Dir creation failed", true);
-                goto cleanup_and_exit;
-            }
+        if (!ensureFsDir(fs, "/BruceMIC")) {
+            displayError("Dir creation failed", true);
+            goto cleanup_and_exit;
         }
 
         char filename[64];
         int index = 0;
         do {
             snprintf(filename, sizeof(filename), "/BruceMIC/recording_%d.wav", index++);
-        } while (fs->exists(filename));
+        } while (fs->exists(projectFsPath(fs, filename)));
 
         //===== UI CLEANING AND SETUP =====
 

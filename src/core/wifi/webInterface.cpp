@@ -347,13 +347,15 @@ void serveWebUIFile(
 ) {
     AsyncWebServerResponse *response = nullptr;
     FS *fs = NULL;
+    String sdUiPath = projectFsPath(&SD, "/BruceWebUI/" + filename);
+    String littleUiPath = projectFsPath(&LittleFS, "/BruceWebUI/" + filename);
     if (setupSdCard()) {
-        if (SD.exists("/BruceWebUI/" + filename)) fs = &SD;
-    } else if (LittleFS.exists("/BruceWebUI/" + filename)) {
+        if (SD.exists(sdUiPath)) fs = &SD;
+    } else if (LittleFS.exists(littleUiPath)) {
         fs = &LittleFS;
     }
     if (fs) {
-        response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
+        response = request->beginResponse(*fs, fs == &SD ? sdUiPath : littleUiPath, contentType);
     } else {
         if (filename == "theme.css") {
             String css = ":root{--color:" + color565ToWebHex(bruceConfig.priColor) +

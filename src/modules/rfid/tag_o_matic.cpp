@@ -533,15 +533,14 @@ void TagOMatic::save_scan_result() {
 
     String filename = "scan_result";
 
-    if (!(*fs).exists("/BruceRFID")) (*fs).mkdir("/BruceRFID");
-    if (!(*fs).exists("/BruceRFID/Scans")) (*fs).mkdir("/BruceRFID/Scans");
-    if ((*fs).exists("/BruceRFID/Scans/" + filename + ".rfidscan")) {
+    ensureFsDir(fs, "/BruceRFID/Scans");
+    if ((*fs).exists(projectFsPath(fs, "/BruceRFID/Scans/" + filename + ".rfidscan"))) {
         int i = 1;
         filename += "_";
-        while ((*fs).exists("/BruceRFID/Scans/" + filename + String(i) + ".rfidscan")) i++;
+        while ((*fs).exists(projectFsPath(fs, "/BruceRFID/Scans/" + filename + String(i) + ".rfidscan"))) i++;
         filename += String(i);
     }
-    File file = (*fs).open("/BruceRFID/Scans/" + filename + ".rfidscan", FILE_WRITE);
+    File file = (*fs).open(projectFsPath(fs, "/BruceRFID/Scans/" + filename + ".rfidscan"), FILE_WRITE);
 
     if (!file) { return; }
 
@@ -643,6 +642,8 @@ int TagOMatic::write_tag_headless(int timeout_seconds) {
 
 String TagOMatic::save_file_headless(String filename) {
     if (!_rfid) return "";
+    FS *fs;
+    if (!getFsStorage(fs)) return "";
 
     // Check for valid data
     if (_rfid->printableUID.uid.isEmpty()) {
@@ -654,7 +655,7 @@ String TagOMatic::save_file_headless(String filename) {
 
     if (result == RFIDInterface::SUCCESS) {
         // Build and return path
-        return "/BruceRFID/" + filename + ".rfid";
+        return projectFsPath(fs, "/BruceRFID/" + filename + ".rfid");
     }
 
     return ""; // Error
@@ -668,7 +669,7 @@ int TagOMatic::load_file_headless(String filename) {
 
     if (!filename.endsWith(".rfid")) { filename += ".rfid"; }
 
-    String filepath = "/BruceRFID/" + filename;
+    String filepath = projectFsPath(fs, "/BruceRFID/" + filename);
 
     if (!(*fs).exists(filepath)) {
         return RFIDInterface::TAG_NOT_PRESENT; // File not found

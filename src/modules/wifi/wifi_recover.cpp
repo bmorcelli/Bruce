@@ -1143,8 +1143,8 @@ void wifi_recover_menu() {
     }
 
     const String PCAP_DIR = "/BrucePCAP";
-    if (!(*fs).exists(PCAP_DIR)) {
-        if ((*fs).mkdir(PCAP_DIR)) padprintf("Created: %s\n", PCAP_DIR.c_str());
+    if (!(*fs).exists(projectFsPath(fs, PCAP_DIR))) {
+        if (ensureFsDir(fs, PCAP_DIR)) padprintf("Created: %s\n", projectFsPath(fs, PCAP_DIR).c_str());
         else padprintf("Warning: failed to create %s\n", PCAP_DIR.c_str());
     }
 

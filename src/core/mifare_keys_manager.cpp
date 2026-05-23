@@ -7,8 +7,10 @@
 void MifareKeysManager::ensureLoaded(std::set<String> &keys) {
     if (!keys.empty()) return; // Already loaded
 
+    String sdKeysPath = projectFsPath(&SD, KEYS_PATH);
+    String littleFsKeysPath = projectFsPath(&LittleFS, KEYS_PATH);
     // Try loading from file (SD priority)
-    if ((setupSdCard() && SD.exists(KEYS_PATH)) || LittleFS.exists(KEYS_PATH)) {
+    if ((setupSdCard() && SD.exists(sdKeysPath)) || LittleFS.exists(littleFsKeysPath)) {
         loadFromFile(keys);
     } else {
         createDefaultFile(keys);
@@ -76,8 +78,10 @@ void MifareKeysManager::reload(std::set<String> &keys) {
 void MifareKeysManager::clear(std::set<String> &keys) {
     keys.clear();
 
-    if (LittleFS.exists(KEYS_PATH)) LittleFS.remove(KEYS_PATH);
-    if (setupSdCard() && SD.exists(KEYS_PATH)) SD.remove(KEYS_PATH);
+    String littleFsKeysPath = projectFsPath(&LittleFS, KEYS_PATH);
+    String sdKeysPath = projectFsPath(&SD, KEYS_PATH);
+    if (LittleFS.exists(littleFsKeysPath)) LittleFS.remove(littleFsKeysPath);
+    if (setupSdCard() && SD.exists(sdKeysPath)) SD.remove(sdKeysPath);
 
     log_i("All keys cleared");
 }
@@ -114,20 +118,23 @@ void MifareKeysManager::validateKeys(std::set<String> &keys) {
 void MifareKeysManager::loadFromFile(std::set<String> &keys) {
     FS *sourceFS = nullptr;
     bool fromSD = false;
+    String sourcePath = "";
 
-    if (setupSdCard() && SD.exists(KEYS_PATH)) {
+    if (setupSdCard() && SD.exists(projectFsPath(&SD, KEYS_PATH))) {
         sourceFS = &SD;
+        sourcePath = projectFsPath(sourceFS, KEYS_PATH);
         fromSD = true;
         log_i("Loading keys from SD");
-    } else if (LittleFS.exists(KEYS_PATH)) {
+    } else if (LittleFS.exists(projectFsPath(&LittleFS, KEYS_PATH))) {
         sourceFS = &LittleFS;
+        sourcePath = projectFsPath(sourceFS, KEYS_PATH);
         log_i("Loading keys from LittleFS");
     } else {
         log_w("No keys file found");
         return;
     }
 
-    File file = sourceFS->open(KEYS_PATH, FILE_READ);
+    File file = sourceFS->open(sourcePath, FILE_READ);
     if (!file) {
         log_e("Failed to open keys file");
         return;
@@ -166,23 +173,27 @@ void MifareKeysManager::loadFromFile(std::set<String> &keys) {
 }
 
 bool MifareKeysManager::copyFileToFS(FS *sourceFS, FS *destFS, const char *destFsName) {
+    String sourceDir = projectFsPath(sourceFS, KEYS_DIR);
+    String sourcePath = projectFsPath(sourceFS, KEYS_PATH);
+    String destDir = projectFsPath(destFS, KEYS_DIR);
+    String destPath = projectFsPath(destFS, KEYS_PATH);
     // Ensure destination directory exists
-    if (!destFS->exists(KEYS_DIR)) {
-        if (!destFS->mkdir(KEYS_DIR)) {
+    if (!destFS->exists(destDir)) {
+        if (!ensureFsDir(destFS, destDir)) {
             log_e("Failed to create dir on %s", destFsName);
             return false;
         }
     }
 
     // Open source file for reading
-    File sourceFile = sourceFS->open(KEYS_PATH, FILE_READ);
+    File sourceFile = sourceFS->open(sourcePath, FILE_READ);
     if (!sourceFile) {
         log_e("Failed to open source file for copying");
         return false;
     }
 
     // Open destination file for writing
-    File destFile = destFS->open(KEYS_PATH, FILE_WRITE);
+    File destFile = destFS->open(destPath, FILE_WRITE);
     if (!destFile) {
         log_e("Failed to open destination file on %s", destFsName);
         sourceFile.close();
@@ -246,14 +257,16 @@ void MifareKeysManager::createDefaultFile(std::set<String> &keys) {
 }
 
 bool MifareKeysManager::writeToFS(FS *fs, const char *fsName, const std::set<String> &keys) {
-    if (!fs->exists(KEYS_DIR)) {
-        if (!fs->mkdir(KEYS_DIR)) {
+    String dirPath = projectFsPath(fs, KEYS_DIR);
+    String filePath = projectFsPath(fs, KEYS_PATH);
+    if (!fs->exists(dirPath)) {
+        if (!ensureFsDir(fs, dirPath)) {
             log_e("Failed to create dir on %s", fsName);
             return false;
         }
     }
 
-    File file = fs->open(KEYS_PATH, FILE_WRITE);
+    File file = fs->open(filePath, FILE_WRITE);
     if (!file) {
         log_e("Failed to open file on %s", fsName);
         return false;
@@ -274,15 +287,17 @@ bool MifareKeysManager::writeToFS(FS *fs, const char *fsName, const std::set<Str
 }
 
 bool MifareKeysManager::appendToFS(FS *fs, const char *fsName, const String &key) {
-    if (!fs->exists(KEYS_DIR)) { fs->mkdir(KEYS_DIR); }
+    String dirPath = projectFsPath(fs, KEYS_DIR);
+    String filePath = projectFsPath(fs, KEYS_PATH);
+    if (!fs->exists(dirPath)) { ensureFsDir(fs, dirPath); }
 
-    if (!fs->exists(KEYS_PATH)) {
+    if (!fs->exists(filePath)) {
         log_i("File missing on %s, creating", fsName);
         // Need to create full file - will be done by caller
         return false;
     }
 
-    File file = fs->open(KEYS_PATH, FILE_APPEND);
+    File file = fs->open(filePath, FILE_APPEND);
     if (!file) {
         log_w("Failed to append to %s", fsName);
         return false;

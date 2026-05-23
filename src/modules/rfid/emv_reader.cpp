@@ -453,8 +453,7 @@ void EMVReader::save_emv(const char *aid, const char *pan, const char *validfrom
     FS *fs;
     if (!getFsStorage(fs)) return;
 
-    if (!(*fs).exists("/BruceRFID")) (*fs).mkdir("/BruceRFID");
-    if (!(*fs).exists("/BruceRFID/Scans")) (*fs).mkdir("/BruceRFID/Scans");
+    ensureFsDir(fs, "/BruceRFID/Scans");
 
     String filename = "emv_";
     String pan_dashed = String(pan);
@@ -462,7 +461,7 @@ void EMVReader::save_emv(const char *aid, const char *pan, const char *validfrom
     filename += pan_dashed;
     filename += ".txt";
 
-    File file = (*fs).open("/BruceRFID/Scans/" + filename, FILE_WRITE);
+    File file = (*fs).open(projectFsPath(fs, "/BruceRFID/Scans/" + filename), FILE_WRITE);
 
     if (!file) {
         displayError("Error opening file.");

@@ -298,7 +298,7 @@ void EvilPortal::loop() {
                 {"View Creds", [this, &shouldRedraw]() {
                     FS *fs;
                     if (getFsStorage(fs)) {
-                        if (fs->exists("/BruceEvilCreds")) {
+                        if (fs->exists(projectFsPath(fs, "/BruceEvilCreds"))) {
                             loopSD(*fs, false, "CSV", "/BruceEvilCreds");
                         } else {
                             displayTextLine("No credentials yet");
@@ -775,14 +775,14 @@ void EvilPortal::saveToCSV(const String &csvLine, bool isAPname) {
         return;
     }
 
-    if (!fs->exists("/BruceEvilCreds")) fs->mkdir("/BruceEvilCreds");
+    ensureFsDir(fs, "/BruceEvilCreds");
 
     File file;
 
     if (!isAPname) {
-        file = fs->open("/BruceEvilCreds/" + outputFile, FILE_APPEND);
+        file = fs->open(projectFsPath(fs, "/BruceEvilCreds/" + outputFile), FILE_APPEND);
     } else {
-        file = fs->open("/BruceEvilCreds/" + apName + "_creds.csv", FILE_APPEND);
+        file = fs->open(projectFsPath(fs, "/BruceEvilCreds/" + apName + "_creds.csv"), FILE_APPEND);
     }
 
     if (!file) {

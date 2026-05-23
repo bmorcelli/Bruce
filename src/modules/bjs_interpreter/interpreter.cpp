@@ -1,5 +1,6 @@
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "interpreter.h"
+#include "core/sd_functions.h"
 #include "core/utils.h"
 
 static void js_log_func(void *opaque, const void *buf, size_t buf_len) { fwrite(buf, 1, buf_len, stdout); }
@@ -181,9 +182,10 @@ String getScriptsFolder(FS *&fs) {
     int listSize = sizeof(possibleFolders) / sizeof(possibleFolders[0]);
 
     for (int i = 0; i < listSize; i++) {
-        if (SD.exists(possibleFolders[i])) {
+        String sdPath = projectFsPath(&SD, possibleFolders[i]);
+        if (SD.exists(sdPath)) {
             fs = &SD;
-            return possibleFolders[i];
+            return sdPath;
         }
         if (LittleFS.exists(possibleFolders[i])) {
             fs = &LittleFS;

@@ -151,14 +151,14 @@ int RFID2::save(String filename) {
     FS *fs;
     if (!getFsStorage(fs)) return FAILURE;
 
-    if (!(*fs).exists("/BruceRFID")) (*fs).mkdir("/BruceRFID");
-    if ((*fs).exists("/BruceRFID/" + filename + ".rfid")) {
+    ensureFsDir(fs, "/BruceRFID");
+    if ((*fs).exists(projectFsPath(fs, "/BruceRFID/" + filename + ".rfid"))) {
         int i = 1;
         filename += "_";
-        while ((*fs).exists("/BruceRFID/" + filename + String(i) + ".rfid")) i++;
+        while ((*fs).exists(projectFsPath(fs, "/BruceRFID/" + filename + String(i) + ".rfid"))) i++;
         filename += String(i);
     }
-    File file = (*fs).open("/BruceRFID/" + filename + ".rfid", FILE_WRITE);
+    File file = (*fs).open(projectFsPath(fs, "/BruceRFID/" + filename + ".rfid"), FILE_WRITE);
 
     if (!file) { return FAILURE; }
 

@@ -9,16 +9,14 @@ bool rf_raw_save(RawRecording recorded) {
     char filename[32];
     int index = 0;
 
-    if (!fs->exists("/BruceRF")) {
-        if (!fs->mkdir("/BruceRF")) {
-            displayError("Error creating directory", true);
-            return false;
-        }
+    if (!ensureFsDir(fs, "/BruceRF")) {
+        displayError("Error creating directory", true);
+        return false;
     }
 
-    do { snprintf(filename, sizeof(filename), "/BruceRF/raw_%d.sub", index++); } while (fs->exists(filename));
+    do { snprintf(filename, sizeof(filename), "/BruceRF/raw_%d.sub", index++); } while (fs->exists(projectFsPath(fs, filename)));
 
-    File file = fs->open(filename, FILE_WRITE, true);
+    File file = fs->open(projectFsPath(fs, filename), FILE_WRITE, true);
     if (!file) {
         displayError("Error creating file", true);
         return false;

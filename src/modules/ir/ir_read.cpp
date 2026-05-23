@@ -461,9 +461,9 @@ String IrRead::loop_headless(int max_loops) {
 bool IrRead::write_file(String filename, FS *fs) {
     if (fs == nullptr) return false;
 
-    if (!(*fs).exists("/BruceIR")) (*fs).mkdir("/BruceIR");
+    ensureFsDir(fs, "/BruceIR");
 
-    while ((*fs).exists("/BruceIR/" + filename + ".ir")) {
+    while ((*fs).exists(projectFsPath(fs, "/BruceIR/" + filename + ".ir"))) {
         int ch = 1;
         int i = 1;
 
@@ -481,10 +481,10 @@ bool IrRead::write_file(String filename, FS *fs) {
         switch (ch) {
             case 1:
                 filename += "_";
-                while ((*fs).exists("/BruceIR/" + filename + String(i) + ".ir")) i++;
+                while ((*fs).exists(projectFsPath(fs, "/BruceIR/" + filename + String(i) + ".ir"))) i++;
                 filename += String(i);
                 break;
-            case 2: (*fs).remove("/BruceIR/" + filename + ".ir"); break;
+            case 2: (*fs).remove(projectFsPath(fs, "/BruceIR/" + filename + ".ir")); break;
             case 3:
                 filename = keyboard(filename, 30, "File name:");
                 display_banner();
@@ -492,7 +492,7 @@ bool IrRead::write_file(String filename, FS *fs) {
         }
     }
 
-    File file = (*fs).open("/BruceIR/" + filename + ".ir", FILE_WRITE);
+    File file = (*fs).open(projectFsPath(fs, "/BruceIR/" + filename + ".ir"), FILE_WRITE);
 
     if (!file) { return false; }
 

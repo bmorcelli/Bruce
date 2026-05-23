@@ -163,6 +163,7 @@ volatile int tftHeight = VECTOR_DISPLAY_DEFAULT_WIDTH;
 void begin_storage() {
     if (!LittleFS.begin(true)) { LittleFS.format(), LittleFS.begin(); }
     bool checkFS = setupSdCard();
+    if (checkFS) migrateLegacySdLayoutIfNeeded();
     bruceConfig.fromFile(checkFS);
     bruceConfigPins.fromFile(checkFS);
 }

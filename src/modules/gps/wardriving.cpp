@@ -234,11 +234,12 @@ void Wardriving::scanWiFiBLE() {
 
     if (filename == "") create_filename();
 
-    if (!(*fs).exists("/BruceWardriving")) (*fs).mkdir("/BruceWardriving");
+    ensureFsDir(fs, "/BruceWardriving");
 
     bool is_new_file = false;
-    if (!(*fs).exists("/BruceWardriving/" + filename)) is_new_file = true;
-    File file = (*fs).open("/BruceWardriving/" + filename, is_new_file ? FILE_WRITE : FILE_APPEND);
+    String filePath = projectFsPath(fs, "/BruceWardriving/" + filename);
+    if (!(*fs).exists(filePath)) is_new_file = true;
+    File file = (*fs).open(filePath, is_new_file ? FILE_WRITE : FILE_APPEND);
 
     if (!file) {
         padprintln("Failed to open file for writing");
@@ -456,10 +457,11 @@ void Wardriving::loadAlertMACs() {
     FS *fs;
     if (!getFsStorage(fs)) return;
 
-    if (!(*fs).exists("/BruceWardriving")) (*fs).mkdir("/BruceWardriving");
+    ensureFsDir(fs, "/BruceWardriving");
 
-    if ((*fs).exists("/BruceWardriving/alert.txt")) {
-        File alertFile = (*fs).open("/BruceWardriving/alert.txt", FILE_READ);
+    String alertPath = projectFsPath(fs, "/BruceWardriving/alert.txt");
+    if ((*fs).exists(alertPath)) {
+        File alertFile = (*fs).open(alertPath, FILE_READ);
         if (alertFile) {
             while (alertFile.available()) {
                 String line = alertFile.readStringUntil('\n');
@@ -475,7 +477,7 @@ void Wardriving::loadAlertMACs() {
         }
     } else {
         // Create sample alert file
-        File alertFile = (*fs).open("/BruceWardriving/alert.txt", FILE_WRITE);
+        File alertFile = (*fs).open(alertPath, FILE_WRITE);
         if (alertFile) {
             alertFile.println("# Alert MAC addresses - one per line");
             alertFile.println("# Lines starting with # are comments");

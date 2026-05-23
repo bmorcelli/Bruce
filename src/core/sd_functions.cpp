@@ -25,6 +25,119 @@
 String fileToCopy;
 std::vector<FileList> fileList;
 
+namespace {
+String normalizeFsPath(String path) {
+    if (path.isEmpty()) return "/";
+    if (!path.startsWith("/")) path = "/" + path;
+    return path;
+}
+
+String pathBasename(const String &path) {
+    int slash = path.lastIndexOf('/');
+    return (slash >= 0) ? path.substring(slash + 1) : path;
+}
+
+String pathDirname(String path) {
+    path = normalizeFsPath(path);
+    int slash = path.lastIndexOf('/');
+    if (slash <= 0) return "/";
+    return path.substring(0, slash);
+}
+
+bool shouldRelocateProjectPath(const String &path) {
+    return path == "/bruce.conf" || path == "/brucePins.conf" || path.startsWith("/Bruce");
+}
+
+bool shouldMigrateLegacyRootEntry(const String &path) {
+    if (path == "/Bruce") return false;
+    if (path == "/bruce.conf" || path == "/brucePins.conf") return true;
+    String base = pathBasename(path);
+    return base.startsWith("Bruce");
+}
+
+String legacyRootEntryTarget(const String &path) {
+    if (path == "/bruce.conf" || path == "/brucePins.conf") return "/Bruce" + path;
+    return "/Bruce/" + pathBasename(path);
+}
+
+size_t countMigrationEntriesRecursive(const String &path) {
+    File node = SD.open(path, FILE_READ);
+    if (!node) return 0;
+    if (!node.isDirectory()) {
+        node.close();
+        return 1;
+    }
+
+    size_t total = 1;
+    node.rewindDirectory();
+    bool isDir = false;
+    String child = node.getNextFileName(&isDir);
+    while (child != "") {
+        total += countMigrationEntriesRecursive(normalizeFsPath(child));
+        child = node.getNextFileName(&isDir);
+    }
+    node.close();
+    return total;
+}
+
+bool moveLegacySdEntryRecursive(const String &sourcePath, const String &targetPath, size_t &progress, size_t total) {
+    File source = SD.open(sourcePath, FILE_READ);
+    if (!source) return false;
+
+    if (!source.isDirectory()) {
+        source.close();
+        if (!ensureFsDir(&SD, pathDirname(targetPath))) return false;
+
+        if (SD.exists(targetPath)) {
+            SD.remove(sourcePath);
+            progress++;
+            progressHandler(progress, total, "Moving SD folders...");
+            return true;
+        }
+
+        File inFile = SD.open(sourcePath, FILE_READ);
+        File outFile = SD.open(targetPath, FILE_WRITE);
+        if (!inFile || !outFile) {
+            if (inFile) inFile.close();
+            if (outFile) outFile.close();
+            return false;
+        }
+
+        static uint8_t buffer[512];
+        while (inFile.available()) {
+            size_t bytesRead = inFile.read(buffer, sizeof(buffer));
+            if (bytesRead > 0) outFile.write(buffer, bytesRead);
+        }
+        inFile.close();
+        outFile.close();
+        SD.remove(sourcePath);
+        progress++;
+        progressHandler(progress, total, "Moving SD folders...");
+        return true;
+    }
+
+    source.close();
+    if (!ensureFsDir(&SD, targetPath)) return false;
+
+    File dir = SD.open(sourcePath, FILE_READ);
+    if (!dir) return false;
+    dir.rewindDirectory();
+    bool isDir = false;
+    String child = dir.getNextFileName(&isDir);
+    while (child != "") {
+        String childPath = normalizeFsPath(child);
+        String childTarget = targetPath + "/" + pathBasename(childPath);
+        moveLegacySdEntryRecursive(childPath, childTarget, progress, total);
+        child = dir.getNextFileName(&isDir);
+    }
+    dir.close();
+    SD.rmdir(sourcePath);
+    progress++;
+    progressHandler(progress, total, "Moving SD folders...");
+    return true;
+}
+} // namespace
+
 /***************************************************************************************
 ** Function name: setupSdCard
 ** Description:   Start SD Card
@@ -124,6 +237,74 @@ bool ToggleSDCard() {
         sdcardMounted = setupSdCard();
         return sdcardMounted;
     }
+}
+
+String projectFsPath(FS *fs, String path) {
+    path = normalizeFsPath(path);
+    if (fs == nullptr || fs != &SD) return path;
+    if (!shouldRelocateProjectPath(path)) return path;
+    if (path == "/Bruce" || path.startsWith("/Bruce/")) return path;
+    return "/Bruce" + path;
+}
+
+String projectFsPath(FS &fs, String path) { return projectFsPath(&fs, path); }
+
+bool ensureFsDir(FS *fs, String path) {
+    if (fs == nullptr) return false;
+    path = normalizeFsPath(path);
+    if (path == "/") return true;
+    if (fs->exists(path)) return true;
+
+    String current = "";
+    int start = 1;
+    while (start < path.length()) {
+        int slash = path.indexOf('/', start);
+        if (slash < 0) current = path;
+        else current = path.substring(0, slash);
+
+        if (!current.isEmpty() && !fs->exists(current) && !fs->mkdir(current)) return false;
+        if (slash < 0) break;
+        start = slash + 1;
+    }
+    return fs->exists(path);
+}
+
+void migrateLegacySdLayoutIfNeeded() {
+    if (!sdcardMounted) return;
+
+    ensureFsDir(&SD, "/Bruce");
+
+    std::vector<String> legacyEntries;
+    File root = SD.open("/", FILE_READ);
+    if (!root) return;
+
+    root.rewindDirectory();
+    bool isDir = false;
+    String child = root.getNextFileName(&isDir);
+    while (child != "") {
+        String childPath = normalizeFsPath(child);
+        if (shouldMigrateLegacyRootEntry(childPath)) legacyEntries.push_back(childPath);
+        child = root.getNextFileName(&isDir);
+    }
+    root.close();
+
+    if (legacyEntries.empty()) return;
+
+    drawMainBorderWithTitle("Storage Migration");
+    padprintln("");
+    padprintln("Moving SD folders to /Bruce");
+
+    size_t total = 0;
+    for (const auto &entry : legacyEntries) total += countMigrationEntriesRecursive(entry);
+    if (total == 0) total = legacyEntries.size();
+
+    size_t progress = 0;
+    progressHandler(0, total, "Moving SD folders...");
+    for (const auto &entry : legacyEntries) {
+        moveLegacySdEntryRecursive(entry, legacyRootEntryTarget(entry), progress, total);
+    }
+    progressHandler(total, total, "Migration completed");
+    delay(300);
 }
 /***************************************************************************************
 ** Function name: deleteFromSd
@@ -560,6 +741,7 @@ void readFs(FS fs, String folder, String allowed_ext) {
 **********************************************************************/
 String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
     delay(10);
+    rootPath = projectFsPath(fs, rootPath);
     if (!fs.exists(rootPath)) {
         Serial.println("loopSD-> 1st exist test failed");
         rootPath = "/";
@@ -1005,6 +1187,7 @@ void fileInfo(FS fs, String filepath) {
 **  append a version number to the file name.
 **********************************************************************/
 File createNewFile(FS *&fs, String filepath, String filename) {
+    filepath = projectFsPath(fs, filepath);
     int extIndex = filename.lastIndexOf('.');
     String name = filename.substring(0, extIndex);
     String ext = filename.substring(extIndex);

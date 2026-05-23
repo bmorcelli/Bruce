@@ -96,13 +96,14 @@ void BruceConfig::fromFile(bool checkFS) {
         else return;
     }
 
-    if (!fs->exists(filepath)) {
+    String resolvedPath = projectFsPath(fs, filepath);
+    if (!fs->exists(resolvedPath)) {
         log_i("Config file not found. Creating default config");
         return saveFile();
     }
 
     File file;
-    file = fs->open(filepath, FILE_READ);
+    file = fs->open(resolvedPath, FILE_READ);
     if (!file) {
         log_i("Config file not found. Using default values");
         return;
@@ -437,7 +438,8 @@ void BruceConfig::saveFile() {
     JsonDocument jsonDoc = toJson();
 
     // Open file for writing
-    File file = fs->open(filepath, FILE_WRITE);
+    String localPath = projectFsPath(fs, filepath);
+    File file = fs->open(localPath, FILE_WRITE);
     if (!file) {
         log_e("Failed to open config file");
         file.close();
@@ -451,13 +453,27 @@ void BruceConfig::saveFile() {
 
     file.close();
 
-    if (setupSdCard()) copyToFs(LittleFS, SD, filepath, false);
+    if (setupSdCard()) {
+        String sdPath = projectFsPath(&SD, filepath);
+        ensureFsDir(&SD, "/Bruce");
+        File sdFile = SD.open(sdPath, FILE_WRITE);
+        if (!sdFile) {
+            log_e("Failed to open SD config file");
+        } else {
+            if (serializeJsonPretty(jsonDoc, sdFile) < 5) log_e("Failed to write SD config file");
+            sdFile.close();
+        }
+    }
 }
 
 void BruceConfig::factoryReset() {
     FS *fs = &LittleFS;
-    fs->rename(String(filepath), "/bak." + String(filepath).substring(1));
-    if (setupSdCard()) SD.rename(String(filepath), "/bak." + String(filepath).substring(1));
+    String localPath = projectFsPath(fs, filepath);
+    fs->rename(localPath, "/bak." + String(filepath).substring(1));
+    if (setupSdCard()) {
+        String sdPath = projectFsPath(&SD, filepath);
+        SD.rename(sdPath, "/Bruce/bak." + String(filepath).substring(1));
+    }
     ESP.restart();
 }
 

@@ -10,6 +10,7 @@
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/net_utils.h"
+#include "core/sd_functions.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h"
 #include "lwip/pbuf.h"
@@ -51,9 +52,9 @@ bool ARPSpoofer::arpPCAPfile() {
     FS *fs;
     if (setupSdCard()) fs = &SD;
     else { fs = &LittleFS; }
-    if (!fs->exists("/BrucePCAP")) fs->mkdir("/BrucePCAP");
-    while (fs->exists(String("/BrucePCAP/ARP_session_" + String(nf++) + ".pcap").c_str())) yield();
-    pcapFile = fs->open(String("/BrucePCAP/ARP_session_" + String(nf) + ".pcap").c_str(), FILE_WRITE);
+    ensureFsDir(fs, "/BrucePCAP");
+    while (fs->exists(projectFsPath(fs, "/BrucePCAP/ARP_session_" + String(nf++) + ".pcap"))) yield();
+    pcapFile = fs->open(projectFsPath(fs, "/BrucePCAP/ARP_session_" + String(nf) + ".pcap"), FILE_WRITE);
     if (pcapFile) return true;
     else return false;
 }

@@ -571,17 +571,16 @@ static void unlockFileMutex() {
 }
 
 static void ensureDirectories(FS &Fs) {
-    if (!Fs.exists("/BrucePCAP")) { Fs.mkdir("/BrucePCAP"); }
-    if (!Fs.exists("/BrucePCAP/handshakes")) { Fs.mkdir("/BrucePCAP/handshakes"); }
+    ensureFsDir(&Fs, "/BrucePCAP/handshakes");
 }
 
 static void openDeauthFile(FS &Fs) {
     ensureDirectories(Fs);
     closeDeauthFile();
-    deauthFilename = "/BrucePCAP/deauth_" + String(deauthFileIndex) + ".pcap";
+    deauthFilename = projectFsPath(Fs, "/BrucePCAP/deauth_" + String(deauthFileIndex) + ".pcap");
     while (Fs.exists(deauthFilename)) {
         deauthFileIndex++;
-        deauthFilename = "/BrucePCAP/deauth_" + String(deauthFileIndex) + ".pcap";
+        deauthFilename = projectFsPath(Fs, "/BrucePCAP/deauth_" + String(deauthFileIndex) + ".pcap");
     }
     if (lockFileMutex(pdMS_TO_TICKS(200))) {
         _deauth_file = Fs.open(deauthFilename, FILE_WRITE);
@@ -867,10 +866,10 @@ void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, voi
 void openFile(FS &Fs) {
     ensureDirectories(Fs);
     closeRawFile();
-    filename = "/BrucePCAP/" + (String)FILENAME + String(rawFileIndex) + ".pcap";
+    filename = projectFsPath(Fs, "/BrucePCAP/" + (String)FILENAME + String(rawFileIndex) + ".pcap");
     while (Fs.exists(filename)) {
         rawFileIndex++;
-        filename = "/BrucePCAP/" + (String)FILENAME + String(rawFileIndex) + ".pcap";
+        filename = projectFsPath(Fs, "/BrucePCAP/" + (String)FILENAME + String(rawFileIndex) + ".pcap");
     }
     if (lockFileMutex(pdMS_TO_TICKS(200))) {
         _pcap_file = Fs.open(filename, FILE_WRITE);

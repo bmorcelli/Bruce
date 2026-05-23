@@ -585,11 +585,10 @@ void SRIXTool::save_file() {
     }
 
     // Create directory if it does not exist
-    if (!(*fs).exists("/BruceRFID")) (*fs).mkdir("/BruceRFID");
-    if (!(*fs).exists("/BruceRFID/SRIX")) (*fs).mkdir("/BruceRFID/SRIX");
+    ensureFsDir(fs, "/BruceRFID/SRIX");
 
     // Check if the file already exists and add number
-    String filepath = "/BruceRFID/SRIX/" + filename;
+    String filepath = projectFsPath(fs, "/BruceRFID/SRIX/" + filename);
     if ((*fs).exists(filepath + ".srix")) {
         int i = 1;
         while ((*fs).exists(filepath + "_" + String(i) + ".srix")) i++;
@@ -653,7 +652,7 @@ void SRIXTool::load_file() {
     }
 
     // Verify that the directory exists
-    if (!(*fs).exists("/BruceRFID/SRIX")) {
+    if (!(*fs).exists(projectFsPath(fs, "/BruceRFID/SRIX"))) {
         displayError("No dumps found!");
         delay(1500);
         displayError("Folder /BruceRFID/SRIX missing");
@@ -663,7 +662,7 @@ void SRIXTool::load_file() {
     }
 
     // List all .srix files in the directory
-    File dir = (*fs).open("/BruceRFID/SRIX");
+    File dir = (*fs).open(projectFsPath(fs, "/BruceRFID/SRIX"));
     if (!dir || !dir.isDirectory()) {
         displayError("Cannot open SRIX folder!");
         delay(1500);
@@ -700,7 +699,7 @@ void SRIXTool::load_file() {
 
     options = {};
     for (const String &fname : fileList) {
-        options.emplace_back(fname, [this, fname, fs]() { load_file_data(fs, "/BruceRFID/SRIX/" + fname); });
+        options.emplace_back(fname, [this, fname, fs]() { load_file_data(fs, projectFsPath(fs, "/BruceRFID/SRIX/" + fname)); });
     }
     options.emplace_back("Cancel", [this]() { set_state(IDLE_MODE); });
 
@@ -1059,11 +1058,10 @@ String SRIXTool::save_file_headless(String filename) {
     if (!getFsStorage(fs)) return "";
 
     // Create directories if needed
-    if (!(*fs).exists("/BruceRFID")) (*fs).mkdir("/BruceRFID");
-    if (!(*fs).exists("/BruceRFID/SRIX")) (*fs).mkdir("/BruceRFID/SRIX");
+    ensureFsDir(fs, "/BruceRFID/SRIX");
 
     // Build filepath
-    String filepath = "/BruceRFID/SRIX/" + filename;
+    String filepath = projectFsPath(fs, "/BruceRFID/SRIX/" + filename);
     if (!filename.endsWith(".srix")) filepath += ".srix";
 
     // Handle existing file
@@ -1120,7 +1118,7 @@ int SRIXTool::load_file_headless(String filename) {
     if (!getFsStorage(fs)) return -1;
 
     // Build filepath
-    String filepath = "/BruceRFID/SRIX/" + filename;
+    String filepath = projectFsPath(fs, "/BruceRFID/SRIX/" + filename);
     if (!filename.endsWith(".srix")) filepath += ".srix";
 
     if (!(*fs).exists(filepath)) return -2; // File not found

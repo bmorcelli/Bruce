@@ -238,7 +238,7 @@ void otherIRcodes() {
     }
 
     // select a file to tx
-    if (!(*fs).exists("/BruceIR")) (*fs).mkdir("/BruceIR");
+    ensureFsDir(fs, "/BruceIR");
 
     // startPath: remember the last visited folder so the user lands back there
     // after pressing back in the command list

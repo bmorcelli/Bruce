@@ -273,10 +273,11 @@ void BruceConfigPins::loadFile(JsonDocument &jsonDoc, bool checkFS) {
         else return;
     }
 
-    if (!fs->exists(filepath)) return createFile();
+    String resolvedPath = projectFsPath(fs, filepath);
+    if (!fs->exists(resolvedPath)) return createFile();
 
     File file;
-    file = fs->open(filepath, FILE_READ);
+    file = fs->open(resolvedPath, FILE_READ);
     if (!file) {
         log_e("Config pins file not found. Using default values");
         return;
@@ -306,7 +307,8 @@ void BruceConfigPins::createFile() {
 
     // Open file for writing
     FS *fs = &LittleFS;
-    File file = fs->open(filepath, FILE_WRITE);
+    String localPath = projectFsPath(fs, filepath);
+    File file = fs->open(localPath, FILE_WRITE);
     if (!file) {
         log_e("Failed to open config file");
         file.close();
@@ -321,7 +323,15 @@ void BruceConfigPins::createFile() {
     jsonDoc.clear();
 
     // don't try to mount SD Card if not previously mounted
-    if (sdcardMounted) copyToFs(LittleFS, SD, filepath, false);
+    if (sdcardMounted) {
+        String sdPath = projectFsPath(&SD, filepath);
+        ensureFsDir(&SD, "/Bruce");
+        File sdFile = SD.open(sdPath, FILE_WRITE);
+        if (sdFile) {
+            serializeJsonPretty(jsonDoc, sdFile);
+            sdFile.close();
+        }
+    }
 }
 
 void BruceConfigPins::saveFile() {
@@ -335,7 +345,8 @@ void BruceConfigPins::saveFile() {
 
     // Open file for writing
     FS *fs = &LittleFS;
-    File file = fs->open(filepath, FILE_WRITE);
+    String localPath = projectFsPath(fs, filepath);
+    File file = fs->open(localPath, FILE_WRITE);
     if (!file) {
         log_e("Failed to open config file");
         return;
@@ -348,14 +359,26 @@ void BruceConfigPins::saveFile() {
     file.close();
     jsonDoc.clear();
     // don't try to mount SD Card if not previously mounted
-    if (sdcardMounted) copyToFs(LittleFS, SD, filepath, false);
+    if (sdcardMounted) {
+        String sdPath = projectFsPath(&SD, filepath);
+        ensureFsDir(&SD, "/Bruce");
+        File sdFile = SD.open(sdPath, FILE_WRITE);
+        if (sdFile) {
+            serializeJsonPretty(jsonDoc, sdFile);
+            sdFile.close();
+        }
+    }
 }
 
 void BruceConfigPins::factoryReset() {
     FS *fs = &LittleFS;
-    fs->rename(String(filepath), "/bak." + String(filepath).substring(1));
+    String localPath = projectFsPath(fs, filepath);
+    fs->rename(localPath, "/bak." + String(filepath).substring(1));
     // don't try to mount SD Card if not previously mounted
-    if (sdcardMounted) SD.rename(String(filepath), "/bak." + String(filepath).substring(1));
+    if (sdcardMounted) {
+        String sdPath = projectFsPath(&SD, filepath);
+        SD.rename(sdPath, "/Bruce/bak." + String(filepath).substring(1));
+    }
 }
 
 void BruceConfigPins::validateConfig() {
