@@ -27,9 +27,6 @@ MainMenu::MainMenu() {
 #endif
         &clockMenu,
         &othersMenu,
-#if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
-        &appsMenu,
-#endif
         &configMenu,
     };
 
