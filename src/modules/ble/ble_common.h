@@ -22,11 +22,14 @@ extern BLEScan *pBLEScan;
 extern int scanTime;
 
 void ble_test();
-
+#if 0 // keep it out for now
 #ifdef BOARD_HAS_PSRAM
 constexpr bool FORCE_RADIO_TEARDOWN_ON_SWITCH = false;
 #else
 constexpr bool FORCE_RADIO_TEARDOWN_ON_SWITCH = true;
+#endif
+#else
+constexpr bool FORCE_RADIO_TEARDOWN_ON_SWITCH = false;
 #endif
 
 void ble_scan_setup();
