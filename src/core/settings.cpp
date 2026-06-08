@@ -1709,7 +1709,7 @@ void installAppStoreJS() {
     }
 
     HTTPClient http;
-    http.begin("http://ghp.iceis.co.uk/service/appstore/");
+    http.begin("https://ghp.iceis.co.uk/service/appstore/");
     int httpCode = http.GET();
     if (httpCode != 200) {
         http.end();
