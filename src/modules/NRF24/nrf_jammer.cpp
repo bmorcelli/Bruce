@@ -304,26 +304,48 @@ static void shuffleChannels(uint8_t *arr, size_t count) {
 // Must call powerUp() before startConstCarrier() because
 // stopConstCarrier() → powerDown() clears the internal PWR_UP flag,
 // and startConstCarrier() never restores it (RF24 library bug).
+// FIX: Apply all settings BEFORE startConstCarrier (not after), and
+// use PA_HIGH instead of PA_MAX for more reliable operation on PA+LNA
+// modules where PA_MAX can overdrive and destabilize the PLL.
 static void initCW(int channel) {
     NRFradio.powerUp();
-    delay(5); // Tpd2stby: power-down → standby settle
-    NRFradio.setPALevel(RF24_PA_MAX);
-    NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+    delayMicroseconds(5000); // Tpd2stby: power-down → standby settle (~5ms)
+    // Apply all settings BEFORE starting carrier — SPI writes during
+    // carrier transmission are unreliable and may be silently ignored.
+    NRFradio.setPALevel(RF24_PA_HIGH);
+    NRFradio.setDataRate(RF24_2MBPS);
     NRFradio.setAddressWidth(5);
     NRFradio.setPayloadSize(2);
-    NRFradio.setDataRate(RF24_2MBPS);
+    NRFradio.startConstCarrier(RF24_PA_HIGH, channel);
 }
 
 // ── CW on a channel ─────────────────────────────────────────────
-// Carrier stays on — just move the frequency via setChannel().
-// This matches the original jammer behavior: startConstCarrier once at
-// init, then setChannel() to hop.  PLL re-locks in ~130µs, carrier
-// is never fully off → maximum duty cycle.
+// FIX: Full power cycle on every hop. The original approach of calling
+// setChannel() in-flight was unreliable in practice — many PA+LNA
+// modules (E01-ML01SP2 etc.) fail to retune the PLL cleanly without
+// a proper power-down/up sequence, causing the carrier to freeze on
+// the first channel or stop transmitting entirely after a few hops.
+// The power cycle costs ~1.2ms overhead but guarantees a clean lock.
 static void cwChannel(uint8_t ch, uint16_t dwellMs) {
+    NRFradio.stopConstCarrier();
+    delayMicroseconds(500); // CE LOW settle before power-down
+    NRFradio.powerDown();
+    delayMicroseconds(500); // Full power-down
+    NRFradio.powerUp();
+    delayMicroseconds(200); // Tpd2stby standby settle
     NRFradio.setChannel(ch);
+    // Re-apply critical settings — power cycle clears radio registers
+    NRFradio.setPALevel(RF24_PA_HIGH);
+    NRFradio.setDataRate(RF24_2MBPS);
+    NRFradio.setAddressWidth(5);
+    NRFradio.setPayloadSize(2);
+    NRFradio.startConstCarrier(RF24_PA_HIGH, ch);
 
-    if (dwellMs == 0) return;
-
+    // Minimum dwell gives the carrier time to stabilize before next hop
+    if (dwellMs == 0) {
+        vTaskDelay(80 / portTICK_PERIOD_MS);
+        return;
+    }
     if (dwellMs <= 5) {
         delayMicroseconds((uint32_t)dwellMs * 1000);
     } else {
@@ -907,8 +929,12 @@ void nrf_channel_jammer() {
             channel++;
             if (channel > 125) channel = 0;
             if (CHECK_NRF_SPI(mode) && !paused) {
+                // FIX: Always stop before changing channel to avoid
+                // transmitting on wrong frequency during PLL retune
+                NRFradio.stopConstCarrier();
+                delayMicroseconds(150);
                 NRFradio.setChannel(channel);
-                NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+                NRFradio.startConstCarrier(RF24_PA_HIGH, channel);
             }
             redraw = true;
         }
@@ -916,8 +942,10 @@ void nrf_channel_jammer() {
             channel--;
             if (channel < 0) channel = 125;
             if (CHECK_NRF_SPI(mode) && !paused) {
+                NRFradio.stopConstCarrier();
+                delayMicroseconds(150);
                 NRFradio.setChannel(channel);
-                NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+                NRFradio.startConstCarrier(RF24_PA_HIGH, channel);
             }
             redraw = true;
         }
