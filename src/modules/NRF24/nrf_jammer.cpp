@@ -683,13 +683,27 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
             if (CHECK_NRF_SPI(nrfMode)) NRFradio.stopConstCarrier();
             editModeConfig(currentMode);
 
-            // Re-apply config after edit
+            // FIX: Same power-cycle issue as mode switching.
+            // stopConstCarrier() leaves the radio powered down; calling
+            // applyJamConfig() without powerUp() first stalls writeFast()
+            // on a powered-off chip — same CW→Flood freeze seen in mode switch.
+            // Also covers the case where strategy didn't change but other
+            // settings (PA, DR) did — always need a clean re-init.
             if (CHECK_NRF_SPI(nrfMode)) {
                 NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
+                NRFradio.flush_tx();
+                NRFradio.powerDown();
+                delayMicroseconds(500);
+                NRFradio.powerUp();
+                delayMicroseconds(5000); // Tpd2stby settle
                 if (cfg.strategy >= 1) {
                     applyJamConfig(cfg, true);
                 } else {
-                    initCW(channel);
+                    NRFradio.setPALevel(RF24_PA_HIGH);
+                    NRFradio.setDataRate(RF24_2MBPS);
+                    NRFradio.setAddressWidth(5);
+                    NRFradio.setPayloadSize(2);
+                    // cwChannelHop/cwChannel will startConstCarrier on next hop
                 }
             }
             prepareChannels(currentMode);
