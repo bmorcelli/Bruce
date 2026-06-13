@@ -26,6 +26,13 @@ void nrf_info() {
     while (!check(AnyKeyPress));
 }
 
+// Track whether the SPI bus has been initialized for the NRF24.
+// Re-calling NRFSPI->begin() on an already-running bus can glitch
+// CLK/MOSI lines and corrupt the first SPI transaction that
+// NRFradio.begin() makes (CONFIG register read), returning garbage
+// and causing a false "NRF24 not found" on every second entry.
+static bool nrfSpiInitialized = false;
+
 bool nrf_start(NRF24_MODE mode) {
     bool result = false;
     if (mode == NRF_MODE_DISABLED) return false;
@@ -41,10 +48,15 @@ bool nrf_start(NRF24_MODE mode) {
     };
 
     if (!CHECK_NRF_SPI(mode)) return result;
+
+    // Always re-assert CE LOW and CS HIGH before begin() — these pins
+    // may have been left in an indeterminate state by the previous session,
+    // especially after stopConstCarrier() which can leave CE HIGH internally.
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
     pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT);
     digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
+    delay(5); // Let pins settle before SPI traffic
 
     if (bruceConfigPins.NRF24_bus.mosi == (gpio_num_t)TFT_MOSI &&
         bruceConfigPins.NRF24_bus.mosi != GPIO_NUM_NC) { // (T_EMBED), CORE2 and others
@@ -56,7 +68,6 @@ bool nrf_start(NRF24_MODE mode) {
 
     } else if (bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.SDCARD_bus.mosi) {
         // CC1101 shares SPI with SDCard (Cardputer and CYDs)
-
         NRFSPI = &sdcardSPI;
     } else if (bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.CC1101_bus.mosi &&
                bruceConfigPins.NRF24_bus.mosi != bruceConfigPins.SDCARD_bus.mosi) {
@@ -67,11 +78,19 @@ bool nrf_start(NRF24_MODE mode) {
     } else {
         NRFSPI = &SPI;
     }
-    NRFSPI->begin(
-        (int8_t)bruceConfigPins.NRF24_bus.sck,
-        (int8_t)bruceConfigPins.NRF24_bus.miso,
-        (int8_t)bruceConfigPins.NRF24_bus.mosi
-    );
+
+    // Only call NRFSPI->begin() once per bus instance. Calling it again
+    // on an already-initialized bus resets the SPI peripheral mid-session
+    // which can leave CLK/MOSI in a bad state and corrupt the first
+    // NRFradio.begin() CONFIG register read → false "NRF24 not found".
+    if (!nrfSpiInitialized) {
+        NRFSPI->begin(
+            (int8_t)bruceConfigPins.NRF24_bus.sck,
+            (int8_t)bruceConfigPins.NRF24_bus.miso,
+            (int8_t)bruceConfigPins.NRF24_bus.mosi
+        );
+        nrfSpiInitialized = true;
+    }
     delay(10);
 
     if (NRFradio.begin(

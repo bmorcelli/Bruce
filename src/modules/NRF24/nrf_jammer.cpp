@@ -304,26 +304,81 @@ static void shuffleChannels(uint8_t *arr, size_t count) {
 // Must call powerUp() before startConstCarrier() because
 // stopConstCarrier() → powerDown() clears the internal PWR_UP flag,
 // and startConstCarrier() never restores it (RF24 library bug).
-static void initCW(int channel) {
+// FIX: Apply all settings BEFORE startConstCarrier (not after), and
+// use PA_HIGH instead of PA_MAX for more reliable operation on PA+LNA
+// modules where PA_MAX can overdrive and destabilize the PLL.
+static void initCW(int channel, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
     NRFradio.powerUp();
-    delay(5); // Tpd2stby: power-down → standby settle
-    NRFradio.setPALevel(RF24_PA_MAX);
-    NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+    delayMicroseconds(5000); // Tpd2stby: power-down → standby settle (~5ms)
+    // Apply all settings BEFORE starting carrier — SPI writes during
+    // carrier transmission are unreliable and may be silently ignored.
+    NRFradio.setPALevel(pa);
+    NRFradio.setDataRate(RF24_2MBPS);
     NRFradio.setAddressWidth(5);
     NRFradio.setPayloadSize(2);
-    NRFradio.setDataRate(RF24_2MBPS);
+    NRFradio.startConstCarrier(pa, channel);
 }
 
 // ── CW on a channel ─────────────────────────────────────────────
-// Carrier stays on — just move the frequency via setChannel().
-// This matches the original jammer behavior: startConstCarrier once at
-// init, then setChannel() to hop.  PLL re-locks in ~130µs, carrier
-// is never fully off → maximum duty cycle.
-static void cwChannel(uint8_t ch, uint16_t dwellMs) {
+// FIX: Full power cycle on every hop. The original approach of calling
+// setChannel() in-flight was unreliable in practice — many PA+LNA
+// modules (E01-ML01SP2 etc.) fail to retune the PLL cleanly without
+// a proper power-down/up sequence, causing the carrier to freeze on
+// the first channel or stop transmitting entirely after a few hops.
+// The power cycle costs ~1.2ms overhead but guarantees a clean lock.
+//
+// dwellMs == 0 in preset-jammer context means "turbo" — uses an 80ms
+// forced stabilization dwell. For the CH Hopper use cwChannelHop()
+// instead, which lets the caller fully own dwell and ESC checks.
+static void cwChannel(uint8_t ch, uint16_t dwellMs, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
+    NRFradio.stopConstCarrier();
+    delayMicroseconds(500); // CE LOW settle before power-down
+    NRFradio.powerDown();
+    delayMicroseconds(500); // Full power-down
+    NRFradio.powerUp();
+    delayMicroseconds(200); // Tpd2stby standby settle
     NRFradio.setChannel(ch);
+    // Re-apply critical settings — power cycle clears radio registers
+    NRFradio.setPALevel(pa);
+    NRFradio.setDataRate(RF24_2MBPS);
+    NRFradio.setAddressWidth(5);
+    NRFradio.setPayloadSize(2);
+    NRFradio.startConstCarrier(pa, ch);
 
-    if (dwellMs == 0) return;
+    // Minimum dwell gives the carrier time to stabilize before next hop
+    if (dwellMs == 0) {
+        vTaskDelay(80 / portTICK_PERIOD_MS);
+        return;
+    }
+    if (dwellMs <= 5) {
+        delayMicroseconds((uint32_t)dwellMs * 1000);
+    } else {
+        delay(dwellMs);
+    }
+}
 
+// ── CW hop for CH Hopper — caller controls dwell ────────────────
+// Same power-cycle sequence as cwChannel() for reliable PLL lock on
+// PA+LNA modules, but without any forced minimum dwell.
+// pa defaults to RF24_PA_HIGH for bare/cloned nRF24L01+ compatibility.
+// dwellMs == 0: return immediately after carrier starts (max speed).
+static void cwChannelHop(uint8_t ch, uint16_t dwellMs, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
+    NRFradio.stopConstCarrier();
+    delayMicroseconds(500);
+    NRFradio.powerDown();
+    delayMicroseconds(500);
+    NRFradio.powerUp();
+    delayMicroseconds(200);
+    NRFradio.setChannel(ch);
+    NRFradio.setPALevel(pa);
+    NRFradio.setDataRate(RF24_2MBPS);
+    NRFradio.setAddressWidth(5);
+    NRFradio.setPayloadSize(2);
+    NRFradio.startConstCarrier(pa, ch);
+    if (dwellMs == 0) {
+        vTaskDelay(80 / portTICK_PERIOD_MS);
+        return;
+    }
     if (dwellMs <= 5) {
         delayMicroseconds((uint32_t)dwellMs * 1000);
     } else {
@@ -587,7 +642,8 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
         if (flooding) {
             applyJamConfig(cfg, true);
         } else {
-            initCW(channel);
+            rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+            initCW(channel, paLevels[cfg.paLevel & 3]);
         }
         NRFSPI = 1;
     }
@@ -632,13 +688,28 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
             if (CHECK_NRF_SPI(nrfMode)) NRFradio.stopConstCarrier();
             editModeConfig(currentMode);
 
-            // Re-apply config after edit
+            // FIX: Same power-cycle issue as mode switching.
+            // stopConstCarrier() leaves the radio powered down; calling
+            // applyJamConfig() without powerUp() first stalls writeFast()
+            // on a powered-off chip — same CW→Flood freeze seen in mode switch.
+            // Also covers the case where strategy didn't change but other
+            // settings (PA, DR) did — always need a clean re-init.
             if (CHECK_NRF_SPI(nrfMode)) {
                 NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
+                NRFradio.flush_tx();
+                NRFradio.powerDown();
+                delayMicroseconds(500);
+                NRFradio.powerUp();
+                delayMicroseconds(5000); // Tpd2stby settle
                 if (cfg.strategy >= 1) {
                     applyJamConfig(cfg, true);
                 } else {
-                    initCW(channel);
+                    rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+                    NRFradio.setPALevel(paLevels[cfg.paLevel & 3]);
+                    NRFradio.setDataRate(RF24_2MBPS);
+                    NRFradio.setAddressWidth(5);
+                    NRFradio.setPayloadSize(2);
+                    // cwChannel() will startConstCarrier on next hop
                 }
             }
             prepareChannels(currentMode);
@@ -647,50 +718,61 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
         }
 
         // ── Mode cycling: Next/Prev ─────────────────────────────
-        if (check(NextPress)) {
-            NrfJamMode prevMode = currentMode;
-            currentMode = (NrfJamMode)(((uint8_t)currentMode + 1) % NRF_JAM_MODE_COUNT);
+        // FIX: Always do a full clean radio re-init on every mode switch,
+        // regardless of whether the strategy type changed.
+        //
+        // The old conditional (only re-init when flood↔CW changes) had two bugs:
+        //  1. CW→Flood: stopConstCarrier() leaves the radio in standby/power-down.
+        //     applyJamConfig() never calls powerUp(), so the first writeFast()
+        //     calls stall on a radio that isn't in TX mode → hang/freeze.
+        //  2. Same-strategy switches (CW→CW, Flood→Flood on different mode):
+        //     The block was skipped entirely, so the new mode's PA/DR/burst
+        //     config was never applied to the hardware → wrong radio settings.
+        //
+        // Solution: unconditionally stop, power-cycle, then re-init for the
+        // new mode's strategy. Cost is one ~6ms power cycle per mode switch,
+        // which is imperceptible to the user.
+        auto switchMode = [&](NrfJamMode newMode) {
+            currentMode = newMode;
             hopIndex = 0;
             prepareChannels(currentMode);
             if (CHECK_NRF_SPI(nrfMode)) {
-                NrfJamConfig &prevCfg = jamConfigs[(uint8_t)prevMode];
                 NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
-                bool prevFlood = (prevCfg.strategy >= 1);
-                bool nowFlood = (cfg.strategy >= 1);
-                if (prevFlood != nowFlood) {
-                    NRFradio.stopConstCarrier();
-                    if (nowFlood) {
-                        applyJamConfig(cfg, true);
-                    } else {
-                        initCW(channel);
-                    }
+                // Full stop + power cycle to reset radio state machine cleanly.
+                // Required whether previous strategy was CW or flood — both
+                // leave the radio in an indeterminate state for the next strategy.
+                NRFradio.stopConstCarrier();
+                NRFradio.flush_tx();
+                NRFradio.powerDown();
+                delayMicroseconds(500); // Full power-down settle
+                NRFradio.powerUp();
+                delayMicroseconds(5000); // Tpd2stby: ~5ms standby settle
+                if (cfg.strategy >= 1) {
+                    // Flood or Turbo Flood: configure TX pipeline
+                    applyJamConfig(cfg, true);
+                } else {
+                    // Constant Carrier: powerUp() already called above.
+                    // Pre-load cfg PA+DR so the first cwChannel() hop starts
+                    // clean without needing to re-read cfg inside the hot loop.
+                    rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+                    NRFradio.setPALevel(paLevels[cfg.paLevel & 3]);
+                    NRFradio.setDataRate(RF24_2MBPS);
+                    NRFradio.setAddressWidth(5);
+                    NRFradio.setPayloadSize(2);
+                    // Don't startConstCarrier here — cwChannel() does it per-hop
                 }
             }
             if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) {
                 NRFSerial.println(MODE_INFO[(uint8_t)currentMode].shortName);
             }
             redraw = true;
+        };
+
+        if (check(NextPress)) {
+            switchMode((NrfJamMode)(((uint8_t)currentMode + 1) % NRF_JAM_MODE_COUNT));
         }
         if (check(PrevPress)) {
-            NrfJamMode prevMode = currentMode;
-            currentMode = (NrfJamMode)(((uint8_t)currentMode + NRF_JAM_MODE_COUNT - 1) % NRF_JAM_MODE_COUNT);
-            hopIndex = 0;
-            prepareChannels(currentMode);
-            if (CHECK_NRF_SPI(nrfMode)) {
-                NrfJamConfig &prevCfg = jamConfigs[(uint8_t)prevMode];
-                NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
-                bool prevFlood = (prevCfg.strategy >= 1);
-                bool nowFlood = (cfg.strategy >= 1);
-                if (prevFlood != nowFlood) {
-                    NRFradio.stopConstCarrier();
-                    if (nowFlood) {
-                        applyJamConfig(cfg, true);
-                    } else {
-                        initCW(channel);
-                    }
-                }
-            }
-            redraw = true;
+            switchMode((NrfJamMode)(((uint8_t)currentMode + NRF_JAM_MODE_COUNT - 1) % NRF_JAM_MODE_COUNT));
         }
 
         // ── Periodic display update (every 200ms) ────────────
@@ -716,14 +798,17 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
 
         if (shuffledCount > 0) {
             uint8_t ch = shuffledCh[hopIndex % shuffledCount];
+            rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+            rf24_pa_dbm_e pa = paLevels[cfg.paLevel & 3];
 
             switch (strategy) {
-                case 0: cwChannel(ch, dwellMs); break;
+                case 0: cwChannel(ch, dwellMs, pa); break;
                 case 1: floodChannel(ch, dwellMs, burst); break;
                 case 2: turboFloodChannel(ch, burst); break;
             }
 
             channel = ch;
+            Serial.printf("Current Channel: %d\n", channel);
             totalCh++;
             hopIndex++;
             if (hopIndex >= (int)shuffledCount) {
@@ -907,8 +992,12 @@ void nrf_channel_jammer() {
             channel++;
             if (channel > 125) channel = 0;
             if (CHECK_NRF_SPI(mode) && !paused) {
-                NRFradio.setChannel(channel);
-                NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+                // FIX: Use initCW() for channel changes instead of bare
+                // stopConstCarrier+setChannel+startConstCarrier with only 150us delay.
+                // That approach leaves PLL in undefined state on PA+LNA modules —
+                // carrier freezes on old frequency. initCW() does the full
+                // power-cycle that guarantees a clean PLL lock on the new channel.
+                initCW(channel);
             }
             redraw = true;
         }
@@ -916,14 +1005,17 @@ void nrf_channel_jammer() {
             channel--;
             if (channel < 0) channel = 125;
             if (CHECK_NRF_SPI(mode) && !paused) {
-                NRFradio.setChannel(channel);
-                NRFradio.startConstCarrier(RF24_PA_MAX, channel);
+                initCW(channel);
             }
             redraw = true;
         }
     }
 
-    if (CHECK_NRF_SPI(mode)) NRFradio.stopConstCarrier();
+    if (CHECK_NRF_SPI(mode)) {
+        NRFradio.stopConstCarrier();
+        NRFradio.flush_tx();
+        NRFradio.powerDown();
+    }
     if (CHECK_NRF_UART(mode) || CHECK_NRF_BOTH(mode)) NRFSerial.println("OFF");
 }
 
@@ -939,11 +1031,17 @@ void nrf_channel_hopper() {
         return;
     }
 
-    // ── Hopper config UI ────────────────────────────────────────
+    // ── Hopper config ────────────────────────────────────────────
     NrfHopperConfig hopCfg = {0, 80, 2};
+    uint8_t hopStrategy = 0; // 0=CW, 1=Flood, 2=Turbo Flood
+    uint8_t hopBurst = 6;    // packets per flood burst
     int menuIndex = 0;
     bool editMode = false;
     bool redraw = true;
+
+    const char *stratLabels[] = {"Const Carrier", "Data Flood", "Turbo Flood"};
+    // Items: Start CH, Stop CH, Step, Strategy, Burst, Start, Exit
+    const int ITEM_COUNT = 7;
 
     vTaskDelay(350 / portTICK_PERIOD_MS);
 
@@ -958,15 +1056,13 @@ void nrf_channel_hopper() {
         if (redraw) {
             drawMainBorderWithTitle("HOPPER CONFIG");
             tft.setTextSize(FP);
-            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
 
             int y = BORDER_PAD_Y + FM * LH + 4;
-            int lineH = max(16, tftHeight / 8);
+            int lineH = max(14, tftHeight / (ITEM_COUNT + 2));
 
-            const char *labels[] = {"Start CH", "Stop CH", "Step", "Start Jammer", "Exit"};
-            int values[] = {hopCfg.startChannel, hopCfg.stopChannel, hopCfg.stepSize, -1, -1};
+            const char *labels[] = {"Start CH", "Stop CH", "Step", "Strategy", "Burst Pkts", "Start Jammer", "Exit"};
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < ITEM_COUNT; i++) {
                 int itemY = y + i * lineH;
                 uint16_t fg = (i == menuIndex) ? bruceConfig.bgColor : bruceConfig.priColor;
                 uint16_t bg = (i == menuIndex) ? bruceConfig.priColor : bruceConfig.bgColor;
@@ -974,16 +1070,16 @@ void nrf_channel_hopper() {
                 tft.fillRect(7, itemY, tftWidth - 14, lineH - 2, bg);
                 tft.setTextColor(fg, bg);
 
-                char line[32];
-                if (values[i] >= 0) {
-                    int freq = 2400 + values[i];
-                    snprintf(line, sizeof(line), "%s: %d (%dMHz)", labels[i], values[i], freq);
-                } else {
-                    snprintf(line, sizeof(line), "%s", labels[i]);
-                }
+                char line[40];
+                if (i == 0) snprintf(line, sizeof(line), "%s: %d (%dMHz)", labels[i], hopCfg.startChannel, 2400 + hopCfg.startChannel);
+                else if (i == 1) snprintf(line, sizeof(line), "%s: %d (%dMHz)", labels[i], hopCfg.stopChannel, 2400 + hopCfg.stopChannel);
+                else if (i == 2) snprintf(line, sizeof(line), "%s: %d", labels[i], hopCfg.stepSize);
+                else if (i == 3) snprintf(line, sizeof(line), "%s: %s", labels[i], stratLabels[hopStrategy]);
+                else if (i == 4) snprintf(line, sizeof(line), "%s: %d", labels[i], hopBurst);
+                else snprintf(line, sizeof(line), "%s", labels[i]);
                 tft.drawString(line, 12, itemY + 2, 1);
 
-                if (editMode && i == menuIndex && i < 3) {
+                if (editMode && i == menuIndex && i < 5) {
                     tft.setTextColor(TFT_YELLOW, bg);
                     tft.drawRightString("<>", tftWidth - 12, itemY + 2, 1);
                 }
@@ -994,10 +1090,12 @@ void nrf_channel_hopper() {
         if (check(NextPress)) {
             if (editMode) {
                 if (menuIndex == 0) hopCfg.startChannel = (hopCfg.startChannel + 1) % 126;
-                if (menuIndex == 1) hopCfg.stopChannel = (hopCfg.stopChannel + 1) % 126;
-                if (menuIndex == 2) hopCfg.stepSize = (hopCfg.stepSize % 10) + 1;
+                else if (menuIndex == 1) hopCfg.stopChannel = (hopCfg.stopChannel + 1) % 126;
+                else if (menuIndex == 2) hopCfg.stepSize = (hopCfg.stepSize % 10) + 1;
+                else if (menuIndex == 3) hopStrategy = (hopStrategy + 1) % 3;
+                else if (menuIndex == 4) hopBurst = min((uint8_t)20, (uint8_t)(hopBurst + 1));
             } else {
-                menuIndex = (menuIndex + 1) % 5;
+                menuIndex = (menuIndex + 1) % ITEM_COUNT;
             }
             redraw = true;
             vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -1006,84 +1104,134 @@ void nrf_channel_hopper() {
         if (check(PrevPress)) {
             if (editMode) {
                 if (menuIndex == 0) hopCfg.startChannel = (hopCfg.startChannel + 125) % 126;
-                if (menuIndex == 1) hopCfg.stopChannel = (hopCfg.stopChannel + 125) % 126;
-                if (menuIndex == 2) hopCfg.stepSize = ((hopCfg.stepSize - 2 + 10) % 10) + 1;
+                else if (menuIndex == 1) hopCfg.stopChannel = (hopCfg.stopChannel + 125) % 126;
+                else if (menuIndex == 2) hopCfg.stepSize = ((hopCfg.stepSize - 2 + 10) % 10) + 1;
+                else if (menuIndex == 3) hopStrategy = (hopStrategy + 2) % 3;
+                else if (menuIndex == 4) hopBurst = max((uint8_t)1, (uint8_t)(hopBurst - 1));
             } else {
-                menuIndex = (menuIndex + 4) % 5;
+                menuIndex = (menuIndex + ITEM_COUNT - 1) % ITEM_COUNT;
             }
             redraw = true;
             vTaskDelay(100 / portTICK_PERIOD_MS);
         }
 
         if (check(SelPress)) {
-            if (menuIndex == 3) {
-                // Start hopper jammer inline
+            if (menuIndex == 5) {
+                // ── Start hopper jammer ──────────────────────────
                 if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) {
                     NRFSerial.println(
-                        "HOPPER_" + String(hopCfg.startChannel) + "_" + String(hopCfg.stopChannel) + "_" +
-                        String(hopCfg.stepSize)
+                        "HOPPER_" + String(hopCfg.startChannel) + "_" +
+                        String(hopCfg.stopChannel) + "_" + String(hopCfg.stepSize)
                     );
                 }
 
-                if (CHECK_NRF_SPI(nrfMode)) { initCW(hopCfg.startChannel); }
-
                 int ch = hopCfg.startChannel;
-                bool hopRedraw = true;
+                if (hopCfg.startChannel > hopCfg.stopChannel) ch = hopCfg.stopChannel;
 
+                // ── Radio init for chosen strategy ───────────────
+                // Power-cycle first so we start from a known state
+                // regardless of what the radio was doing before.
+                if (CHECK_NRF_SPI(nrfMode)) {
+                    NRFradio.powerDown();
+                    delayMicroseconds(500);
+                    NRFradio.powerUp();
+                    delayMicroseconds(5000);
+                    // CH Hopper has no per-mode config — use RF24_PA_HIGH as the
+                    // safe default that works on bare, cloned, and PA+LNA modules.
+                    // Users wanting more power should use the preset jammer modes
+                    // which have full per-mode config (including PA level).
+                    if (hopStrategy >= 1) {
+                        // Flood / Turbo: configure TX pipeline once;
+                        // floodChannel/turboFloodChannel switch channel per hop.
+                        NRFradio.setPALevel(RF24_PA_HIGH);
+                        NRFradio.setDataRate(RF24_2MBPS);
+                        NRFradio.setAutoAck(false);
+                        NRFradio.setRetries(0, 0);
+                        NRFradio.disableCRC();
+                        NRFradio.setPayloadSize(32);
+                        NRFradio.setAddressWidth(3);
+                        uint8_t txAddr[] = {0xE7, 0xE7, 0xE7};
+                        NRFradio.openWritingPipe(txAddr);
+                        NRFradio.stopListening();
+                    }
+                    // CW: cwChannelHop() handles its own init per hop (RF24_PA_HIGH default)
+                }
+
+                // ── Draw static screen ───────────────────────────
                 drawMainBorderWithTitle("CH HOPPER");
+                {
+                    int contentY = BORDER_PAD_Y + FM * LH + 4;
+                    int lineHop = max(14, tftHeight / 10);
+                    tft.setTextSize(FP);
+                    tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
+                    char hBuf[48];
+                    snprintf(hBuf, sizeof(hBuf), "Range: %d-%d  Step: %d",
+                             hopCfg.startChannel, hopCfg.stopChannel, hopCfg.stepSize);
+                    tft.fillRect(7, contentY, tftWidth - 14, lineHop, bruceConfig.bgColor);
+                    tft.drawCentreString(hBuf, tftWidth / 2, contentY, 1);
 
+                    // Strategy badge
+                    const char *sNames[] = {"CW", "FLOOD", "TURBO"};
+                    uint16_t badgeClr = (hopStrategy == 2) ? TFT_RED : (hopStrategy == 1) ? TFT_ORANGE : TFT_CYAN;
+                    const char *sName = sNames[hopStrategy];
+                    int bw = strlen(sName) * 6 + 8;
+                    tft.fillRoundRect(tftWidth - 12 - bw, contentY + 1, bw, lineHop - 3, 3, badgeClr);
+                    tft.setTextColor(TFT_BLACK, badgeClr);
+                    tft.drawCentreString(sName, tftWidth - 12 - bw / 2, contentY + 2, 1);
+
+                    int footerY = tftHeight - BORDER_PAD_X - FP * LH - 2;
+                    tft.fillRect(7, footerY, tftWidth - 14, FP * LH, bruceConfig.bgColor);
+                    tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+                    tft.drawCentreString("[ESC] Stop", tftWidth / 2, footerY, 1);
+                }
+                int hopLineY = BORDER_PAD_Y + FM * LH + 4 + max(14, tftHeight / 10);
+                int hopLineH = max(14, tftHeight / 10);
+
+                // ── Hopper loop ──────────────────────────────────
                 while (true) {
                     if (check(EscPress)) break;
 
-                    if (hopRedraw) {
-                        int contentY = BORDER_PAD_Y + FM * LH + 4;
-                        int lineHop = max(14, tftHeight / 10);
+                    // Update channel display every hop
+                    {
                         tft.setTextSize(FP);
-
-                        tft.fillRect(7, contentY, tftWidth - 14, lineHop, bruceConfig.bgColor);
-                        tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
-                        char hBuf[40];
-                        snprintf(
-                            hBuf,
-                            sizeof(hBuf),
-                            "Range: %d - %d  Step: %d",
-                            hopCfg.startChannel,
-                            hopCfg.stopChannel,
-                            hopCfg.stepSize
-                        );
-                        tft.drawCentreString(hBuf, tftWidth / 2, contentY, 1);
-                        contentY += lineHop;
-
-                        tft.fillRect(7, contentY, tftWidth - 14, lineHop, bruceConfig.bgColor);
+                        tft.fillRect(7, hopLineY, tftWidth - 14, hopLineH, bruceConfig.bgColor);
                         tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
-                        int freq = 2400 + ch;
-                        snprintf(hBuf, sizeof(hBuf), "CH: %d  (%d MHz)", ch, freq);
-                        tft.drawCentreString(hBuf, tftWidth / 2, contentY, 1);
-
-                        int footerY = tftHeight - BORDER_PAD_X - FP * LH - 2;
-                        tft.fillRect(7, footerY, tftWidth - 14, FP * LH, bruceConfig.bgColor);
-                        tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-                        tft.drawCentreString("[ESC] Stop", tftWidth / 2, footerY, 1);
-
-                        hopRedraw = false;
+                        char hBuf[40];
+                        snprintf(hBuf, sizeof(hBuf), "CH: %d  (%d MHz)", ch, 2400 + ch);
+                        tft.drawCentreString(hBuf, tftWidth / 2, hopLineY + 2, 1);
                     }
 
-                    if (CHECK_NRF_SPI(nrfMode)) { cwChannel(ch, 0); }
+                    if (CHECK_NRF_SPI(nrfMode)) {
+                        switch (hopStrategy) {
+                            case 0:
+                                // CW: full power-cycle per hop for reliable PLL lock
+                                cwChannelHop(ch, 0);
+                                break;
+                            case 1:
+                                // Data Flood: CE-safe channel switch + burst
+                                floodChannel(ch, 0, hopBurst);
+                                break;
+                            case 2:
+                                // Turbo Flood: varied payloads, max duty cycle
+                                turboFloodChannel(ch, hopBurst);
+                                break;
+                        }
+                    }
 
                     ch += hopCfg.stepSize;
-                    if (ch > hopCfg.stopChannel) {
-                        ch = hopCfg.startChannel;
-                        hopRedraw = true; // Update display on wrap
-                    }
+                    if (ch > (int)hopCfg.stopChannel) ch = hopCfg.startChannel;
                 }
 
+                // ── Cleanup ──────────────────────────────────────
                 if (CHECK_NRF_SPI(nrfMode)) {
-                    NRFradio.stopConstCarrier();
+                    if (hopStrategy == 0) NRFradio.stopConstCarrier();
+                    NRFradio.flush_tx();
                     NRFradio.powerDown();
                 }
                 if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) { NRFSerial.println("OFF"); }
                 return;
-            } else if (menuIndex == 4) {
+
+            } else if (menuIndex == 6) {
                 return;
             } else {
                 editMode = !editMode;
