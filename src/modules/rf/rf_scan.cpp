@@ -67,7 +67,7 @@ void RFScan::loop() {
     }
 }
 
-void RFScan::RCSwitch_Enable_Receive(RCSwitch rcswitch) {
+void RFScan::RCSwitch_Enable_Receive(RCSwitch &rcswitch) {
     if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
         rcswitch.enableReceive(bruceConfigPins.CC1101_bus.io0);
     } else {
