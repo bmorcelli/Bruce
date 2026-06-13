@@ -669,50 +669,59 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
         }
 
         // ── Mode cycling: Next/Prev ─────────────────────────────
-        if (check(NextPress)) {
-            NrfJamMode prevMode = currentMode;
-            currentMode = (NrfJamMode)(((uint8_t)currentMode + 1) % NRF_JAM_MODE_COUNT);
+        // FIX: Always do a full clean radio re-init on every mode switch,
+        // regardless of whether the strategy type changed.
+        //
+        // The old conditional (only re-init when flood->CW changes) had two bugs:
+        //  1. CW->Flood: stopConstCarrier() leaves the radio in standby/power-down.
+        //     applyJamConfig() never calls powerUp(), so the first writeFast()
+        //     calls stall on a radio that isn't in TX mode -> hang/freeze.
+        //  2. Same-strategy switches (CW->CW, Flood->Flood on different mode):
+        //     The block was skipped entirely, so the new mode's PA/DR/burst
+        //     config was never applied to the hardware -> wrong radio settings.
+        //
+        // Solution: unconditionally stop, power-cycle, then re-init for the
+        // new mode's strategy. Cost is one ~6ms power cycle per mode switch,
+        // which is imperceptible to the user.
+        auto switchMode = [&](NrfJamMode newMode) {
+            currentMode = newMode;
             hopIndex = 0;
             prepareChannels(currentMode);
             if (CHECK_NRF_SPI(nrfMode)) {
-                NrfJamConfig &prevCfg = jamConfigs[(uint8_t)prevMode];
                 NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
-                bool prevFlood = (prevCfg.strategy >= 1);
-                bool nowFlood = (cfg.strategy >= 1);
-                if (prevFlood != nowFlood) {
-                    NRFradio.stopConstCarrier();
-                    if (nowFlood) {
-                        applyJamConfig(cfg, true);
-                    } else {
-                        initCW(channel);
-                    }
+                // Full stop + power cycle to reset radio state machine cleanly.
+                // Required whether previous strategy was CW or flood — both
+                // leave the radio in an indeterminate state for the next strategy.
+                NRFradio.stopConstCarrier();
+                NRFradio.flush_tx();
+                NRFradio.powerDown();
+                delayMicroseconds(500); // Full power-down settle
+                NRFradio.powerUp();
+                delayMicroseconds(5000); // Tpd2stby: ~5ms standby settle
+                if (cfg.strategy >= 1) {
+                    // Flood or Turbo Flood: configure TX pipeline
+                    applyJamConfig(cfg, true);
+                } else {
+                    // Constant Carrier: initCW handles its own powerUp sequence
+                    // but powerUp() already called above — just apply settings
+                    NRFradio.setPALevel(RF24_PA_HIGH);
+                    NRFradio.setDataRate(RF24_2MBPS);
+                    NRFradio.setAddressWidth(5);
+                    NRFradio.setPayloadSize(2);
+                    // Don't startConstCarrier here — cwChannel() does it per-hop
                 }
             }
             if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) {
                 NRFSerial.println(MODE_INFO[(uint8_t)currentMode].shortName);
             }
             redraw = true;
+        };
+
+        if (check(NextPress)) {
+            switchMode((NrfJamMode)(((uint8_t)currentMode + 1) % NRF_JAM_MODE_COUNT));
         }
         if (check(PrevPress)) {
-            NrfJamMode prevMode = currentMode;
-            currentMode = (NrfJamMode)(((uint8_t)currentMode + NRF_JAM_MODE_COUNT - 1) % NRF_JAM_MODE_COUNT);
-            hopIndex = 0;
-            prepareChannels(currentMode);
-            if (CHECK_NRF_SPI(nrfMode)) {
-                NrfJamConfig &prevCfg = jamConfigs[(uint8_t)prevMode];
-                NrfJamConfig &cfg = jamConfigs[(uint8_t)currentMode];
-                bool prevFlood = (prevCfg.strategy >= 1);
-                bool nowFlood = (cfg.strategy >= 1);
-                if (prevFlood != nowFlood) {
-                    NRFradio.stopConstCarrier();
-                    if (nowFlood) {
-                        applyJamConfig(cfg, true);
-                    } else {
-                        initCW(channel);
-                    }
-                }
-            }
-            redraw = true;
+            switchMode((NrfJamMode)(((uint8_t)currentMode + NRF_JAM_MODE_COUNT - 1) % NRF_JAM_MODE_COUNT));
         }
 
         // ── Periodic display update (every 200ms) ────────────
@@ -746,6 +755,7 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
             }
 
             channel = ch;
+            Serial.printf("Current Channel: %d\n", channel);
             totalCh++;
             hopIndex++;
             if (hopIndex >= (int)shuffledCount) {
