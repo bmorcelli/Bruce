@@ -819,6 +819,14 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
         NRFradio.stopConstCarrier();
         NRFradio.flush_tx();
         NRFradio.powerDown();
+        // FIX: After stopConstCarrier() the RF24 library leaves CE HIGH.
+        // nrf_start() → NRFradio.begin() requires CE LOW to succeed —
+        // if CE is still HIGH from the previous session, begin() fails
+        // and the next entry shows "NRF24 not found".
+        // Explicitly drive CE LOW and give the chip time to fully settle
+        // before returning control so the next begin() starts clean.
+        digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
+        delay(20);
     }
     if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) { NRFSerial.println("OFF"); }
 }
@@ -1001,7 +1009,12 @@ void nrf_channel_jammer() {
         }
     }
 
-    if (CHECK_NRF_SPI(mode)) NRFradio.stopConstCarrier();
+    if (CHECK_NRF_SPI(mode)) {
+        NRFradio.stopConstCarrier();
+        NRFradio.powerDown();
+        digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
+        delay(20);
+    }
     if (CHECK_NRF_UART(mode) || CHECK_NRF_BOTH(mode)) NRFSerial.println("OFF");
 }
 
@@ -1160,6 +1173,8 @@ void nrf_channel_hopper() {
                 if (CHECK_NRF_SPI(nrfMode)) {
                     NRFradio.stopConstCarrier();
                     NRFradio.powerDown();
+                    digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
+                    delay(20);
                 }
                 if (CHECK_NRF_UART(nrfMode) || CHECK_NRF_BOTH(nrfMode)) { NRFSerial.println("OFF"); }
                 return;
@@ -1175,3 +1190,4 @@ void nrf_channel_hopper() {
         delay(50);
     }
 }
+
