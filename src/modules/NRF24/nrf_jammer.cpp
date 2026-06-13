@@ -307,16 +307,16 @@ static void shuffleChannels(uint8_t *arr, size_t count) {
 // FIX: Apply all settings BEFORE startConstCarrier (not after), and
 // use PA_HIGH instead of PA_MAX for more reliable operation on PA+LNA
 // modules where PA_MAX can overdrive and destabilize the PLL.
-static void initCW(int channel) {
+static void initCW(int channel, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
     NRFradio.powerUp();
     delayMicroseconds(5000); // Tpd2stby: power-down → standby settle (~5ms)
     // Apply all settings BEFORE starting carrier — SPI writes during
     // carrier transmission are unreliable and may be silently ignored.
-    NRFradio.setPALevel(RF24_PA_HIGH);
+    NRFradio.setPALevel(pa);
     NRFradio.setDataRate(RF24_2MBPS);
     NRFradio.setAddressWidth(5);
     NRFradio.setPayloadSize(2);
-    NRFradio.startConstCarrier(RF24_PA_HIGH, channel);
+    NRFradio.startConstCarrier(pa, channel);
 }
 
 // ── CW on a channel ─────────────────────────────────────────────
@@ -330,7 +330,7 @@ static void initCW(int channel) {
 // dwellMs == 0 in preset-jammer context means "turbo" — uses an 80ms
 // forced stabilization dwell. For the CH Hopper use cwChannelHop()
 // instead, which lets the caller fully own dwell and ESC checks.
-static void cwChannel(uint8_t ch, uint16_t dwellMs) {
+static void cwChannel(uint8_t ch, uint16_t dwellMs, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
     NRFradio.stopConstCarrier();
     delayMicroseconds(500); // CE LOW settle before power-down
     NRFradio.powerDown();
@@ -339,11 +339,11 @@ static void cwChannel(uint8_t ch, uint16_t dwellMs) {
     delayMicroseconds(200); // Tpd2stby standby settle
     NRFradio.setChannel(ch);
     // Re-apply critical settings — power cycle clears radio registers
-    NRFradio.setPALevel(RF24_PA_HIGH);
+    NRFradio.setPALevel(pa);
     NRFradio.setDataRate(RF24_2MBPS);
     NRFradio.setAddressWidth(5);
     NRFradio.setPayloadSize(2);
-    NRFradio.startConstCarrier(RF24_PA_HIGH, ch);
+    NRFradio.startConstCarrier(pa, ch);
 
     // Minimum dwell gives the carrier time to stabilize before next hop
     if (dwellMs == 0) {
@@ -360,8 +360,9 @@ static void cwChannel(uint8_t ch, uint16_t dwellMs) {
 // ── CW hop for CH Hopper — caller controls dwell ────────────────
 // Same power-cycle sequence as cwChannel() for reliable PLL lock on
 // PA+LNA modules, but without any forced minimum dwell.
+// pa defaults to RF24_PA_HIGH for bare/cloned nRF24L01+ compatibility.
 // dwellMs == 0: return immediately after carrier starts (max speed).
-static void cwChannelHop(uint8_t ch, uint16_t dwellMs) {
+static void cwChannelHop(uint8_t ch, uint16_t dwellMs, rf24_pa_dbm_e pa = RF24_PA_HIGH) {
     NRFradio.stopConstCarrier();
     delayMicroseconds(500);
     NRFradio.powerDown();
@@ -369,12 +370,15 @@ static void cwChannelHop(uint8_t ch, uint16_t dwellMs) {
     NRFradio.powerUp();
     delayMicroseconds(200);
     NRFradio.setChannel(ch);
-    NRFradio.setPALevel(RF24_PA_HIGH);
+    NRFradio.setPALevel(pa);
     NRFradio.setDataRate(RF24_2MBPS);
     NRFradio.setAddressWidth(5);
     NRFradio.setPayloadSize(2);
-    NRFradio.startConstCarrier(RF24_PA_HIGH, ch);
-    if (dwellMs == 0) return; // caller owns timing
+    NRFradio.startConstCarrier(pa, ch);
+    if (dwellMs == 0) {
+        vTaskDelay(80 / portTICK_PERIOD_MS);
+        return;
+    }
     if (dwellMs <= 5) {
         delayMicroseconds((uint32_t)dwellMs * 1000);
     } else {
@@ -638,7 +642,8 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
         if (flooding) {
             applyJamConfig(cfg, true);
         } else {
-            initCW(channel);
+            rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+            initCW(channel, paLevels[cfg.paLevel & 3]);
         }
         NRFSPI = 1;
     }
@@ -699,11 +704,12 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
                 if (cfg.strategy >= 1) {
                     applyJamConfig(cfg, true);
                 } else {
-                    NRFradio.setPALevel(RF24_PA_HIGH);
+                    rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+                    NRFradio.setPALevel(paLevels[cfg.paLevel & 3]);
                     NRFradio.setDataRate(RF24_2MBPS);
                     NRFradio.setAddressWidth(5);
                     NRFradio.setPayloadSize(2);
-                    // cwChannelHop/cwChannel will startConstCarrier on next hop
+                    // cwChannel() will startConstCarrier on next hop
                 }
             }
             prepareChannels(currentMode);
@@ -745,9 +751,11 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
                     // Flood or Turbo Flood: configure TX pipeline
                     applyJamConfig(cfg, true);
                 } else {
-                    // Constant Carrier: initCW handles its own powerUp sequence
-                    // but powerUp() already called above — just apply settings
-                    NRFradio.setPALevel(RF24_PA_HIGH);
+                    // Constant Carrier: powerUp() already called above.
+                    // Pre-load cfg PA+DR so the first cwChannel() hop starts
+                    // clean without needing to re-read cfg inside the hot loop.
+                    rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+                    NRFradio.setPALevel(paLevels[cfg.paLevel & 3]);
                     NRFradio.setDataRate(RF24_2MBPS);
                     NRFradio.setAddressWidth(5);
                     NRFradio.setPayloadSize(2);
@@ -790,9 +798,11 @@ static void runJammer(NRF24_MODE nrfMode, NrfJamMode jamMode) {
 
         if (shuffledCount > 0) {
             uint8_t ch = shuffledCh[hopIndex % shuffledCount];
+            rf24_pa_dbm_e paLevels[] = {RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX};
+            rf24_pa_dbm_e pa = paLevels[cfg.paLevel & 3];
 
             switch (strategy) {
-                case 0: cwChannel(ch, dwellMs); break;
+                case 0: cwChannel(ch, dwellMs, pa); break;
                 case 1: floodChannel(ch, dwellMs, burst); break;
                 case 2: turboFloodChannel(ch, burst); break;
             }
@@ -1126,6 +1136,10 @@ void nrf_channel_hopper() {
                     delayMicroseconds(500);
                     NRFradio.powerUp();
                     delayMicroseconds(5000);
+                    // CH Hopper has no per-mode config — use RF24_PA_HIGH as the
+                    // safe default that works on bare, cloned, and PA+LNA modules.
+                    // Users wanting more power should use the preset jammer modes
+                    // which have full per-mode config (including PA level).
                     if (hopStrategy >= 1) {
                         // Flood / Turbo: configure TX pipeline once;
                         // floodChannel/turboFloodChannel switch channel per hop.
@@ -1140,7 +1154,7 @@ void nrf_channel_hopper() {
                         NRFradio.openWritingPipe(txAddr);
                         NRFradio.stopListening();
                     }
-                    // CW: cwChannelHop() handles its own init per hop
+                    // CW: cwChannelHop() handles its own init per hop (RF24_PA_HIGH default)
                 }
 
                 // ── Draw static screen ───────────────────────────
