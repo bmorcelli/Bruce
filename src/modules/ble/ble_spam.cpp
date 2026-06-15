@@ -29,7 +29,10 @@
 #define NIMBLE_V2_PLUS 1
 #endif
 #include "esp_mac.h"
+#if __has_include("host/ble_hs.h")
 #include "host/ble_hs.h"
+#define HAS_BLE_HS_H 1
+#endif
 #elif defined(CONFIG_BT_BLUEDROID_ENABLED)
 #include "esp_gap_ble_api.h"
 #endif
