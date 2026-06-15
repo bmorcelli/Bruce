@@ -6,8 +6,8 @@
 #include <NimBLEServer.h>
 
 struct ApplePayload {
-    const char* name;
-    const uint8_t* data;
+    const char *name;
+    const uint8_t *data;
     uint8_t length;
 };
 
@@ -17,6 +17,7 @@ void startAppleSpamAll();
 void stopAppleSpam();
 void quickAppleSpam(int payloadIndex);
 bool isAppleSpamRunning();
-const char* getApplePayloadName(int index);
+const char *getApplePayloadName(int index);
 int getApplePayloadCount();
+bool buildAppleSpamAdvertisement(int payloadIndex, BLEAdvertisementData &advertisementData);
 #endif

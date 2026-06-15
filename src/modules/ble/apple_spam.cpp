@@ -110,6 +110,27 @@ const char *getApplePayloadName(int index) {
     return apple_payloads[index].name;
 }
 
+bool buildAppleSpamAdvertisement(int payloadIndex, BLEAdvertisementData &advertisementData) {
+    if (payloadIndex < 0 || payloadIndex >= apple_payload_count) return false;
+
+    advertisementData = BLEAdvertisementData();
+    advertisementData.setFlags(0x06);
+
+    uint8_t fullPayload[31];
+    fullPayload[0] = apple_payloads[payloadIndex].length + 1;
+    fullPayload[1] = 0xFF;
+    memcpy(&fullPayload[2], apple_payloads[payloadIndex].data, apple_payloads[payloadIndex].length);
+
+#ifdef NIMBLE_V2_PLUS
+    advertisementData.addData(fullPayload, apple_payloads[payloadIndex].length + 2);
+#else
+    std::vector<uint8_t> payloadVector(fullPayload, fullPayload + apple_payloads[payloadIndex].length + 2);
+    advertisementData.addData(payloadVector);
+#endif
+
+    return true;
+}
+
 bool isAppleSpamRunning() { return apple_spam_running; }
 
 void stopAppleSpam() {
