@@ -5,6 +5,8 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <globals.h>
 
+#define MAX_JAMMER_RUNTIME 30000 // 30 seconds max runtime for jammer (safety cutoff)
+
 static const uint32_t MAX_SEQUENCE = 50;
 static const uint32_t DURATION_CYCLES = 3;
 
@@ -16,9 +18,7 @@ RFJammer::RFJammer(bool full) {
     setup();
 }
 
-RFJammer::~RFJammer() {
-    deinitRfModule();
-}
+RFJammer::~RFJammer() { deinitRfModule(); }
 
 // ── Mode selection menu ─────────────────────────────────────────
 RFJamMode RFJammer::showModeMenu(bool defaultFull) {
@@ -69,8 +69,14 @@ RFJamMode RFJammer::showModeMenu(bool defaultFull) {
             redraw = false;
         }
 
-        if (check(NextPress)) { menuIdx = (menuIdx + 1) % modeCount; redraw = true; }
-        if (check(PrevPress)) { menuIdx = (menuIdx + modeCount - 1) % modeCount; redraw = true; }
+        if (check(NextPress)) {
+            menuIdx = (menuIdx + 1) % modeCount;
+            redraw = true;
+        }
+        if (check(PrevPress)) {
+            menuIdx = (menuIdx + modeCount - 1) % modeCount;
+            redraw = true;
+        }
         if (check(SelPress)) return (RFJamMode)menuIdx;
 
         delay(50);
@@ -80,16 +86,20 @@ RFJamMode RFJammer::showModeMenu(bool defaultFull) {
 void RFJammer::setup() {
     // Show mode selection first
     RFJamMode selected = showModeMenu(jamMode == RF_JAM_FULL);
-    if ((uint8_t)selected == 255) { sendRF = false; return; }
+    if ((uint8_t)selected == 255) {
+        sendRF = false;
+        return;
+    }
     jamMode = selected;
 
     nTransmitterPin = bruceConfigPins.rfTx;
-    if (!initRfModule("tx")) { sendRF = false; return; }
+    if (!initRfModule("tx")) {
+        sendRF = false;
+        return;
+    }
 
     isCC1101 = (bruceConfigPins.rfModule == CC1101_SPI_MODULE);
-    if (isCC1101) {
-        nTransmitterPin = bruceConfigPins.CC1101_bus.io0;
-    }
+    if (isCC1101) { nTransmitterPin = bruceConfigPins.CC1101_bus.io0; }
 
     sendRF = true;
     pulseCount = 0;
@@ -97,8 +107,8 @@ void RFJammer::setup() {
     display_banner();
 
     switch (jamMode) {
-        case RF_JAM_FULL:  run_full_jammer();  break;
-        case RF_JAM_ITMT:  run_itmt_jammer();  break;
+        case RF_JAM_FULL: run_full_jammer(); break;
+        case RF_JAM_ITMT: run_itmt_jammer(); break;
         case RF_JAM_NOISE: run_noise_jammer(); break;
         case RF_JAM_SWEEP: run_sweep_jammer(); break;
         default: break;
@@ -224,37 +234,37 @@ void RFJammer::run_full_jammer() {
         phase = (elapsed / 100) % 3;
 
         switch (phase) {
-        case 0:
-            // Phase A: Ultra-rapid micro-glitches (1µs LOW every 4µs)
-            for (int i = 0; i < 100 && sendRF; i++) {
+            case 0:
+                // Phase A: Ultra-rapid micro-glitches (1µs LOW every 4µs)
+                for (int i = 0; i < 100 && sendRF; i++) {
+                    digitalWrite(nTransmitterPin, HIGH);
+                    delayMicroseconds(3);
+                    digitalWrite(nTransmitterPin, LOW);
+                    delayMicroseconds(1);
+                    pulseCount++;
+                }
+                break;
+            case 1:
+                // Phase B: Variable-width burst disruption (2-20µs pulses)
+                for (int i = 0; i < 50 && sendRF; i++) {
+                    uint32_t w = 2 + (micros() % 18);
+                    digitalWrite(nTransmitterPin, HIGH);
+                    delayMicroseconds(w);
+                    digitalWrite(nTransmitterPin, LOW);
+                    delayMicroseconds(1);
+                    pulseCount++;
+                }
+                break;
+            case 2:
+                // Phase C: Sustained carrier with periodic hard cuts
                 digitalWrite(nTransmitterPin, HIGH);
-                delayMicroseconds(3);
+                delayMicroseconds(80);
                 digitalWrite(nTransmitterPin, LOW);
-                delayMicroseconds(1);
-                pulseCount++;
-            }
-            break;
-        case 1:
-            // Phase B: Variable-width burst disruption (2-20µs pulses)
-            for (int i = 0; i < 50 && sendRF; i++) {
-                uint32_t w = 2 + (micros() % 18);
+                delayMicroseconds(2);
                 digitalWrite(nTransmitterPin, HIGH);
-                delayMicroseconds(w);
-                digitalWrite(nTransmitterPin, LOW);
-                delayMicroseconds(1);
-                pulseCount++;
-            }
-            break;
-        case 2:
-            // Phase C: Sustained carrier with periodic hard cuts
-            digitalWrite(nTransmitterPin, HIGH);
-            delayMicroseconds(80);
-            digitalWrite(nTransmitterPin, LOW);
-            delayMicroseconds(2);
-            digitalWrite(nTransmitterPin, HIGH);
-            delayMicroseconds(80);
-            pulseCount += 2;
-            break;
+                delayMicroseconds(80);
+                pulseCount += 2;
+                break;
         }
 
         if (currentTime - lastCheckTime > 100) {
@@ -270,6 +280,8 @@ void RFJammer::run_full_jammer() {
             lastDisplayTime = currentTime;
             update_display(currentTime - startTime);
         }
+
+        if (currentTime - startTime > MAX_JAMMER_RUNTIME) break;
     }
     digitalWrite(nTransmitterPin, LOW);
 }
@@ -281,9 +293,7 @@ void RFJammer::run_itmt_jammer() {
     uint32_t lastDisplayTime = startTime;
 
     uint32_t sequenceValues[MAX_SEQUENCE];
-    for (uint32_t i = 0; i < MAX_SEQUENCE; i++) {
-        sequenceValues[i] = 10 * (i + 1);
-    }
+    for (uint32_t i = 0; i < MAX_SEQUENCE; i++) { sequenceValues[i] = 10 * (i + 1); }
 
     while (sendRF) {
         // Forward sweep: 10µs → 500µs
@@ -319,7 +329,11 @@ void RFJammer::run_itmt_jammer() {
             uint32_t currentTime = millis();
             if (currentTime - lastCheckTime > 50) {
                 lastCheckTime = currentTime;
-                if (check(EscPress)) { sendRF = false; returnToMenu = true; break; }
+                if (check(EscPress)) {
+                    sendRF = false;
+                    returnToMenu = true;
+                    break;
+                }
             }
             if (currentTime - lastDisplayTime >= 1000) {
                 lastDisplayTime = currentTime;
@@ -332,6 +346,8 @@ void RFJammer::run_itmt_jammer() {
             send_random_pattern(200);
             pulseCount += 200;
         }
+
+        if (millis() - startTime > MAX_JAMMER_RUNTIME) break;
     }
     digitalWrite(nTransmitterPin, LOW);
 }
@@ -345,12 +361,12 @@ void RFJammer::run_noise_jammer() {
 
     // Switch CC1101 to PN9 random TX mode — maximum aggression
     ELECHOUSE_cc1101.setSidle();
-    ELECHOUSE_cc1101.setPktFormat(2);   // PN9 random TX mode
-    ELECHOUSE_cc1101.setDRate(800);     // Push data rate higher for wider occupied BW
-    ELECHOUSE_cc1101.setModulation(2);  // Start with ASK/OOK
-    ELECHOUSE_cc1101.setDeviation(47.6);// Max deviation for FSK modes
-    ELECHOUSE_cc1101.setRxBW(812);      // Widest RX BW setting (not critical for TX but sets filter)
-    ELECHOUSE_cc1101.setPA(12);         // Maximum TX power
+    ELECHOUSE_cc1101.setPktFormat(2);    // PN9 random TX mode
+    ELECHOUSE_cc1101.setDRate(800);      // Push data rate higher for wider occupied BW
+    ELECHOUSE_cc1101.setModulation(2);   // Start with ASK/OOK
+    ELECHOUSE_cc1101.setDeviation(47.6); // Max deviation for FSK modes
+    ELECHOUSE_cc1101.setRxBW(812);       // Widest RX BW setting (not critical for TX but sets filter)
+    ELECHOUSE_cc1101.setPA(12);          // Maximum TX power
     ELECHOUSE_cc1101.SetTx();
 
     uint32_t startTime = millis();
@@ -403,6 +419,8 @@ void RFJammer::run_noise_jammer() {
             returnToMenu = true;
             break;
         }
+
+        if (currentTime - startTime > MAX_JAMMER_RUNTIME) break;
 
         delay(50); // Low CPU usage since hardware handles TX
     }
@@ -493,6 +511,8 @@ void RFJammer::run_sweep_jammer() {
 
             update_display(currentTime - startTime);
         }
+
+        if (currentTime - startTime > MAX_JAMMER_RUNTIME) break;
     }
 
     digitalWrite(nTransmitterPin, LOW);
