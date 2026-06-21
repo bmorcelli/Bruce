@@ -42,6 +42,12 @@ public:
             obj["rx"] = rx;
             obj["tx"] = tx;
         }
+
+        bool checkConflict(int8_t p) {
+            gpio_num_t pin = (gpio_num_t)p;
+            if (rx == pin || tx == pin) return true;
+            return false;
+        }
     };
 
     struct I2CPins {
@@ -60,6 +66,12 @@ public:
         void toJson(JsonObject obj) const {
             obj["sda"] = sda;
             obj["scl"] = scl;
+        }
+
+        bool checkConflict(int8_t p) {
+            gpio_num_t pin = (gpio_num_t)p;
+            if (sda == pin || scl == pin) return true;
+            return false;
         }
     };
 
@@ -99,7 +111,7 @@ public:
             obj["io2"] = io2;
         }
 
-        bool checkConflict(uint8_t p) {
+        bool checkConflict(int8_t p) {
             gpio_num_t pin = (gpio_num_t)p;
             if (sck == pin || miso == pin || mosi == pin || cs == pin) return true;
             return false;

@@ -40,7 +40,7 @@ bool nrf_start(NRF24_MODE mode) {
     if (CHECK_NRF_UART(mode)) {
         if (USBserial.getSerialOutput() == &Serial1) {
             displayError("(E) UART already in use", true);
-            return false;
+            result = false;
         }
         NRFSerial.begin(115200, SERIAL_8N1, bruceConfigPins.uart_bus.rx, bruceConfigPins.uart_bus.tx);
         Serial.println("NRF24 on Serial Started");
@@ -69,8 +69,10 @@ bool nrf_start(NRF24_MODE mode) {
     } else if (bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.SDCARD_bus.mosi) {
         // CC1101 shares SPI with SDCard (Cardputer and CYDs)
         NRFSPI = &sdcardSPI;
-    } else if (bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.CC1101_bus.mosi &&
-               bruceConfigPins.NRF24_bus.mosi != bruceConfigPins.SDCARD_bus.mosi) {
+    } else if (
+        bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.CC1101_bus.mosi &&
+        bruceConfigPins.NRF24_bus.mosi != bruceConfigPins.SDCARD_bus.mosi
+    ) {
         // Smoochie board shares CC1101 and NRF24 SPI bus with different CS pins at
         // the same time, different from StickCs that uses the same Bus, but one at a
         // time (same CS Pin)
@@ -107,12 +109,29 @@ bool nrf_start(NRF24_MODE mode) {
 
 NRF24_MODE nrf_setMode() {
     NRF24_MODE mode = NRF_MODE_DISABLED;
-    options = {
-        {"SPI Mode",  [&]() { mode = NRF_MODE_SPI; } },
-        {"SPI UART",  [&]() { mode = NRF_MODE_UART; }},
-        {"SPI BOTH",  [&]() { mode = NRF_MODE_BOTH; }},
-        {"Main Menu", [=]() { returnToMenu = true; } }
-    };
-    loopOptions(options);
+    bool nrfSPI = true;
+    bool nrfUART = true;
+    if (bruceConfigPins.NRF24_bus.checkConflict(GPIO_NUM_NC)) {
+        displayError("NRF24 pins not configured", true);
+        nrfSPI = false;
+    }
+    // Serial UART oly display errors on Serial Monitor
+    if (bruceConfigPins.NRF24_bus.checkConflict(bruceConfigPins.uart_bus.rx) ||
+        bruceConfigPins.NRF24_bus.checkConflict(bruceConfigPins.uart_bus.tx)) {
+        Serial.println("NRF24 pins conflict with UART pins");
+        nrfUART = false;
+    }
+    if (bruceConfigPins.uart_bus.checkConflict(GPIO_NUM_NC)) {
+        Serial.println("UART pins not configured");
+        nrfUART = false;
+    }
+    if (nrfSPI && nrfUART) {
+        displayError("NRF24 pins undefined", true);
+        mode = NRF_MODE_BOTH;
+    } else if (nrfSPI) {
+        mode = NRF_MODE_SPI;
+    } else if (nrfUART) {
+        mode = NRF_MODE_UART;
+    }
     return mode;
 }
