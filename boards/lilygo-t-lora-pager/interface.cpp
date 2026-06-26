@@ -161,27 +161,6 @@ void _setup_gpio() {
 
     // Battery gauge
     if (bq.getDesignCap() != BATTERY_DESIGN_CAPACITY) { bq.setDesignCap(BATTERY_DESIGN_CAPACITY); }
-
-    // IO Expander
-    // TODO: Needs updating to use the same interface as the other IO Expanders (io_expander ioExpander)
-    // if (ioExpander.init(IO_EXPANDER_ADDRESS, &Wire)) {
-    //     const uint8_t expands[] = {
-    //         EXPANDS_KB_RST,
-    //         EXPANDS_KB_EN,
-    //         EXPANDS_SD_EN,
-    //         EXPANDS_DRV_EN,
-    //         EXPANDS_AMP_EN, // Audio
-    //     };
-    //     for (auto pin : expands) {
-    //         ioExpander.pinMode(pin, OUTPUT);
-    //         ioExpander.digitalWrite(pin, HIGH);
-    //         delay(1);
-    //     }
-    //     ioExpander.pinMode(EXPANDS_SD_PULLEN, INPUT);
-    //     ioExpander.digitalWrite(EXPANDS_DRV_EN, LOW);
-    // } else {
-    //     Serial.println("Initializing expander failed");
-    // }
     if (io.begin(Wire, IO_EXPANDER_ADDRESS)) {
         const uint8_t expands[] = {
             EXPANDS_KB_RST,

@@ -42,6 +42,7 @@
 // making Wardrive start way faster
 // comment the next line
 #define IO_EXP_GPS EXPANDS_GPS_EN
+#define IO_EXP_NFC EXPANDS_NFC_EN
 //  Main SPI Bus
 #define SPI_SS_PIN 21
 #define SPI_MOSI_PIN 34
@@ -162,7 +163,6 @@ static const uint8_t RX = SERIAL_RX;
 #define FM_SI4713
 
 // RFID
-#define HAS_ST25R3916
 #define RFID125_RX_PIN SERIAL_RX
 #define RFID125_TX_PIN SERIAL_TX
 
@@ -197,6 +197,14 @@ static const uint8_t RX = SERIAL_RX;
 #define NFC_INT 5
 #define SENSOR_INT 8
 #define NFC_CS 39
+
+// NFC ST25R3916
+#define HAS_ST25R3916
+#define ST25R_MISO SPI_MISO_PIN
+#define ST25R_MOSI SPI_MOSI_PIN
+#define ST25R_SCLK SPI_SCK_PIN
+#define ST25R_CS 39
+#define ST25R_IRQ 5
 
 // Audio ES8311
 #define AUDIO_I2S_WS 18

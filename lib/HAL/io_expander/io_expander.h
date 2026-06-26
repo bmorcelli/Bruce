@@ -35,6 +35,9 @@
 #ifndef IO_EXP_NRF // Used in C5
 #define IO_EXP_NRF -1
 #endif
+#ifndef IO_EXP_NFC // Used in T-LoraPager
+#define IO_EXP_NFC -1
+#endif
 
 // Button pins (likely inputs on the expander)
 #ifndef IO_EXP_UP
@@ -93,6 +96,7 @@ public:
         turnPinOnOff(IO_EXP_CC_TX, LOW); // SMOOOCHIE||REAPER
         turnPinOnOff(IO_EXP_LOGO, HIGH); // BRUCE LOGO LEAD ON REAPER
         turnPinOnOff(IO_EXP_NRF, HIGH);  // NRF ON BY DEFAULT FOR C5
+        turnPinOnOff(IO_EXP_NFC,HIGH);  // ST25R NFC chip power on Lilygo T-LoraPager
 
         // Set button pins as inputs
         button(IO_EXP_UP);
