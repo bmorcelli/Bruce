@@ -261,6 +261,7 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     strAllPages = "";
     dataPages = 0;
     totalPages = 0;
+    pageReadSuccess = false;
 
     if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA || uid.sak != 0x00) {
         pageReadStatus = FAILURE;
@@ -268,9 +269,13 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     }
 
     // Detect NTAG size from CC page (page 3)
-    uint8_t ccBuf[4] = {0};
+    uint8_t ccBuf[16] = {0};
     uint16_t rcvLen = 0;
-    _nfc->rfalT2TPollerRead(3, ccBuf, sizeof(ccBuf), &rcvLen);
+    auto ccErr = _nfc->rfalT2TPollerRead(3, ccBuf, sizeof(ccBuf), &rcvLen);
+    if (ccErr != ST_ERR_NONE || rcvLen < 4) {
+        pageReadStatus = FAILURE;
+        return FAILURE;
+    }
     switch (ccBuf[2]) {
         case 0x12: totalPages = 45; break;  // NTAG213
         case 0x3E: totalPages = 135; break; // NTAG215
@@ -279,10 +284,10 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     }
 
     for (int page = 0; page < totalPages; page++) {
-        uint8_t pageData[4] = {0};
+        uint8_t pageData[16] = {0};
         uint16_t len = 0;
         auto err = _nfc->rfalT2TPollerRead(page, pageData, sizeof(pageData), &len);
-        if (err != ST_ERR_NONE) {
+        if (err != ST_ERR_NONE || len < 4) {
             pageReadStatus = FAILURE;
             return FAILURE;
         }
@@ -301,6 +306,7 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
 
 int ST25R3916::read(int cardBaudRate) {
     pageReadStatus = FAILURE;
+    pageReadSuccess = false;
     if (!_nfc) return FAILURE;
     _deselectSharedSpiDevices();
 
@@ -313,46 +319,33 @@ int ST25R3916::read(int cardBaudRate) {
         _discoveryStarted = true;
     }
 
-    rfalNfcState state;
-    rfalNfcState prevState = (rfalNfcState)-1;
-    uint32_t startMs = millis();
+    _deselectSharedSpiDevices();
+    _hw->st25r3916OscOn();
+    _nfc->rfalNfcWorker();
 
-    while (millis() - startMs < 3000) {
-        _deselectSharedSpiDevices();
-        _hw->st25r3916OscOn();
-        _nfc->rfalNfcWorker();
-        state = _nfc->rfalNfcGetState();
+    rfalNfcState state = _nfc->rfalNfcGetState();
+    ST25R_LOG("-> %s(%d)", _stateStr(state), (int)state);
 
-        if (state != prevState) {
-            ST25R_LOG("-> %s(%d)", _stateStr(state), (int)state);
-            _logOpControl(_stateStr(state));
-            prevState = state;
-        }
-
-        if (state == RFAL_NFC_STATE_ACTIVATED) {
-            rfalNfcDevice *dev;
-            _nfc->rfalNfcGetActiveDevice(&dev);
-            ST25R_LOG("TAG! type=%d uid_len=%d", (int)dev->type, dev->nfcidLen);
-            _parseDevice(dev);
-            ST25R_LOG(
-                "uid=%s type=%s sak=%s atqa=%s",
-                printableUID.uid.c_str(),
-                printableUID.picc_type.c_str(),
-                printableUID.sak.c_str(),
-                printableUID.atqa.c_str()
-            );
-            int blkResult = _readDataBlocks(dev);
-            ST25R_LOG("_readDataBlocks -> %d pages=%d", blkResult, dataPages);
-            _nfc->rfalNfcDeactivate(false);
-            _discoveryStarted = false;
-            return SUCCESS;
-        }
-        yield();
-        if (EscPress || SelPress) break;
+    if (state != RFAL_NFC_STATE_ACTIVATED) {
+        return TAG_NOT_PRESENT;
     }
 
-    ST25R_LOG("timeout");
-    return TAG_NOT_PRESENT;
+    rfalNfcDevice *dev;
+    _nfc->rfalNfcGetActiveDevice(&dev);
+    ST25R_LOG("TAG! type=%d uid_len=%d", (int)dev->type, dev->nfcidLen);
+    _parseDevice(dev);
+    ST25R_LOG(
+        "uid=%s type=%s sak=%s atqa=%s",
+        printableUID.uid.c_str(),
+        printableUID.picc_type.c_str(),
+        printableUID.sak.c_str(),
+        printableUID.atqa.c_str()
+    );
+    int blkResult = _readDataBlocks(dev);
+    ST25R_LOG("_readDataBlocks -> %d pages=%d", blkResult, dataPages);
+    _nfc->rfalNfcDeactivate(false);
+    _discoveryStarted = false;
+    return SUCCESS;
 }
 
 int ST25R3916::clone() { return NOT_IMPLEMENTED; }
