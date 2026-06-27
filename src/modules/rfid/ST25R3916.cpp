@@ -348,6 +348,7 @@ int ST25R3916::read(int cardBaudRate) {
             return SUCCESS;
         }
         yield();
+        if (EscPress || SelPress) break;
     }
 
     ST25R_LOG("timeout");
