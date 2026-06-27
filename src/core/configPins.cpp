@@ -546,7 +546,12 @@ void BruceConfigPins::setRfidModule(RFIDModules value) {
 
 void BruceConfigPins::validateRfidModuleValue() {
     if (rfidModule != M5_RFID2_MODULE && rfidModule != PN532_I2C_MODULE && rfidModule != PN532_SPI_MODULE &&
-        rfidModule != RC522_SPI_MODULE && rfidModule != PN532_I2C_SPI_MODULE) {
+        rfidModule != RC522_SPI_MODULE && rfidModule != PN532_I2C_SPI_MODULE
+#if !defined(LITE_VERSION)
+        && rfidModule != ST25R3916_SPI_MODULE
+        && rfidModule != ST25R3916_I2C_MODULE
+#endif
+    ) {
         rfidModule = M5_RFID2_MODULE;
     }
 }
