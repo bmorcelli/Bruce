@@ -161,11 +161,13 @@ uint32_t rfidInfoCallback(cmd *c) {
 }
 
 // rfid reset  — destroys the module instance (forces re-init on next command)
-// rfid save [filename=rfid_dump]
+// rfid save [filename=rfid_dump] [format=bruce|flipper]
 uint32_t rfidSaveCallback(cmd *c) {
     Command cmd(c);
     String filename = cmd.getArgument("filename").getValue();
     if (filename.length() == 0) filename = "rfid_dump";
+    String format = cmd.getArgument("format").getValue();
+    format.toLowerCase();
 
     if (!_ensureRfid()) return false;
     if (_rfid->printableUID.uid.length() == 0) {
@@ -173,7 +175,14 @@ uint32_t rfidSaveCallback(cmd *c) {
         return false;
     }
 
-    int result = _rfid->save(filename);
+    int result;
+    if (format == "flipper") {
+        result = _rfid->saveFlipper(filename);
+        if (result == RFIDInterface::NOT_IMPLEMENTED)
+            serialDevice->println("Flipper format not supported by this module; using Bruce format.");
+    } else {
+        result = _rfid->save(filename);
+    }
     serialDevice->println("Save: " + _rfid->statusMessage(result));
     return result == RFIDInterface::SUCCESS;
 }
@@ -372,6 +381,7 @@ void createRfidCommands(SimpleCLI *cli) {
     cmd.addCommand("info", rfidInfoCallback);
     Command saveCmd = cmd.addCommand("save", rfidSaveCallback);
     saveCmd.addPosArg("filename", "rfid_dump");
+    saveCmd.addPosArg("format", "bruce");
     Command loadFileCmd = cmd.addCommand("loadfile", rfidLoadFileCallback);
     loadFileCmd.addPosArg("filepath", "/BruceRFID/rfid_dump.rfid");
     cmd.addBoundlessCommand("ndef", rfidNdefCallback);

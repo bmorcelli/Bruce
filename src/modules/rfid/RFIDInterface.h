@@ -95,6 +95,7 @@ public:
     virtual int emulate() { return NOT_IMPLEMENTED; }
     virtual int load() = 0;
     virtual int save(String filename) = 0;
+    virtual int saveFlipper(String filename) { return NOT_IMPLEMENTED; }
 
     String statusMessage(int status) const {
         switch (status) {

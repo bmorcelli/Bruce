@@ -389,11 +389,16 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
         pageReadStatus = FAILURE;
         return FAILURE;
     }
-    switch (ccBuf[2]) {
-        case 0x12: totalPages = 45; break;  // NTAG213
-        case 0x3E: totalPages = 135; break; // NTAG215
-        case 0x6D: totalPages = 231; break; // NTAG216
-        default: totalPages = 64; break;    // MF Ultralight
+    if (_ntagPagesHint > 0) {
+        // GET_VERSION is authoritative (also covers blank/unformatted tags)
+        totalPages = _ntagPagesHint;
+    } else {
+        switch (ccBuf[2]) {
+            case 0x12: totalPages = 45; break;  // NTAG213
+            case 0x3E: totalPages = 135; break; // NTAG215
+            case 0x6D: totalPages = 231; break; // NTAG216
+            default: totalPages = 64; break;    // MF Ultralight
+        }
     }
 
     for (int page = 0; page < totalPages; page++) {
@@ -497,8 +502,30 @@ int ST25R3916::read(int cardBaudRate) {
         printableUID.sak.c_str(),
         printableUID.atqa.c_str()
     );
+    // Milestone 1: enriquecer leitura NFC-A T2T (NTAG / Ultralight)
+    ntagVariant = "";
+    ntagHasVersion = false;
+    ntagHasSignature = false;
+    ntagHasCounters = false;
+    _ntagPagesHint = 0;
+    bool isNfcaT2T = (dev->type == RFAL_NFC_LISTEN_TYPE_NFCA && uid.sak == 0x00);
+    if (isNfcaT2T) {
+        // GET_VERSION first: identifies the variant and the authoritative page count
+        String variant = _getNtagVariant();
+        if (variant.length() > 0) {
+            ntagVariant = variant;
+            printableUID.picc_type = variant;
+        }
+    }
+
     int blkResult = _readDataBlocks(dev);
     ST25R_LOG("_readDataBlocks -> %d pages=%d", blkResult, dataPages);
+
+    if (isNfcaT2T) {
+        _readNtagSignature();
+        _readNtagCounters();
+    }
+
     _nfc->rfalNfcDeactivate(false);
     _discoveryStarted = false;
     return SUCCESS;
@@ -976,6 +1003,150 @@ int ST25R3916::load() {
     if (printableUID.uid.length() == 0) return FAILURE;
 
     _parseLoadedData();
+    return SUCCESS;
+}
+
+// Milestone 1 — GET_VERSION (0x60): identifica a variante exata do chip.
+String ST25R3916::_getNtagVariant() {
+    ntagHasVersion = false;
+    memset(ntagVersion, 0, sizeof(ntagVersion));
+
+    uint8_t cmd = 0x60;
+    uint8_t rx[10] = {0};
+    uint16_t rxLen = 0;
+    auto err = _hw->rfalTransceiveBlockingTxRx(
+        &cmd, 1, rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+    );
+    if (err != ST_ERR_NONE || rxLen < 8) {
+        ST25R_LOG("_getNtagVariant: GET_VERSION failed err=%d len=%u", (int)err, rxLen);
+        return "";
+    }
+    memcpy(ntagVersion, rx, 8);
+    ntagHasVersion = true;
+    ST25R_LOG(
+        "version=%02X %02X %02X %02X %02X %02X %02X %02X",
+        rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]
+    );
+
+    uint8_t productType = rx[2]; // 0x03 = Ultralight, 0x04 = NTAG
+    uint8_t storage = rx[6];     // storage size code
+    if (productType == 0x04) {
+        switch (storage) {
+            case 0x0F: _ntagPagesHint = 45; return "NTAG213";
+            case 0x11: _ntagPagesHint = 135; return "NTAG215";
+            case 0x13: _ntagPagesHint = 231; return "NTAG216";
+            default: return "NTAG21x";
+        }
+    }
+    if (productType == 0x03) {
+        switch (storage) {
+            case 0x0B: _ntagPagesHint = 20; return "MF Ultralight EV1 (UL11)";
+            case 0x0E: _ntagPagesHint = 41; return "MF Ultralight EV1 (UL21)";
+            default: return "MF Ultralight EV1";
+        }
+    }
+    return "";
+}
+
+// Milestone 1 — READ_SIG (0x3C): assinatura ECC-P256 (32 bytes).
+bool ST25R3916::_readNtagSignature() {
+    ntagHasSignature = false;
+    memset(ntagSignature, 0, sizeof(ntagSignature));
+
+    uint8_t cmd[2] = {0x3C, 0x00};
+    uint8_t rx[40] = {0};
+    uint16_t rxLen = 0;
+    auto err = _hw->rfalTransceiveBlockingTxRx(
+        cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+    );
+    if (err != ST_ERR_NONE || rxLen < 32) {
+        ST25R_LOG("_readNtagSignature: READ_SIG failed err=%d len=%u", (int)err, rxLen);
+        return false;
+    }
+    memcpy(ntagSignature, rx, 32);
+    ntagHasSignature = true;
+    ST25R_LOG(
+        "signature=%02X %02X %02X %02X...%02X %02X",
+        rx[0], rx[1], rx[2], rx[3], rx[30], rx[31]
+    );
+    return true;
+}
+
+// Milestone 1 — READ_CNT (0x39): contadores monotônicos 24-bit (little-endian).
+bool ST25R3916::_readNtagCounters() {
+    ntagHasCounters = false;
+    bool any = false;
+    for (uint8_t idx = 0; idx < 3; idx++) {
+        ntagCounters[idx] = 0;
+        ntagTearing[idx] = 0xBD;
+
+        uint8_t cmd[2] = {0x39, idx};
+        uint8_t rx[4] = {0};
+        uint16_t rxLen = 0;
+        auto err = _hw->rfalTransceiveBlockingTxRx(
+            cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+        );
+        if (err == ST_ERR_NONE && rxLen >= 3) {
+            ntagCounters[idx] = (uint32_t)rx[0] | ((uint32_t)rx[1] << 8) | ((uint32_t)rx[2] << 16);
+            any = true;
+            ST25R_LOG("counter[%u]=%lu", idx, (unsigned long)ntagCounters[idx]);
+        }
+    }
+    ntagHasCounters = any;
+    return any;
+}
+
+static String _bytesToHex(const uint8_t *data, size_t len) {
+    String out;
+    char buf[4];
+    for (size_t i = 0; i < len; i++) {
+        sprintf(buf, "%02X", data[i]);
+        out += buf;
+        if (i < len - 1) out += " ";
+    }
+    return out;
+}
+
+// Milestone 1 — dump no formato .nfc do Flipper Zero.
+int ST25R3916::saveFlipper(String filename) {
+    FS *fs;
+    if (!getFsStorage(fs)) return FAILURE;
+
+    File file = createNewFile(fs, "/BruceRFID", filename + ".nfc");
+    if (!file) return FAILURE;
+
+    String devType = ntagVariant.length() ? ntagVariant : printableUID.picc_type;
+
+    file.println("Filetype: Flipper NFC device");
+    file.println("Version: 4");
+    file.println("# Device type can be ISO14443-3A, ISO14443-3B, ISO14443-4A, ISO14443-4B, "
+                 "ISO15693-3, FeliCa, NTAG/Ultralight, Mifare Classic, Mifare DESFire, SLIX, "
+                 "ST25TB, EMV");
+    file.println("Device type: " + devType);
+    file.println("# UID is common for all formats");
+    file.println("UID: " + printableUID.uid);
+    // Flipper grava ATQA em little-endian (ex.: NTAG => "44 00")
+    char atqaBuf[6];
+    sprintf(atqaBuf, "%02X %02X", uid.atqaByte[0], uid.atqaByte[1]);
+    file.println("ATQA: " + String(atqaBuf));
+    file.println("SAK: " + printableUID.sak);
+    file.println("# Mifare Ultralight specific data");
+    file.println("Data format version: 2");
+    file.println("Signature: " + _bytesToHex(ntagSignature, 32));
+    file.println("Mifare version: " + _bytesToHex(ntagVersion, 8));
+    for (int i = 0; i < 3; i++) {
+        file.println("Counter " + String(i) + ": " + String(ntagCounters[i]));
+        char tBuf[3];
+        sprintf(tBuf, "%02X", ntagTearing[i]);
+        file.println("Tearing " + String(i) + ": " + String(tBuf));
+    }
+    file.println("Pages total: " + String(totalPages > 0 ? totalPages : dataPages));
+    file.println("Pages read: " + String(dataPages));
+    file.print(strAllPages);
+    file.println("Failed authentication attempts: 0");
+
+    file.close();
+    delay(100);
     return SUCCESS;
 }
 

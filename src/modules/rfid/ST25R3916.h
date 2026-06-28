@@ -26,8 +26,20 @@ public:
     int emulate() override;
     int load() override;
     int save(String filename) override;
+    int saveFlipper(String filename) override;
 
     void stopDiscovery();
+
+    // Milestone 1 — advanced NFC-A info (NTAG / Ultralight)
+    String ntagVariant;        // "NTAG213", "NTAG215", "NTAG216", "MF Ultralight", ...
+    uint8_t ntagVersion[8];    // raw GET_VERSION response
+    uint8_t ntagSignature[32]; // raw READ_SIG response (ECC-P256)
+    uint32_t ntagCounters[3];  // monotonic counters 0/1/2
+    uint8_t ntagTearing[3];    // tearing flags per counter
+    bool ntagHasVersion = false;
+    bool ntagHasSignature = false;
+    bool ntagHasCounters = false;
+    int _ntagPagesHint = 0; // page count derived from GET_VERSION (0 = unknown)
 
 private:
     CONNECTION_TYPE _connection_type;
@@ -54,6 +66,11 @@ private:
     bool _isUltralightUserPage(int page) const;
     bool _writeMagicGen1UID(rfalNfcDevice *dev);
     bool _writeMagicGen2UID(rfalNfcDevice *dev);
+
+    // Milestone 1 helpers
+    String _getNtagVariant();
+    bool _readNtagSignature();
+    bool _readNtagCounters();
 };
 
 #endif // !LITE_VERSION
