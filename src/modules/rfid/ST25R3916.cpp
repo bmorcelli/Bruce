@@ -1,6 +1,14 @@
 ﻿#include "ST25R3916.h"
 #if !defined(LITE_VERSION)
 
+// ST25R3916 via RFAL fork (lewisxhe/ST25R3916-fork + NFC-RFAL-fork).
+// Supported: SPI mode on boards with ST25R wiring such as lilygo-t-lora-pager and reaper.
+// I2C mode uses the fork constructor RfalRfST25R3916Class(&Wire, irqPin).
+// Card emulation/listen mode is not wired in this driver yet.
+// MIFARE Classic and ISO15693 writes are not implemented.
+
+#include "core/sd_functions.h"
+#include "modules/rfid/apdu.h"
 #include <globals.h>
 
 #define ST25R_DEBUG 1
@@ -31,18 +39,20 @@ static const char *_stateStr(rfalNfcState st) {
 }
 
 static void _deselectSharedSpiDevices() {
-#if defined(TFT_CS) && TFT_CS >= 0
-    digitalWrite(TFT_CS, HIGH);
-#endif
-#if defined(SDCARD_CS) && SDCARD_CS >= 0
-    digitalWrite(SDCARD_CS, HIGH);
-#endif
-#if defined(LORA_CS) && LORA_CS >= 0
-    digitalWrite(LORA_CS, HIGH);
-#endif
-#if defined(NFC_CS) && NFC_CS >= 0
-    digitalWrite(NFC_CS, HIGH);
-#endif
+    /*
+    #if defined(TFT_CS) && TFT_CS >= 0
+        digitalWrite(TFT_CS, HIGH);
+    #endif
+    #if defined(SDCARD_CS) && SDCARD_CS >= 0
+        digitalWrite(SDCARD_CS, HIGH);
+    #endif
+    #if defined(LORA_CS) && LORA_CS >= 0
+        digitalWrite(LORA_CS, HIGH);
+    #endif
+    #if defined(NFC_CS) && NFC_CS >= 0
+        digitalWrite(NFC_CS, HIGH);
+    #endif
+    */
 }
 
 static void _setNfcPower(bool enabled) {
@@ -51,6 +61,105 @@ static void _setNfcPower(bool enabled) {
     ioExpander.turnPinOnOff(IO_EXP_NFC, enabled ? HIGH : LOW);
 #endif
 }
+
+namespace {
+int st25HexNibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+bool st25ParseHexBytesAfterColon(const String &line, std::vector<uint8_t> &bytes) {
+    bytes.clear();
+    int colon = line.indexOf(':');
+    if (colon < 0) return false;
+
+    int hi = -1;
+    for (int i = colon + 1; i < line.length(); i++) {
+        int v = st25HexNibble(line.charAt(i));
+        if (v < 0) continue;
+        if (hi < 0) {
+            hi = v;
+        } else {
+            bytes.push_back(static_cast<uint8_t>((hi << 4) | v));
+            hi = -1;
+        }
+    }
+    return !bytes.empty() && hi < 0;
+}
+
+bool st25ExtractNdefMessageFromPageDump(const String &dump, std::vector<uint8_t> &ndefOut) {
+    ndefOut.clear();
+    if (dump.length() == 0) return false;
+
+    std::vector<uint8_t> userData;
+    std::vector<uint8_t> lineBytes;
+    int pos = 0;
+
+    while (pos < dump.length()) {
+        int nl = dump.indexOf('\n', pos);
+        if (nl < 0) nl = dump.length();
+
+        String line = dump.substring(pos, nl);
+        line.trim();
+        pos = nl + 1;
+
+        if (!line.startsWith("Page ")) continue;
+
+        int colon = line.indexOf(':');
+        if (colon < 0) continue;
+
+        int page = line.substring(5, colon).toInt();
+        if (page < 4) continue;
+
+        if (!st25ParseHexBytesAfterColon(line, lineBytes)) continue;
+        if (lineBytes.size() < 4) continue;
+        userData.insert(userData.end(), lineBytes.begin(), lineBytes.begin() + 4);
+    }
+
+    size_t i = 0;
+    while (i < userData.size()) {
+        uint8_t tlv = userData[i++];
+
+        if (tlv == 0x00) continue;
+        if (tlv == 0xFE) break;
+        if (i >= userData.size()) return false;
+
+        uint32_t len = userData[i++];
+        if (len == 0xFF) {
+            if (i + 1 >= userData.size()) return false;
+            len = (static_cast<uint32_t>(userData[i]) << 8) | userData[i + 1];
+            i += 2;
+        }
+
+        if (i + len > userData.size()) return false;
+
+        if (tlv == 0x03) {
+            ndefOut.assign(userData.begin() + i, userData.begin() + i + len);
+            return !ndefOut.empty();
+        }
+
+        i += len;
+    }
+
+    return false;
+}
+
+bool st25BuildNdefMessageFromStruct(const RFIDInterface::NdefMessage &src, std::vector<uint8_t> &ndefOut) {
+    ndefOut.clear();
+    if (src.messageSize == 0 || src.payloadSize == 0) return false;
+
+    ndefOut.reserve(4 + src.payloadSize);
+    ndefOut.push_back(src.header);
+    ndefOut.push_back(src.tnf);
+    ndefOut.push_back(src.payloadSize);
+    ndefOut.push_back(src.payloadType);
+    ndefOut.insert(ndefOut.end(), src.payload, src.payload + src.payloadSize);
+
+    return ndefOut.size() == src.messageSize;
+}
+} // namespace
 
 void ST25R3916::_logOpControl(const char *where) {
     if (!_hw) return;
@@ -92,7 +201,11 @@ ST25R3916::~ST25R3916() {
     stopDiscovery();
     _setNfcPower(false);
     delete _nfc;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdelete-non-virtual-dtor"
+    // RFAL class is deleted through its concrete type, but the fork lacks a virtual destructor.
     delete _hw;
+#pragma GCC diagnostic pop
 }
 
 bool ST25R3916::_initSPI() {
@@ -304,6 +417,51 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     return SUCCESS;
 }
 
+void ST25R3916::_parseLoadedData() {
+    String strUID = printableUID.uid;
+    strUID.trim();
+    strUID.replace(" ", "");
+    uid.size = strUID.length() / 2;
+    if (uid.size > sizeof(uid.uidByte)) uid.size = sizeof(uid.uidByte);
+    for (size_t i = 0; i < uid.size; i++) {
+        uid.uidByte[i] = strtoul(strUID.substring(i * 2, i * 2 + 2).c_str(), NULL, 16);
+    }
+
+    uint8_t bcc = 0;
+    for (int i = 0; i < uid.size; i++) bcc ^= uid.uidByte[i];
+    char bccBuf[3];
+    sprintf(bccBuf, "%02X", bcc);
+    printableUID.bcc = String(bccBuf);
+
+    printableUID.sak.trim();
+    uid.sak = strtoul(printableUID.sak.c_str(), NULL, 16);
+
+    String strAtqa = printableUID.atqa;
+    strAtqa.trim();
+    strAtqa.replace(" ", "");
+    uid.atqaByte[0] = 0;
+    uid.atqaByte[1] = 0;
+    if (strAtqa.length() >= 4) {
+        uid.atqaByte[1] = strtoul(strAtqa.substring(0, 2).c_str(), NULL, 16);
+        uid.atqaByte[0] = strtoul(strAtqa.substring(2, 4).c_str(), NULL, 16);
+    }
+}
+
+bool ST25R3916::_isUltralightUserPage(int page) const {
+    if (page < 4) return false;
+    if (totalPages <= 0) return true;
+    return page < (totalPages - 5);
+}
+
+bool ST25R3916::_buildLoadedNdefMessage(std::vector<uint8_t> &ndefOut) {
+    if (st25ExtractNdefMessageFromPageDump(strAllPages, ndefOut)) return true;
+    if (st25BuildNdefMessageFromStruct(ndefMessage, ndefOut)) return true;
+
+    std::vector<uint8_t> uriPayload = Ndef::urlNdefAbbrv("https://bruce.computer");
+    ndefOut = Ndef::newMessage(uriPayload);
+    return !ndefOut.empty();
+}
+
 int ST25R3916::read(int cardBaudRate) {
     pageReadStatus = FAILURE;
     pageReadSuccess = false;
@@ -326,9 +484,7 @@ int ST25R3916::read(int cardBaudRate) {
     rfalNfcState state = _nfc->rfalNfcGetState();
     ST25R_LOG("-> %s(%d)", _stateStr(state), (int)state);
 
-    if (state != RFAL_NFC_STATE_ACTIVATED) {
-        return TAG_NOT_PRESENT;
-    }
+    if (state != RFAL_NFC_STATE_ACTIVATED) { return TAG_NOT_PRESENT; }
 
     rfalNfcDevice *dev;
     _nfc->rfalNfcGetActiveDevice(&dev);
@@ -348,12 +504,503 @@ int ST25R3916::read(int cardBaudRate) {
     return SUCCESS;
 }
 
-int ST25R3916::clone() { return NOT_IMPLEMENTED; }
-int ST25R3916::erase() { return NOT_IMPLEMENTED; }
-int ST25R3916::write(int) { return NOT_IMPLEMENTED; }
-int ST25R3916::write_ndef() { return NOT_IMPLEMENTED; }
-int ST25R3916::emulate() { return NOT_IMPLEMENTED; }
-int ST25R3916::load() { return NOT_IMPLEMENTED; }
-int ST25R3916::save(String) { return NOT_IMPLEMENTED; }
+bool ST25R3916::_pollForTag(rfalNfcDevice **dev, uint32_t timeoutMs) {
+    if (_discoveryStarted) {
+        _nfc->rfalNfcDeactivate(false);
+        _discoveryStarted = false;
+    }
+    _deselectSharedSpiDevices();
+
+    rfalNfcDiscoverParam params;
+    memset(&params, 0, sizeof(params));
+    params.compMode = RFAL_COMPLIANCE_MODE_NFC;
+    params.devLimit = 1;
+    params.nfcfBR = RFAL_BR_212;
+    params.ap2pBR = RFAL_BR_424;
+    params.techs2Find = RFAL_NFC_POLL_TECH_A;
+    params.GBLen = RFAL_NFCDEP_GB_MAX_LEN;
+    params.notifyCb = _notifyCb;
+    params.totalDuration = timeoutMs;
+    params.wakeupEnabled = false;
+    params.wakeupConfigDefault = true;
+
+    if (_nfc->rfalNfcDiscover(&params) != ST_ERR_NONE) return false;
+    _hw->st25r3916OscOn();
+
+    uint32_t deadline = millis() + timeoutMs;
+    while (millis() < deadline) {
+        _nfc->rfalNfcWorker();
+        if (_nfc->rfalNfcGetState() == RFAL_NFC_STATE_ACTIVATED) {
+            _nfc->rfalNfcGetActiveDevice(dev);
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    return false;
+}
+
+bool ST25R3916::_writeT2TPage(uint8_t page, const uint8_t data[4], bool verify) {
+    auto err = _nfc->rfalT2TPollerWrite(page, const_cast<uint8_t *>(data));
+    if (err != ST_ERR_NONE) {
+        ST25R_LOG("_writeT2TPage: page %u write failed err=%d", page, (int)err);
+        return false;
+    }
+
+    delay(12);
+
+    if (!verify) return true;
+
+    uint8_t rx[16] = {0};
+    uint16_t rxLen = 0;
+    err = _nfc->rfalT2TPollerRead(page, rx, sizeof(rx), &rxLen);
+    if (err != ST_ERR_NONE || rxLen < 4) {
+        ST25R_LOG("_writeT2TPage: page %u verify read failed err=%d len=%u", page, (int)err, rxLen);
+        return false;
+    }
+
+    if (memcmp(rx, data, 4) != 0) {
+        ST25R_LOG(
+            "_writeT2TPage: page %u verify mismatch got=%02X %02X %02X %02X expected=%02X %02X %02X %02X",
+            page,
+            rx[0],
+            rx[1],
+            rx[2],
+            rx[3],
+            data[0],
+            data[1],
+            data[2],
+            data[3]
+        );
+        return false;
+    }
+
+    return true;
+}
+
+int ST25R3916::_writeUltralight(rfalNfcDevice *dev) {
+    String pages = strAllPages;
+    int written = 0;
+    int pos = 0;
+
+    while (pos < (int)pages.length()) {
+        int nl = pages.indexOf('\n', pos);
+        if (nl < 0) nl = pages.length();
+        String line = pages.substring(pos, nl);
+        pos = nl + 1;
+        if (line.length() == 0) continue;
+
+        int pageNum = -1;
+        unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+        if (sscanf(line.c_str(), "Page %d: %02X %02X %02X %02X", &pageNum, &b0, &b1, &b2, &b3) == 5) {
+            if (!_isUltralightUserPage(pageNum)) continue;
+            uint8_t data[4] = {(uint8_t)b0, (uint8_t)b1, (uint8_t)b2, (uint8_t)b3};
+            if (!_writeT2TPage((uint8_t)pageNum, data)) {
+                _nfc->rfalNfcDeactivate(false);
+                return FAILURE;
+            }
+            written++;
+        }
+    }
+
+    ST25R_LOG("_writeUltralight: wrote %d pages", written);
+    _nfc->rfalNfcDeactivate(false);
+    return SUCCESS;
+}
+
+int ST25R3916::_eraseUltralight(rfalNfcDevice *dev) {
+    uint8_t zeros[4] = {0x00, 0x00, 0x00, 0x00};
+    for (int page = 4; page < totalPages; page++) {
+        if (!_isUltralightUserPage(page)) continue;
+        if (!_writeT2TPage((uint8_t)page, zeros)) {
+            _nfc->rfalNfcDeactivate(false);
+            return FAILURE;
+        }
+    }
+    ST25R_LOG("_eraseUltralight: erased pages 4..%d", totalPages - 1);
+    _nfc->rfalNfcDeactivate(false);
+    return SUCCESS;
+}
+
+int ST25R3916::_writeNdefBlocks(rfalNfcDevice *dev) {
+    uint8_t ndefPayload[180] = {0};
+    size_t idx = 0;
+
+    if (ndefMessage.messageSize == 0 || ndefMessage.payloadSize == 0) return FAILURE;
+    if ((size_t)ndefMessage.messageSize + 3 > sizeof(ndefPayload)) return FAILURE;
+
+    ndefPayload[idx++] = ndefMessage.begin;
+    ndefPayload[idx++] = ndefMessage.messageSize;
+    ndefPayload[idx++] = ndefMessage.header;
+    ndefPayload[idx++] = ndefMessage.tnf;
+    ndefPayload[idx++] = ndefMessage.payloadSize;
+    ndefPayload[idx++] = ndefMessage.payloadType;
+
+    for (uint8_t i = 0; i < ndefMessage.payloadSize && idx < sizeof(ndefPayload); i++) {
+        ndefPayload[idx++] = ndefMessage.payload[i];
+    }
+
+    if (idx >= sizeof(ndefPayload)) return FAILURE;
+    ndefPayload[idx++] = ndefMessage.end;
+
+    int maxBytes = (totalPages > 0 ? (totalPages - 5 - 4) : 36) * 4;
+    if (maxBytes <= 0 || (int)idx > maxBytes) {
+        ST25R_LOG("_writeNdefBlocks: payload too large len=%d max=%d", (int)idx, maxBytes);
+        return FAILURE;
+    }
+
+    int pagesWritten = 0;
+    for (int page = 4; _isUltralightUserPage(page); page++) {
+        int base = (page - 4) * 4;
+        if (base >= (int)idx) break;
+
+        uint8_t data[4] = {0x00, 0x00, 0x00, 0x00};
+        for (int b = 0; b < 4 && base + b < (int)idx; b++) data[b] = ndefPayload[base + b];
+
+        if (!_writeT2TPage((uint8_t)page, data)) {
+            return FAILURE;
+        }
+        pagesWritten++;
+    }
+
+    uint8_t zeros[4] = {0x00, 0x00, 0x00, 0x00};
+    for (int page = 4 + pagesWritten; _isUltralightUserPage(page); page++) {
+        if (!_writeT2TPage((uint8_t)page, zeros)) {
+            return FAILURE;
+        }
+    }
+
+    ST25R_LOG("_writeNdefBlocks: wrote %d bytes", (int)idx);
+    return SUCCESS;
+}
+
+bool ST25R3916::_writeMagicGen2UID(rfalNfcDevice *dev) {
+    if (uid.size == 7) {
+        uint8_t bcc0 = 0x88 ^ uid.uidByte[0] ^ uid.uidByte[1] ^ uid.uidByte[2];
+        uint8_t bcc1 = uid.uidByte[3] ^ uid.uidByte[4] ^ uid.uidByte[5] ^ uid.uidByte[6];
+        uint8_t page0[4] = {uid.uidByte[0], uid.uidByte[1], uid.uidByte[2], bcc0};
+        uint8_t page1[4] = {uid.uidByte[3], uid.uidByte[4], uid.uidByte[5], uid.uidByte[6]};
+        uint8_t page2[4] = {bcc1, 0x00, 0x00, 0x00};
+        if (_writeT2TPage(0, page0) && _writeT2TPage(1, page1) && _writeT2TPage(2, page2)) {
+            ST25R_LOG("_writeMagicGen2UID: 7-byte UID written to pages 0-2");
+            return true;
+        }
+    } else if (uid.size == 4) {
+        uint8_t bcc = uid.uidByte[0] ^ uid.uidByte[1] ^ uid.uidByte[2] ^ uid.uidByte[3];
+        uint8_t page0[4] = {uid.uidByte[0], uid.uidByte[1], uid.uidByte[2], uid.uidByte[3]};
+        uint8_t page1[4] = {bcc, uid.sak, uid.atqaByte[1], uid.atqaByte[0]};
+        if (_writeT2TPage(0, page0) && _writeT2TPage(1, page1)) {
+            ST25R_LOG("_writeMagicGen2UID: 4-byte UID written to pages 0-1");
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ST25R3916::_writeMagicGen1UID(rfalNfcDevice *dev) {
+    // Magic Gen1 backdoor: send 0x40 (7 bits, no CRC, no parity), then 0x43
+    uint8_t cmd40 = 0x40;
+    uint8_t rxBuf[4] = {0};
+    uint16_t actLen = 0;
+
+    rfalTransceiveContext ctx;
+    ctx.txBuf = &cmd40;
+    ctx.txBufLen = 7;
+    ctx.rxBuf = rxBuf;
+    ctx.rxBufLen = 32;
+    ctx.rxRcvdLen = &actLen;
+    ctx.flags = (uint32_t)RFAL_TXRX_FLAGS_CRC_TX_MANUAL | (uint32_t)RFAL_TXRX_FLAGS_PAR_TX_NONE |
+                (uint32_t)RFAL_TXRX_FLAGS_CRC_RX_KEEP | (uint32_t)RFAL_TXRX_FLAGS_PAR_RX_KEEP;
+    ctx.fwt = rfalConv64fcTo1fc(5000);
+
+    if (_hw->rfalStartTransceive(&ctx) != ST_ERR_NONE) return false;
+    uint32_t t0 = millis();
+    while (millis() - t0 < 50) {
+        _hw->rfalWorker();
+        if (_hw->rfalGetTransceiveState() == RFAL_TXRX_STATE_IDLE) break;
+    }
+    if (_hw->rfalGetTransceiveStatus() != ST_ERR_NONE || rxBuf[0] != 0x0A) {
+        ST25R_LOG("_writeMagicGen1UID: 0x40 no ACK (got 0x%02X)", rxBuf[0]);
+        return false;
+    }
+
+    uint8_t cmd43 = 0x43;
+    memset(rxBuf, 0, sizeof(rxBuf));
+    actLen = 0;
+    ctx.txBuf = &cmd43;
+    ctx.txBufLen = 8;
+    ctx.rxBuf = rxBuf;
+    ctx.rxBufLen = 32;
+    ctx.rxRcvdLen = &actLen;
+    ctx.flags = (uint32_t)RFAL_TXRX_FLAGS_CRC_TX_MANUAL | (uint32_t)RFAL_TXRX_FLAGS_PAR_TX_NONE |
+                (uint32_t)RFAL_TXRX_FLAGS_CRC_RX_KEEP | (uint32_t)RFAL_TXRX_FLAGS_PAR_RX_KEEP;
+    ctx.fwt = rfalConv64fcTo1fc(5000);
+
+    if (_hw->rfalStartTransceive(&ctx) != ST_ERR_NONE) return false;
+    t0 = millis();
+    while (millis() - t0 < 50) {
+        _hw->rfalWorker();
+        if (_hw->rfalGetTransceiveState() == RFAL_TXRX_STATE_IDLE) break;
+    }
+    if (_hw->rfalGetTransceiveStatus() != ST_ERR_NONE || rxBuf[0] != 0x0A) {
+        ST25R_LOG("_writeMagicGen1UID: 0x43 no ACK (got 0x%02X)", rxBuf[0]);
+        return false;
+    }
+
+    // Build block 0: UID (4 bytes) + BCC + SAK + ATQA (2) + filler (8)
+    uint8_t block0[16] = {0};
+    uint8_t bcc = 0;
+    int uidLen = uid.size < 4 ? uid.size : 4;
+    for (int i = 0; i < uidLen; i++) {
+        block0[i] = uid.uidByte[i];
+        bcc ^= uid.uidByte[i];
+    }
+    block0[4] = bcc;
+    block0[5] = uid.sak;
+    block0[6] = uid.atqaByte[1];
+    block0[7] = uid.atqaByte[0];
+
+    // Send MIFARE WRITE block 0 command (with CRC)
+    uint8_t writeCmd[2] = {0xA0, 0x00};
+    memset(rxBuf, 0, sizeof(rxBuf));
+    actLen = 0;
+    auto err = _hw->rfalTransceiveBlockingTxRx(
+        writeCmd, sizeof(writeCmd), rxBuf, sizeof(rxBuf), &actLen, RFAL_TXRX_FLAGS_DEFAULT, RFAL_FWT_NONE
+    );
+    if (err != ST_ERR_NONE || rxBuf[0] != 0x0A) {
+        ST25R_LOG("_writeMagicGen1UID: WRITE cmd no ACK err=%d", (int)err);
+        return false;
+    }
+
+    // Send block data (with CRC)
+    memset(rxBuf, 0, sizeof(rxBuf));
+    actLen = 0;
+    err = _hw->rfalTransceiveBlockingTxRx(
+        block0, sizeof(block0), rxBuf, sizeof(rxBuf), &actLen, RFAL_TXRX_FLAGS_DEFAULT, RFAL_FWT_NONE
+    );
+    if (err != ST_ERR_NONE) {
+        ST25R_LOG("_writeMagicGen1UID: data send failed err=%d", (int)err);
+        return false;
+    }
+
+    ST25R_LOG("_writeMagicGen1UID: block 0 written successfully");
+    return true;
+}
+
+int ST25R3916::write(int cardBaudRate) {
+    if (!_nfc) return FAILURE;
+    _deselectSharedSpiDevices();
+
+    rfalNfcDevice *dev;
+    if (!_pollForTag(&dev)) return TAG_NOT_PRESENT;
+
+    if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA) {
+        _nfc->rfalNfcDeactivate(false);
+        return TAG_NOT_MATCH;
+    }
+
+    bool storedIsUltralight = printableUID.picc_type.indexOf("Ultralight") >= 0;
+    bool presentIsUltralight = (dev->dev.nfca.selRes.sak == 0x00);
+
+    if (!storedIsUltralight || !presentIsUltralight) {
+        _nfc->rfalNfcDeactivate(false);
+        return TAG_NOT_MATCH;
+    }
+
+    return _writeUltralight(dev);
+}
+
+int ST25R3916::clone() {
+    if (!_nfc) return FAILURE;
+    _deselectSharedSpiDevices();
+
+    rfalNfcDevice *dev = nullptr;
+    if (!_pollForTag(&dev)) return TAG_NOT_PRESENT;
+
+    if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA) {
+        _nfc->rfalNfcDeactivate(false);
+        return TAG_NOT_MATCH;
+    }
+
+    if (_writeMagicGen2UID(dev)) {
+        _nfc->rfalNfcDeactivate(false);
+        return SUCCESS;
+    }
+
+    _nfc->rfalNfcDeactivate(false);
+    delay(50);
+
+    dev = nullptr;
+    if (!_pollForTag(&dev)) return TAG_NOT_PRESENT;
+
+    if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA) {
+        _nfc->rfalNfcDeactivate(false);
+        return TAG_NOT_MATCH;
+    }
+
+    if (_writeMagicGen1UID(dev)) {
+        _nfc->rfalNfcDeactivate(false);
+        return SUCCESS;
+    }
+
+    _nfc->rfalNfcDeactivate(false);
+    return FAILURE;
+}
+
+int ST25R3916::erase() {
+    if (!_nfc) return FAILURE;
+    _deselectSharedSpiDevices();
+
+    rfalNfcDevice *dev;
+    if (!_pollForTag(&dev)) return TAG_NOT_PRESENT;
+
+    if (dev->type == RFAL_NFC_LISTEN_TYPE_NFCA && dev->dev.nfca.selRes.sak == 0x00) {
+        return _eraseUltralight(dev);
+    }
+
+    _nfc->rfalNfcDeactivate(false);
+    return NOT_IMPLEMENTED;
+}
+
+int ST25R3916::write_ndef() {
+    if (!_nfc) return FAILURE;
+    _deselectSharedSpiDevices();
+
+    rfalNfcDevice *dev;
+    if (!_pollForTag(&dev)) return TAG_NOT_PRESENT;
+
+    if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA || dev->dev.nfca.selRes.sak != 0x00) {
+        _nfc->rfalNfcDeactivate(false);
+        return TAG_NOT_MATCH;
+    }
+
+    if (totalPages <= 0) {
+        _parseDevice(dev);
+        if (_readDataBlocks(dev) != SUCCESS) {
+            _nfc->rfalNfcDeactivate(false);
+            return FAILURE;
+        }
+    }
+
+    int result = _writeNdefBlocks(dev);
+    _nfc->rfalNfcDeactivate(false);
+    return result;
+}
+
+int ST25R3916::emulate() {
+    if (!_hw) return FAILURE;
+
+    std::vector<uint8_t> emulatedNdefMessage;
+    if (!_buildLoadedNdefMessage(emulatedNdefMessage)) {
+        ST25R_LOG("emulate: no NDEF payload available from loaded/read data");
+        return FAILURE;
+    }
+
+    ST25R_LOG(
+        "emulate: prepared Type 4 NDEF payload from loaded data, ndefLen=%u uid=%s",
+        (unsigned)emulatedNdefMessage.size(),
+        printableUID.uid.c_str()
+    );
+
+    rfalLmConfPA confA;
+    memset(&confA, 0, sizeof(confA));
+    confA.nfcidLen = uid.size >= 7 ? RFAL_LM_NFCID_LEN_07 : RFAL_LM_NFCID_LEN_04;
+
+    uint8_t nfcid[7] = {0x08, 0x04, 0x25, 0x85, 0x93, 0x10, 0x01};
+    if (uid.size >= 4) {
+        size_t copyLen = uid.size >= 7 ? 7 : 4;
+        memcpy(nfcid, uid.uidByte, copyLen);
+    }
+    memcpy(confA.nfcid, nfcid, confA.nfcidLen == RFAL_LM_NFCID_LEN_07 ? 7 : 4);
+
+    confA.SENS_RES[0] = uid.atqaByte[1] ? uid.atqaByte[1] : 0x04;
+    confA.SENS_RES[1] = uid.atqaByte[0] ? uid.atqaByte[0] : 0x00;
+    confA.SEL_RES = 0x20; // ISO-DEP capable Type 4 Tag emulation.
+
+    uint8_t rxBuf[256] = {0};
+    uint16_t rxLenBits = 0;
+    auto err = _hw->rfalListenStart(
+        RFAL_LM_MASK_NFCA, &confA, nullptr, nullptr, rxBuf, sizeof(rxBuf) * 8, &rxLenBits
+    );
+    if (err != ST_ERR_NONE) {
+        ST25R_LOG(
+            "emulate: rfalListenStart failed err=%d. ST25R3916-fork currently returns ST_ERR_NOTSUPP for listen mode",
+            (int)err
+        );
+        return (err == ST_ERR_NOTSUPP) ? NOT_IMPLEMENTED : FAILURE;
+    }
+
+    _hw->rfalListenStop();
+    ST25R_LOG("emulate: listen mode started, but APDU Type 4 exchange is not implemented for this driver yet");
+    return NOT_IMPLEMENTED;
+}
+
+int ST25R3916::load() {
+    FS *fs;
+    if (!getFsStorage(fs)) return FAILURE;
+
+    String filepath = loopSD(*fs, true, "RFID|NFC", "/BruceRFID");
+    if (filepath.length() == 0) return FAILURE;
+
+    File file = fs->open(filepath, FILE_READ);
+    if (!file) return FAILURE;
+
+    String line;
+    String strData;
+    strAllPages = "";
+    totalPages = 0;
+    dataPages = 0;
+    pageReadSuccess = true;
+    pageReadStatus = SUCCESS;
+
+    while (file.available()) {
+        line = file.readStringUntil('\n');
+        line.trim();
+        strData = line.substring(line.indexOf(":") + 1);
+        strData.trim();
+
+        if (line.startsWith("Device type:")) printableUID.picc_type = strData;
+        else if (line.startsWith("UID:")) printableUID.uid = strData;
+        else if (line.startsWith("SAK:")) printableUID.sak = strData;
+        else if (line.startsWith("ATQA:")) printableUID.atqa = strData;
+        else if (line.startsWith("Pages total:")) totalPages = strData.toInt();
+        else if (line.startsWith("Pages read:")) pageReadSuccess = false;
+        else if (line.startsWith("Page ")) {
+            strAllPages += line + "\n";
+            dataPages++;
+        }
+    }
+
+    file.close();
+
+    if (totalPages == 0) totalPages = dataPages;
+    if (printableUID.uid.length() == 0) return FAILURE;
+
+    _parseLoadedData();
+    return SUCCESS;
+}
+
+int ST25R3916::save(String filename) {
+    FS *fs;
+    if (!getFsStorage(fs)) return FAILURE;
+
+    File file = createNewFile(fs, "/BruceRFID", filename + ".rfid");
+    if (!file) return FAILURE;
+
+    file.println("Filetype: Bruce RFID File");
+    file.println("Version 1");
+    file.println("Device type: " + printableUID.picc_type);
+    file.println("# UID, ATQA and SAK are common for all formats");
+    file.println("UID: " + printableUID.uid);
+    file.println("SAK: " + printableUID.sak);
+    file.println("ATQA: " + printableUID.atqa);
+    file.println("# Memory dump");
+    file.println("Pages total: " + String(totalPages > 0 ? totalPages : dataPages));
+    if (!pageReadSuccess) file.println("Pages read: " + String(dataPages));
+    file.print(strAllPages);
+
+    file.close();
+    delay(100);
+    return SUCCESS;
+}
 
 #endif // !LITE_VERSION

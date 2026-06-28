@@ -1,0 +1,383 @@
+#include "rfid_commands.h"
+#if !defined(LITE_VERSION)
+#include "modules/rfid/ST25R3916.h"
+#endif
+#include "modules/rfid/PN532.h"
+#include "modules/rfid/RFID2.h"
+#include "modules/rfid/RFIDInterface.h"
+#include "core/sd_functions.h"
+#include <globals.h>
+
+static RFIDInterface *_rfid = nullptr;
+
+static RFIDInterface *_createRfidModule() {
+    switch (bruceConfigPins.rfidModule) {
+        case PN532_I2C_MODULE: return new PN532(PN532::CONNECTION_TYPE::I2C);
+#ifdef M5STICK
+        case PN532_I2C_SPI_MODULE: return new PN532(PN532::CONNECTION_TYPE::I2C_SPI);
+#endif
+        case PN532_SPI_MODULE: return new PN532(PN532::CONNECTION_TYPE::SPI);
+        case RC522_SPI_MODULE: return new RFID2(false);
+#if !defined(LITE_VERSION)
+        case ST25R3916_SPI_MODULE: return new ST25R3916(ST25R3916::SPI_MODE);
+        case ST25R3916_I2C_MODULE: return new ST25R3916(ST25R3916::I2C_MODE);
+#endif
+        case M5_RFID2_MODULE:
+        default: return new RFID2();
+    }
+}
+
+static bool _ensureRfid() {
+    if (_rfid != nullptr) return true;
+    _rfid = _createRfidModule();
+    if (!_rfid->begin()) {
+        delete _rfid;
+        _rfid = nullptr;
+        serialDevice->println("ERROR: RFID module not found");
+        return false;
+    }
+    return true;
+}
+
+static uint32_t _argTimeout(Command &cmd, uint32_t fallback = 5000) {
+    String timeoutStr = cmd.getArgument("timeout").getValue();
+    uint32_t timeout_ms = (uint32_t)timeoutStr.toInt();
+    return timeout_ms == 0 ? fallback : timeout_ms;
+}
+
+static int _readTagWithTimeout(uint32_t timeout_ms) {
+    serialDevice->println("Waiting for tag (" + String(timeout_ms) + " ms)...");
+
+    uint32_t deadline = millis() + timeout_ms;
+    int result = RFIDInterface::TAG_NOT_PRESENT;
+
+    while (millis() < deadline) {
+        result = _rfid->read();
+        if (result == RFIDInterface::SUCCESS) break;
+        if (result == RFIDInterface::FAILURE) break;
+        delay(50);
+    }
+
+    return result;
+}
+
+static void _printTagInfo() {
+    serialDevice->println("UID:   " + _rfid->printableUID.uid);
+    serialDevice->println("Type:  " + _rfid->printableUID.picc_type);
+    serialDevice->println("SAK:   " + _rfid->printableUID.sak);
+    serialDevice->println("ATQA:  " + _rfid->printableUID.atqa);
+    serialDevice->println("Pages: " + String(_rfid->totalPages));
+    if (_rfid->strAllPages.length() > 0) {
+        serialDevice->println("--- data ---");
+        serialDevice->print(_rfid->strAllPages);
+        serialDevice->println("------------");
+    }
+}
+
+// rfid read [timeout=5000]
+uint32_t rfidReadCallback(cmd *c) {
+    Command cmd(c);
+    uint32_t timeout_ms = _argTimeout(cmd);
+
+    if (!_ensureRfid()) return false;
+
+    int result = _readTagWithTimeout(timeout_ms);
+    if (result != RFIDInterface::SUCCESS) {
+        serialDevice->println("Read failed: " + _rfid->statusMessage(result));
+        return false;
+    }
+
+    _printTagInfo();
+    return true;
+}
+
+// rfid write [timeout=5000]
+uint32_t rfidWriteCallback(cmd *c) {
+    Command cmd(c);
+    uint32_t timeout_ms = _argTimeout(cmd);
+
+    if (!_ensureRfid()) return false;
+    if (_rfid->strAllPages.length() == 0) {
+        serialDevice->println("No data to write. Run 'rfid read' first.");
+        return false;
+    }
+
+    serialDevice->println("Place target tag on reader...");
+    delay(timeout_ms > 3000 ? 2000 : 500);
+
+    int result = _rfid->write();
+    serialDevice->println("Write: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+// rfid clone [timeout=5000]
+uint32_t rfidCloneCallback(cmd *c) {
+    Command cmd(c);
+    uint32_t timeout_ms = _argTimeout(cmd);
+
+    if (!_ensureRfid()) return false;
+    if (_rfid->printableUID.uid.length() == 0) {
+        serialDevice->println("No UID loaded. Run 'rfid read' first.");
+        return false;
+    }
+
+    serialDevice->println("Cloning UID: " + _rfid->printableUID.uid);
+    serialDevice->println("Place Magic card on reader...");
+    delay(timeout_ms > 3000 ? 2000 : 500);
+
+    int result = _rfid->clone();
+    serialDevice->println("Clone: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+// rfid emulate
+uint32_t rfidEmulateCallback(cmd *c) {
+    if (!_ensureRfid()) return false;
+
+    serialDevice->println("Starting RFID emulation...");
+    int result = _rfid->emulate();
+    serialDevice->println("Emulate: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+// rfid erase
+uint32_t rfidEraseCallback(cmd *c) {
+    if (!_ensureRfid()) return false;
+
+    serialDevice->println("Place tag on reader to erase...");
+    int result = _rfid->erase();
+    serialDevice->println("Erase: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+// rfid info
+uint32_t rfidInfoCallback(cmd *c) {
+    if (!_rfid || _rfid->printableUID.uid.length() == 0) {
+        serialDevice->println("No tag data. Run 'rfid read' first.");
+        return false;
+    }
+    _printTagInfo();
+    return true;
+}
+
+// rfid reset  — destroys the module instance (forces re-init on next command)
+// rfid save [filename=rfid_dump]
+uint32_t rfidSaveCallback(cmd *c) {
+    Command cmd(c);
+    String filename = cmd.getArgument("filename").getValue();
+    if (filename.length() == 0) filename = "rfid_dump";
+
+    if (!_ensureRfid()) return false;
+    if (_rfid->printableUID.uid.length() == 0) {
+        serialDevice->println("No tag data. Run 'rfid read' first.");
+        return false;
+    }
+
+    int result = _rfid->save(filename);
+    serialDevice->println("Save: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+// rfid loadfile [filepath=/BruceRFID/rfid_dump.rfid]
+uint32_t rfidLoadFileCallback(cmd *c) {
+    Command cmd(c);
+    String filepath = cmd.getArgument("filepath").getValue();
+    if (filepath.length() == 0) filepath = "/BruceRFID/rfid_dump.rfid";
+
+    if (!_ensureRfid()) return false;
+
+    FS *fs;
+    if (!getFsStorage(fs)) {
+        serialDevice->println("Load: " + _rfid->statusMessage(RFIDInterface::FAILURE));
+        return false;
+    }
+
+    File file = fs->open(filepath, FILE_READ);
+    if (!file) {
+        serialDevice->println("Load: file not found");
+        return false;
+    }
+
+    String line;
+    String strData;
+    _rfid->strAllPages = "";
+    _rfid->totalPages = 0;
+    _rfid->dataPages = 0;
+    _rfid->pageReadSuccess = true;
+    _rfid->pageReadStatus = RFIDInterface::SUCCESS;
+
+    while (file.available()) {
+        line = file.readStringUntil('\n');
+        line.trim();
+        strData = line.substring(line.indexOf(":") + 1);
+        strData.trim();
+
+        if (line.startsWith("Device type:")) _rfid->printableUID.picc_type = strData;
+        else if (line.startsWith("UID:")) _rfid->printableUID.uid = strData;
+        else if (line.startsWith("SAK:")) _rfid->printableUID.sak = strData;
+        else if (line.startsWith("ATQA:")) _rfid->printableUID.atqa = strData;
+        else if (line.startsWith("Pages total:")) _rfid->totalPages = strData.toInt();
+        else if (line.startsWith("Pages read:")) _rfid->pageReadSuccess = false;
+        else if (line.startsWith("Page ")) {
+            _rfid->strAllPages += line + "\n";
+            _rfid->dataPages++;
+        }
+    }
+    file.close();
+
+    String uidStr = _rfid->printableUID.uid;
+    uidStr.trim();
+    uidStr.replace(" ", "");
+    _rfid->uid.size = uidStr.length() / 2;
+    if (_rfid->uid.size > sizeof(_rfid->uid.uidByte)) _rfid->uid.size = sizeof(_rfid->uid.uidByte);
+    for (int i = 0; i < _rfid->uid.size; i++) {
+        _rfid->uid.uidByte[i] = strtoul(uidStr.substring(i * 2, i * 2 + 2).c_str(), NULL, 16);
+    }
+    _rfid->uid.sak = strtoul(_rfid->printableUID.sak.c_str(), NULL, 16);
+
+    String atqaStr = _rfid->printableUID.atqa;
+    atqaStr.replace(" ", "");
+    if (atqaStr.length() >= 4) {
+        _rfid->uid.atqaByte[1] = strtoul(atqaStr.substring(0, 2).c_str(), NULL, 16);
+        _rfid->uid.atqaByte[0] = strtoul(atqaStr.substring(2, 4).c_str(), NULL, 16);
+    }
+    if (_rfid->totalPages == 0) _rfid->totalPages = _rfid->dataPages;
+
+    serialDevice->println("Load: " + _rfid->statusMessage(RFIDInterface::SUCCESS));
+    _printTagInfo();
+    return true;
+}
+
+// rfid ndef [url|text] [value]
+uint32_t rfidNdefCallback(cmd *c) {
+    Command cmd(c);
+    String type = cmd.countArgs() > 0 ? cmd.getArgument(0).getValue() : String("url");
+    String value = "";
+    for (int i = 1; i < cmd.countArgs(); i++) {
+        if (value.length() > 0) value += " ";
+        value += cmd.getArgument(i).getValue();
+    }
+    type.toLowerCase();
+    if (value.length() == 0) value = (type == "text") ? "Bruce" : "https://bruce.computer";
+
+    if (!_ensureRfid()) return false;
+
+    memset(&_rfid->ndefMessage, 0, sizeof(_rfid->ndefMessage));
+    _rfid->ndefMessage.begin = 0x03;
+    _rfid->ndefMessage.header = 0xD1;
+    _rfid->ndefMessage.tnf = 0x01;
+    _rfid->ndefMessage.end = 0xFE;
+
+    if (type == "text") {
+        _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_TEXT;
+        _rfid->ndefMessage.payload[0] = 0x02;
+        _rfid->ndefMessage.payload[1] = 'e';
+        _rfid->ndefMessage.payload[2] = 'n';
+        uint8_t len = min((int)value.length(), 96);
+        for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 3] = value.charAt(i);
+        _rfid->ndefMessage.payloadSize = len + 3;
+    } else {
+        _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_URI;
+        _rfid->ndefMessage.payload[0] = 0x00;
+        uint8_t len = min((int)value.length(), 99);
+        for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 1] = value.charAt(i);
+        _rfid->ndefMessage.payloadSize = len + 1;
+    }
+    _rfid->ndefMessage.messageSize = _rfid->ndefMessage.payloadSize + 4;
+
+    int result = _rfid->write_ndef();
+    serialDevice->println("NDEF: " + _rfid->statusMessage(result));
+    return result == RFIDInterface::SUCCESS;
+}
+
+uint32_t rfidResetCallback(cmd *c) {
+    if (_rfid) {
+        delete _rfid;
+        _rfid = nullptr;
+        serialDevice->println("RFID module reset.");
+    } else {
+        serialDevice->println("No active RFID module.");
+    }
+    return true;
+}
+
+// rfid autotest [mode=read-write] [timeout=5000]
+uint32_t rfidAutotestCallback(cmd *c) {
+    Command cmd(c);
+    String mode = cmd.getArgument("mode").getValue();
+    mode.toLowerCase();
+    uint32_t timeout_ms = _argTimeout(cmd);
+
+    if (!_ensureRfid()) return false;
+
+    serialDevice->println("RFID autotest mode: " + mode);
+
+    if (mode == "read") {
+        int result = _readTagWithTimeout(timeout_ms);
+        serialDevice->println("Read: " + _rfid->statusMessage(result));
+        if (result == RFIDInterface::SUCCESS) _printTagInfo();
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "write") {
+        int result = _rfid->write();
+        serialDevice->println("Write: " + _rfid->statusMessage(result));
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "read-write") {
+        int readResult = _readTagWithTimeout(timeout_ms);
+        serialDevice->println("Read: " + _rfid->statusMessage(readResult));
+        if (readResult != RFIDInterface::SUCCESS) return false;
+
+        String savedPages = _rfid->strAllPages;
+        _printTagInfo();
+        serialDevice->println("Writing the captured dump back to the current tag...");
+        int writeResult = _rfid->write();
+        _rfid->strAllPages = savedPages;
+        serialDevice->println("Write: " + _rfid->statusMessage(writeResult));
+        return writeResult == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "clone") {
+        int result = _rfid->clone();
+        serialDevice->println("Clone: " + _rfid->statusMessage(result));
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "emulate") {
+        int result = _rfid->emulate();
+        serialDevice->println("Emulate: " + _rfid->statusMessage(result));
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    serialDevice->println("Invalid mode. Use: read, write, read-write, clone, emulate");
+    return false;
+}
+
+void createRfidCommands(SimpleCLI *cli) {
+    Command cmd = cli->addCompositeCmd("rfid,nfc");
+
+    Command readCmd = cmd.addCommand("read", rfidReadCallback);
+    readCmd.addPosArg("timeout", "5000");
+
+    Command writeCmd = cmd.addCommand("write", rfidWriteCallback);
+    writeCmd.addPosArg("timeout", "5000");
+
+    Command cloneCmd = cmd.addCommand("clone", rfidCloneCallback);
+    cloneCmd.addPosArg("timeout", "5000");
+
+    cmd.addCommand("emulate", rfidEmulateCallback);
+    cmd.addCommand("erase", rfidEraseCallback);
+    cmd.addCommand("info", rfidInfoCallback);
+    Command saveCmd = cmd.addCommand("save", rfidSaveCallback);
+    saveCmd.addPosArg("filename", "rfid_dump");
+    Command loadFileCmd = cmd.addCommand("loadfile", rfidLoadFileCallback);
+    loadFileCmd.addPosArg("filepath", "/BruceRFID/rfid_dump.rfid");
+    cmd.addBoundlessCommand("ndef", rfidNdefCallback);
+    cmd.addCommand("reset", rfidResetCallback);
+
+    Command autotestCmd = cmd.addCommand("autotest,test", rfidAutotestCallback);
+    autotestCmd.addPosArg("mode", "read-write");
+    autotestCmd.addPosArg("timeout", "5000");
+}
