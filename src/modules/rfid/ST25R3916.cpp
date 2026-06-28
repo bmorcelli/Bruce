@@ -287,7 +287,8 @@ bool ST25R3916::_startDiscovery() {
     params.devLimit = 1;
     params.nfcfBR = RFAL_BR_212;
     params.ap2pBR = RFAL_BR_424;
-    params.techs2Find = RFAL_NFC_POLL_TECH_A | RFAL_NFC_POLL_TECH_B | RFAL_NFC_POLL_TECH_V;
+    params.techs2Find =
+        RFAL_NFC_POLL_TECH_A | RFAL_NFC_POLL_TECH_B | RFAL_NFC_POLL_TECH_V | RFAL_NFC_POLL_TECH_F;
     params.GBLen = RFAL_NFCDEP_GB_MAX_LEN;
     params.notifyCb = _notifyCb;
     params.totalDuration = 1000U;
@@ -345,8 +346,10 @@ void ST25R3916::_parseDevice(rfalNfcDevice *dev) {
 
             uid.atqaByte[0] = nfca->sensRes.anticollisionInfo;
             uid.atqaByte[1] = nfca->sensRes.platformInfo;
+            // ATQA em ordem de transmissão (byte baixo primeiro), igual ao PN532/Flipper
+            // (ex.: NTAG => "44 00").
             char atqaBuf[6];
-            sprintf(atqaBuf, "%02X %02X", uid.atqaByte[1], uid.atqaByte[0]);
+            sprintf(atqaBuf, "%02X %02X", uid.atqaByte[0], uid.atqaByte[1]);
             printableUID.atqa = String(atqaBuf);
 
             printableUID.picc_type = _getNfcaTypeName(uid.sak);
@@ -375,6 +378,20 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     dataPages = 0;
     totalPages = 0;
     pageReadSuccess = false;
+
+    // ISO-DEP (ISO14443-4) — T4T / DESFire / EMV (NFC-A SAK=0x20 ou NFC-B).
+    if (dev->rfInterface == RFAL_NFC_INTERFACE_ISODEP) { return _readIsoDep(dev); }
+
+    switch (dev->type) {
+        case RFAL_NFC_LISTEN_TYPE_NFCB:
+            _parseNfcB(dev);
+            pageReadStatus = SUCCESS;
+            pageReadSuccess = true;
+            return SUCCESS;
+        case RFAL_NFC_LISTEN_TYPE_NFCV: return _readNfcV(dev);
+        case RFAL_NFC_LISTEN_TYPE_NFCF: return _readFeliCa(dev);
+        default: break;
+    }
 
     if (dev->type != RFAL_NFC_LISTEN_TYPE_NFCA || uid.sak != 0x00) {
         pageReadStatus = FAILURE;
@@ -447,8 +464,9 @@ void ST25R3916::_parseLoadedData() {
     uid.atqaByte[0] = 0;
     uid.atqaByte[1] = 0;
     if (strAtqa.length() >= 4) {
-        uid.atqaByte[1] = strtoul(strAtqa.substring(0, 2).c_str(), NULL, 16);
-        uid.atqaByte[0] = strtoul(strAtqa.substring(2, 4).c_str(), NULL, 16);
+        // ATQA em ordem de transmissão (byte baixo primeiro), igual ao PN532/Flipper.
+        uid.atqaByte[0] = strtoul(strAtqa.substring(0, 2).c_str(), NULL, 16);
+        uid.atqaByte[1] = strtoul(strAtqa.substring(2, 4).c_str(), NULL, 16);
     }
 }
 
@@ -502,7 +520,6 @@ int ST25R3916::read(int cardBaudRate) {
         printableUID.sak.c_str(),
         printableUID.atqa.c_str()
     );
-    // Milestone 1: enriquecer leitura NFC-A T2T (NTAG / Ultralight)
     ntagVariant = "";
     ntagHasVersion = false;
     ntagHasSignature = false;
@@ -683,17 +700,13 @@ int ST25R3916::_writeNdefBlocks(rfalNfcDevice *dev) {
         uint8_t data[4] = {0x00, 0x00, 0x00, 0x00};
         for (int b = 0; b < 4 && base + b < (int)idx; b++) data[b] = ndefPayload[base + b];
 
-        if (!_writeT2TPage((uint8_t)page, data)) {
-            return FAILURE;
-        }
+        if (!_writeT2TPage((uint8_t)page, data)) { return FAILURE; }
         pagesWritten++;
     }
 
     uint8_t zeros[4] = {0x00, 0x00, 0x00, 0x00};
     for (int page = 4 + pagesWritten; _isUltralightUserPage(page); page++) {
-        if (!_writeT2TPage((uint8_t)page, zeros)) {
-            return FAILURE;
-        }
+        if (!_writeT2TPage((uint8_t)page, zeros)) { return FAILURE; }
     }
 
     ST25R_LOG("_writeNdefBlocks: wrote %d bytes", (int)idx);
@@ -913,52 +926,348 @@ int ST25R3916::write_ndef() {
     return result;
 }
 
-int ST25R3916::emulate() {
-    if (!_hw) return FAILURE;
+// ---------------------------------------------------------------------------
+// Emulação de tag NFC-A (modo passive target / listen)
+//
+// O wrapper RFAL de alto nível (rfalListenStart) é stub (ST_ERR_NOTSUPP) neste
+// fork. Porém o ST25R3916 faz a anti-colisão NFC-A em hardware no modo
+// "Passive Target" (MODE.targ + om_targ_nfca): basta carregar UID/ATQA/SAK na
+// PT Memory e o chip responde sozinho SENS_RES/anticolisão/SELECT. A sequência
+// de registradores abaixo segue o furi_hal_nfc do Flipper (mesmo CI).
+// ---------------------------------------------------------------------------
 
-    std::vector<uint8_t> emulatedNdefMessage;
-    if (!_buildLoadedNdefMessage(emulatedNdefMessage)) {
-        ST25R_LOG("emulate: no NDEF payload available from loaded/read data");
+// Converte strAllPages ("Page N: XX XX XX XX") em _emuPages. Retorna nº de páginas.
+int ST25R3916::_buildEmuPages() {
+    _emuPageCount = 0;
+    memset(_emuPages, 0, sizeof(_emuPages));
+    int pos = 0;
+    while (pos < strAllPages.length() && _emuPageCount < 256) {
+        int nl = strAllPages.indexOf('\n', pos);
+        if (nl < 0) nl = strAllPages.length();
+        String line = strAllPages.substring(pos, nl);
+        line.trim();
+        pos = nl + 1;
+        if (!line.startsWith("Page ")) continue;
+        int colon = line.indexOf(':');
+        if (colon < 0) continue;
+        int page = line.substring(5, colon).toInt();
+        if (page < 0 || page >= 256) continue;
+        std::vector<uint8_t> bytes;
+        if (!st25ParseHexBytesAfterColon(line, bytes) || bytes.size() < 4) continue;
+        memcpy(_emuPages[page], bytes.data(), 4);
+        if (page + 1 > _emuPageCount) _emuPageCount = page + 1;
+    }
+    return _emuPageCount;
+}
+
+bool ST25R3916::_setupListenMode(const uint8_t *uidBuf, uint8_t uidLen, const uint8_t *atqa, uint8_t sak) {
+    _deselectSharedSpiDevices();
+    _hw->st25r3916OscOn();
+
+    // Configura modo + front-end analógico para listen NFC-A (caminho testado do fork).
+    auto mres = _hw->rfalSetMode(RFAL_MODE_LISTEN_NFCA, RFAL_BR_106, RFAL_BR_106);
+    if (mres != ST_ERR_NONE) {
+        ST25R_LOG("emulate: rfalSetMode(LISTEN_NFCA) -> %d", (int)mres);
+        return false;
+    }
+
+    // Passive target: receptor ligado, detector de campo externo automático (sem TX próprio).
+    _hw->st25r3916WriteRegister(
+        ST25R3916_REG_OP_CONTROL,
+        ST25R3916_REG_OP_CONTROL_en | ST25R3916_REG_OP_CONTROL_rx_en | ST25R3916_REG_OP_CONTROL_en_fd_auto_efd
+    );
+    _hw->st25r3916WriteRegister(ST25R3916_REG_MODE, ST25R3916_REG_MODE_targ_targ | ST25R3916_REG_MODE_om0);
+    _hw->st25r3916WriteRegister(
+        ST25R3916_REG_PASSIVE_TARGET,
+        ST25R3916_REG_PASSIVE_TARGET_fdel_2 | ST25R3916_REG_PASSIVE_TARGET_fdel_0 |
+            ST25R3916_REG_PASSIVE_TARGET_d_ac_ap2p | ST25R3916_REG_PASSIVE_TARGET_d_212_424_1r
+    );
+    _hw->st25r3916WriteRegister(ST25R3916_REG_MASK_RX_TIMER, 0x02);
+    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_STOP);
+
+    // Habilita as interrupções relevantes ao modo target.
+    uint32_t interrupts = ST25R3916_IRQ_MASK_FWL | ST25R3916_IRQ_MASK_TXE | ST25R3916_IRQ_MASK_RXS |
+                          ST25R3916_IRQ_MASK_RXE | ST25R3916_IRQ_MASK_PAR | ST25R3916_IRQ_MASK_CRC |
+                          ST25R3916_IRQ_MASK_ERR1 | ST25R3916_IRQ_MASK_ERR2 | ST25R3916_IRQ_MASK_NRE |
+                          ST25R3916_IRQ_MASK_EON | ST25R3916_IRQ_MASK_EOF | ST25R3916_IRQ_MASK_WU_A_X |
+                          ST25R3916_IRQ_MASK_WU_A;
+    _hw->st25r3916ClearInterrupts();
+    _hw->st25r3916DisableInterrupts(ST25R3916_IRQ_MASK_ALL);
+    _hw->st25r3916EnableInterrupts(interrupts);
+
+    // UID de 4 ou 7 bytes.
+    _hw->st25r3916ChangeRegisterBits(
+        ST25R3916_REG_AUX,
+        ST25R3916_REG_AUX_nfc_id_mask,
+        (uidLen == 4) ? ST25R3916_REG_AUX_nfc_id_4bytes : ST25R3916_REG_AUX_nfc_id_7bytes
+    );
+
+    // PT Memory A (15 bytes): UID[0..len], ATQA em [10..11], SAK em [12..14].
+    uint8_t pt[ST25R3916_PTM_A_LEN] = {0};
+    memcpy(pt, uidBuf, uidLen);
+    pt[10] = atqa[0];
+    pt[11] = atqa[1];
+    pt[12] = (uidLen == 4) ? (uint8_t)(sak & ~0x04) : 0x04; // cascade level 1
+    pt[13] = (uint8_t)(sak & ~0x04);
+    pt[14] = (uint8_t)(sak & ~0x04);
+    _hw->st25r3916WritePTMem(pt, sizeof(pt));
+
+    // Habilita anti-colisão automática (bit limpo) e entra no estado Sense.
+    _hw->st25r3916ClrRegisterBits(ST25R3916_REG_PASSIVE_TARGET, ST25R3916_REG_PASSIVE_TARGET_d_106_ac_a);
+    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_GOTO_SENSE);
+    return true;
+}
+
+void ST25R3916::_listenStop() {
+    if (!_hw) return;
+    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_STOP);
+    _hw->st25r3916DisableInterrupts(ST25R3916_IRQ_MASK_ALL);
+    _hw->st25r3916ClearInterrupts();
+    // Volta ao modo poller padrão para que rfid read funcione em seguida.
+    _hw->rfalSetMode(RFAL_MODE_POLL_NFCA, RFAL_BR_106, RFAL_BR_106);
+    _hw->rfalFieldOff();
+    _discoveryStarted = false;
+}
+
+// Transmite uma resposta (com CRC apêndice automático) via FIFO no modo target.
+bool ST25R3916::_listenRespond(const uint8_t *resp, uint16_t len) {
+    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_CLEAR_FIFO);
+    _hw->st25r3916WriteFifo(resp, len);
+    _hw->st25r3916SetNumTxBits((uint16_t)(len * 8U));
+    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_TRANSMIT_WITH_CRC);
+    uint32_t irqs = _hw->st25r3916WaitForInterruptsTimed(ST25R3916_IRQ_MASK_TXE, 20);
+    return (irqs & ST25R3916_IRQ_MASK_TXE) != 0U;
+}
+
+// Loop principal: o hardware responde anti-colisão/SELECT sozinho; aqui apenas
+// detectamos seleções (WU_A) e respondemos comandos T2T (READ/FAST_READ/GET_VERSION).
+int ST25R3916::_handleListenLoop(uint32_t timeoutMs) {
+    uint32_t deadline = millis() + timeoutMs;
+    int readers = 0;
+    uint32_t nRead = 0;
+    bool active = false;
+    uint8_t fifo[64];
+    // Trace diferido: registra a sequência de comandos e imprime só quando o leitor
+    // sai do campo, p/ não atrasar o caminho RX->resposta (timing do Switch é estrito).
+    uint8_t traceCmd[96];
+    uint8_t traceArg[96];
+    uint16_t traceN = 0;
+
+    while ((int32_t)(deadline - millis()) > 0) {
+        vTaskDelay(pdMS_TO_TICKS(1)); // time to pull EscPress from othe tasks
+        if (check(EscPress)) {
+            ST25R_LOG("emulate: Esc — encerrando");
+            break;
+        }
+
+        uint32_t irqs = _hw->st25r3916WaitForInterruptsTimed(
+            ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X | ST25R3916_IRQ_MASK_RXE |
+                ST25R3916_IRQ_MASK_EOF,
+            200
+        );
+        if (irqs == 0U) continue;
+
+        if ((irqs & (ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X)) != 0U) {
+            if (!active) {
+                readers++;
+                traceN = 0;
+                ST25R_LOG("emulate: reader selecionou a tag (UID enviado) #%d", readers);
+            }
+            active = true;
+            // Passa a tratar dados manualmente (desabilita auto-AC).
+            _hw->st25r3916SetRegisterBits(
+                ST25R3916_REG_PASSIVE_TARGET, ST25R3916_REG_PASSIVE_TARGET_d_106_ac_a
+            );
+        }
+
+        if ((irqs & ST25R3916_IRQ_MASK_RXE) != 0U) {
+            uint16_t n = _hw->st25r3916GetNumFIFOBytes();
+            if (n > 0U && n <= sizeof(fifo)) {
+                _hw->st25r3916ReadFifo(fifo, n);
+                uint8_t cmd = fifo[0];
+                // Registra no trace (impressão diferida p/ não atrasar a resposta).
+                if (cmd == 0x30 || cmd == 0x3A) nRead++;
+                if (traceN < sizeof(traceCmd)) {
+                    traceCmd[traceN] = cmd;
+                    traceArg[traceN] = (n > 1) ? fifo[1] : 0;
+                    traceN++;
+                }
+                if (cmd == 0x30 && n >= 2) { // READ: 16 bytes (4 páginas a partir de addr)
+                    uint8_t addr = fifo[1];
+                    uint8_t resp[16];
+                    for (int i = 0; i < 4; i++) {
+                        int p = (_emuPageCount > 0) ? ((addr + i) % _emuPageCount) : (addr + i);
+                        memcpy(&resp[i * 4], _emuPages[p & 0xFF], 4);
+                    }
+                    _listenRespond(resp, sizeof(resp));
+                } else if (cmd == 0x3A && n >= 3) { // FAST_READ start..end (até 64 páginas/256 B)
+                    uint8_t start = fifo[1], end = fifo[2];
+                    if (end >= start && (uint16_t)((end - start + 1) * 4) <= 256) {
+                        uint8_t resp[256];
+                        uint16_t rl = 0;
+                        for (int p = start; p <= end; p++) {
+                            int pp = (_emuPageCount > 0) ? (p % _emuPageCount) : p;
+                            memcpy(&resp[rl], _emuPages[pp & 0xFF], 4);
+                            rl += 4;
+                        }
+                        _listenRespond(resp, rl);
+                    }
+                } else if (cmd == 0x60) { // GET_VERSION (necessário p/ NTAG21x e amiibo)
+                    uint8_t ver[8];
+                    if (ntagHasVersion) {
+                        memcpy(ver, ntagVersion, 8);
+                    } else {
+                        // Default NTAG21x conforme nº de páginas (0F=213, 11=215, 13=216).
+                        uint8_t storage = 0x11; // NTAG215 (caso típico amiibo)
+                        if (_emuPageCount > 0 && _emuPageCount <= 45) storage = 0x0F;
+                        else if (_emuPageCount > 135) storage = 0x13;
+                        uint8_t def[8] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, storage, 0x03};
+                        memcpy(ver, def, 8);
+                    }
+                    _listenRespond(ver, 8);
+                } else if (cmd == 0x3C && n >= 2) { // READ_SIG: assinatura ECC (amiibo/Switch)
+                    uint8_t sig[32];
+                    if (ntagHasSignature) memcpy(sig, ntagSignature, 32);
+                    else memset(sig, 0, 32);
+                    _listenRespond(sig, 32);
+                } else if (cmd == 0x39 && n >= 2) { // READ_CNT: contador de 24 bits
+                    uint8_t idx = fifo[1];
+                    uint8_t cnt[3] = {0, 0, 0};
+                    if (idx < 3 && ntagHasCounters) {
+                        cnt[0] = (uint8_t)(ntagCounters[idx] & 0xFF);
+                        cnt[1] = (uint8_t)((ntagCounters[idx] >> 8) & 0xFF);
+                        cnt[2] = (uint8_t)((ntagCounters[idx] >> 16) & 0xFF);
+                    }
+                    _listenRespond(cnt, 3);
+                } else if (cmd == 0x1B && n >= 5) { // PWD_AUTH: responde PACK
+                    uint8_t pack[2] = {0, 0};
+                    if (_emuPageCount > 0) {
+                        pack[0] = _emuPages[_emuPageCount - 1][0];
+                        pack[1] = _emuPages[_emuPageCount - 1][1];
+                    }
+                    // Amiibo (NTAG215): a senha deriva do UID e o PACK correto é 80 80.
+                    // Na tag genuína a página PACK é lida como 00 00 (protegida), então
+                    // sem isto o Switch recebe PACK errado e recusa antes de ler os dados.
+                    if (uid.size == 7) {
+                        uint8_t apwd[4] = {
+                            (uint8_t)(0xAA ^ uid.uidByte[1] ^ uid.uidByte[3]),
+                            (uint8_t)(0x55 ^ uid.uidByte[2] ^ uid.uidByte[4]),
+                            (uint8_t)(0xAA ^ uid.uidByte[3] ^ uid.uidByte[5]),
+                            (uint8_t)(0x55 ^ uid.uidByte[4] ^ uid.uidByte[6]),
+                        };
+                        if (fifo[1] == apwd[0] && fifo[2] == apwd[1] && fifo[3] == apwd[2] &&
+                            fifo[4] == apwd[3]) {
+                            pack[0] = 0x80;
+                            pack[1] = 0x80;
+                        }
+                    }
+                    _listenRespond(pack, 2);
+                } else if (cmd == 0x50) { // HALT
+                    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_GOTO_SLEEP);
+                } else if (cmd == 0xA2 && n >= 6) { // WRITE: aceita e guarda, ACK
+                    uint8_t addr = fifo[1];
+                    if (addr < 256) {
+                        memcpy(_emuPages[addr], &fifo[2], 4);
+                        if (addr + 1 > _emuPageCount) _emuPageCount = addr + 1;
+                    }
+                    uint8_t ack = 0x0A; // ACK NTAG (4 bits, sem CRC)
+                    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_CLEAR_FIFO);
+                    _hw->st25r3916WriteFifo(&ack, 1);
+                    _hw->st25r3916SetNumTxBits(4);
+                    _hw->st25r3916ExecuteCommand(ST25R3916_CMD_TRANSMIT_WITHOUT_CRC);
+                }
+            }
+        }
+
+        if ((irqs & ST25R3916_IRQ_MASK_EOF) != 0U) {
+            // Campo do reader desligou: imprime o trace acumulado e rearma.
+            if (active) {
+                String tr;
+                for (uint16_t i = 0; i < traceN; i++) {
+                    char b[8];
+                    if (traceCmd[i] == 0x30 || traceCmd[i] == 0x3A)
+                        sprintf(b, "%02X:%02X ", traceCmd[i], traceArg[i]);
+                    else sprintf(b, "%02X ", traceCmd[i]);
+                    tr += b;
+                }
+                ST25R_LOG(
+                    "emulate: reader saiu (cmds=%u reads=%lu): %s", traceN, (unsigned long)nRead, tr.c_str()
+                );
+            }
+            active = false;
+            _hw->st25r3916ClrRegisterBits(
+                ST25R3916_REG_PASSIVE_TARGET, ST25R3916_REG_PASSIVE_TARGET_d_106_ac_a
+            );
+            _hw->st25r3916ExecuteCommand(ST25R3916_CMD_GOTO_SENSE);
+        }
+    }
+    return readers;
+}
+
+int ST25R3916::emulate() {
+    if (!_hw || !_nfc) return FAILURE;
+
+    // Obtém UID: do struct (após read) ou do printableUID (após load).
+    uint8_t uidBuf[7] = {0};
+    uint8_t uidLen = 0;
+    if (uid.size == 4 || uid.size == 7) {
+        uidLen = uid.size;
+        memcpy(uidBuf, uid.uidByte, uidLen);
+    } else if (printableUID.uid.length() > 0) {
+        std::vector<uint8_t> ub;
+        int hi = -1;
+        for (unsigned i = 0; i < printableUID.uid.length(); i++) {
+            int v = st25HexNibble(printableUID.uid.charAt(i));
+            if (v < 0) continue;
+            if (hi < 0) hi = v;
+            else {
+                ub.push_back((uint8_t)((hi << 4) | v));
+                hi = -1;
+            }
+        }
+        if (ub.size() == 4 || ub.size() == 7) {
+            uidLen = ub.size();
+            memcpy(uidBuf, ub.data(), uidLen);
+        }
+    }
+    if (uidLen != 4 && uidLen != 7) {
+        ST25R_LOG("emulate: UID inválido/ausente — faça 'rfid read' ou 'rfid loadfile' antes");
+        return FAILURE;
+    }
+
+    uint8_t atqa[2];
+    atqa[0] = uid.atqaByte[0] ? uid.atqaByte[0] : (uidLen == 7 ? 0x44 : 0x04);
+    atqa[1] = uid.atqaByte[1];
+    uint8_t sak = uid.sak; // 0x00 = NTAG/Ultralight (T2T)
+
+    _buildEmuPages();
+
+    // Garante que nenhum discovery/poller esteja ativo antes de virar target.
+    stopDiscovery();
+    _nfc->rfalNfcDeactivate(false);
+    _discoveryStarted = false;
+
+    if (!_setupListenMode(uidBuf, uidLen, atqa, sak)) {
+        _listenStop();
         return FAILURE;
     }
 
     ST25R_LOG(
-        "emulate: prepared Type 4 NDEF payload from loaded data, ndefLen=%u uid=%s",
-        (unsigned)emulatedNdefMessage.size(),
-        printableUID.uid.c_str()
+        "emulate: emulando UID=%s ATQA=%02X%02X SAK=%02X pages=%d ver=%d sig=%d (timeout 30s, Esc p/ sair)",
+        printableUID.uid.c_str(),
+        atqa[1],
+        atqa[0],
+        sak,
+        _emuPageCount,
+        ntagHasVersion ? 1 : 0,
+        ntagHasSignature ? 1 : 0
     );
 
-    rfalLmConfPA confA;
-    memset(&confA, 0, sizeof(confA));
-    confA.nfcidLen = uid.size >= 7 ? RFAL_LM_NFCID_LEN_07 : RFAL_LM_NFCID_LEN_04;
+    int readers = _handleListenLoop(30000);
 
-    uint8_t nfcid[7] = {0x08, 0x04, 0x25, 0x85, 0x93, 0x10, 0x01};
-    if (uid.size >= 4) {
-        size_t copyLen = uid.size >= 7 ? 7 : 4;
-        memcpy(nfcid, uid.uidByte, copyLen);
-    }
-    memcpy(confA.nfcid, nfcid, confA.nfcidLen == RFAL_LM_NFCID_LEN_07 ? 7 : 4);
-
-    confA.SENS_RES[0] = uid.atqaByte[1] ? uid.atqaByte[1] : 0x04;
-    confA.SENS_RES[1] = uid.atqaByte[0] ? uid.atqaByte[0] : 0x00;
-    confA.SEL_RES = 0x20; // ISO-DEP capable Type 4 Tag emulation.
-
-    uint8_t rxBuf[256] = {0};
-    uint16_t rxLenBits = 0;
-    auto err = _hw->rfalListenStart(
-        RFAL_LM_MASK_NFCA, &confA, nullptr, nullptr, rxBuf, sizeof(rxBuf) * 8, &rxLenBits
-    );
-    if (err != ST_ERR_NONE) {
-        ST25R_LOG(
-            "emulate: rfalListenStart failed err=%d. ST25R3916-fork currently returns ST_ERR_NOTSUPP for listen mode",
-            (int)err
-        );
-        return (err == ST_ERR_NOTSUPP) ? NOT_IMPLEMENTED : FAILURE;
-    }
-
-    _hw->rfalListenStop();
-    ST25R_LOG("emulate: listen mode started, but APDU Type 4 exchange is not implemented for this driver yet");
-    return NOT_IMPLEMENTED;
+    _listenStop();
+    ST25R_LOG("emulate: encerrado — readers detectados=%d", readers);
+    return SUCCESS;
 }
 
 int ST25R3916::load() {
@@ -978,6 +1287,9 @@ int ST25R3916::load() {
     dataPages = 0;
     pageReadSuccess = true;
     pageReadStatus = SUCCESS;
+    ntagHasVersion = false;
+    ntagHasSignature = false;
+    ntagHasCounters = false;
 
     while (file.available()) {
         line = file.readStringUntil('\n');
@@ -991,7 +1303,26 @@ int ST25R3916::load() {
         else if (line.startsWith("ATQA:")) printableUID.atqa = strData;
         else if (line.startsWith("Pages total:")) totalPages = strData.toInt();
         else if (line.startsWith("Pages read:")) pageReadSuccess = false;
-        else if (line.startsWith("Page ")) {
+        // NTAG/Ultralight: restaura versão/assinatura/contadores p/ emulação fiel.
+        else if (line.startsWith("Mifare version:")) {
+            std::vector<uint8_t> b;
+            if (st25ParseHexBytesAfterColon(line, b) && b.size() >= 8) {
+                memcpy(ntagVersion, b.data(), 8);
+                ntagHasVersion = true;
+            }
+        } else if (line.startsWith("Signature:")) {
+            std::vector<uint8_t> b;
+            if (st25ParseHexBytesAfterColon(line, b) && b.size() >= 32) {
+                memcpy(ntagSignature, b.data(), 32);
+                ntagHasSignature = true;
+            }
+        } else if (line.startsWith("Counter ")) {
+            int idx = line.substring(8, line.indexOf(":")).toInt();
+            if (idx >= 0 && idx < 3) {
+                ntagCounters[idx] = (uint32_t)strData.toInt();
+                ntagHasCounters = true;
+            }
+        } else if (line.startsWith("Page ")) {
             strAllPages += line + "\n";
             dataPages++;
         }
@@ -1006,7 +1337,6 @@ int ST25R3916::load() {
     return SUCCESS;
 }
 
-// Milestone 1 — GET_VERSION (0x60): identifica a variante exata do chip.
 String ST25R3916::_getNtagVariant() {
     ntagHasVersion = false;
     memset(ntagVersion, 0, sizeof(ntagVersion));
@@ -1025,7 +1355,14 @@ String ST25R3916::_getNtagVariant() {
     ntagHasVersion = true;
     ST25R_LOG(
         "version=%02X %02X %02X %02X %02X %02X %02X %02X",
-        rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]
+        rx[0],
+        rx[1],
+        rx[2],
+        rx[3],
+        rx[4],
+        rx[5],
+        rx[6],
+        rx[7]
     );
 
     uint8_t productType = rx[2]; // 0x03 = Ultralight, 0x04 = NTAG
@@ -1048,7 +1385,6 @@ String ST25R3916::_getNtagVariant() {
     return "";
 }
 
-// Milestone 1 — READ_SIG (0x3C): assinatura ECC-P256 (32 bytes).
 bool ST25R3916::_readNtagSignature() {
     ntagHasSignature = false;
     memset(ntagSignature, 0, sizeof(ntagSignature));
@@ -1065,14 +1401,10 @@ bool ST25R3916::_readNtagSignature() {
     }
     memcpy(ntagSignature, rx, 32);
     ntagHasSignature = true;
-    ST25R_LOG(
-        "signature=%02X %02X %02X %02X...%02X %02X",
-        rx[0], rx[1], rx[2], rx[3], rx[30], rx[31]
-    );
+    ST25R_LOG("signature=%02X %02X %02X %02X...%02X %02X", rx[0], rx[1], rx[2], rx[3], rx[30], rx[31]);
     return true;
 }
 
-// Milestone 1 — READ_CNT (0x39): contadores monotônicos 24-bit (little-endian).
 bool ST25R3916::_readNtagCounters() {
     ntagHasCounters = false;
     bool any = false;
@@ -1096,6 +1428,404 @@ bool ST25R3916::_readNtagCounters() {
     return any;
 }
 
+static String _bytesToHex(const uint8_t *data, size_t len);
+
+int ST25R3916::_readNfcV(rfalNfcDevice *dev) {
+    strAllPages = "";
+    dataPages = 0;
+    totalPages = 0;
+
+    const uint8_t *nfcvUid = dev->nfcid;
+    uint8_t flags = RFAL_NFCV_REQ_FLAG_DEFAULT;
+
+    uint8_t blockCount = 0;
+    uint8_t blockSize = 4;
+    {
+        uint8_t sysInfo[32] = {0};
+        uint16_t rcvLen = 0;
+        auto err =
+            _nfc->rfalNfcvPollerGetSystemInformation(flags, nfcvUid, sysInfo, sizeof(sysInfo), &rcvLen);
+        if (err == ST_ERR_NONE && rcvLen >= 10) {
+            // Layout ISO15693: RES_FLAG(1) InfoFlags(1) UID(8) [DSFID] [AFI] [MemSize(2)] [ICref]
+            uint8_t infoFlags = sysInfo[1];
+            size_t idx = 10;
+            if (infoFlags & 0x01) idx += 1; // DSFID presente
+            if (infoFlags & 0x02) idx += 1; // AFI presente
+            if ((infoFlags & 0x04) && (idx + 1 < rcvLen)) {
+                blockCount = sysInfo[idx] + 1;             // nº de blocos (valor+1)
+                blockSize = (sysInfo[idx + 1] & 0x1F) + 1; // tamanho do bloco (valor+1)
+            }
+            ST25R_LOG("NFC-V SysInfo flags=0x%02X blocks=%u size=%u", infoFlags, blockCount, blockSize);
+        } else {
+            ST25R_LOG("NFC-V GetSystemInformation err=%d len=%u (lendo até falhar)", (int)err, rcvLen);
+        }
+    }
+
+    if (blockSize == 0 || blockSize > 8) blockSize = 4;
+    uint8_t maxBlocks = (blockCount > 0) ? blockCount : 255;
+
+    for (uint16_t blk = 0; blk < maxBlocks; blk++) {
+        uint8_t rxBuf[16] = {0};
+        uint16_t rxLen = 0;
+        auto err =
+            _nfc->rfalNfcvPollerReadSingleBlock(flags, nfcvUid, (uint8_t)blk, rxBuf, sizeof(rxBuf), &rxLen);
+        if (err != ST_ERR_NONE || rxLen < (uint16_t)(blockSize + 1)) {
+            if (blockCount == 0) break; // tamanho desconhecido: parar no 1º erro
+            // tamanho conhecido: bloco ilegível, registra como zeros e segue
+            char line[64];
+            sprintf(line, "Block %02u: (unreadable err=%d)", blk, (int)err);
+            strAllPages += String(line) + "\n";
+            continue;
+        }
+        // rxBuf[0] = RES_FLAG; dados a partir de rxBuf[1]
+        String line = "Block ";
+        char idxBuf[8];
+        sprintf(idxBuf, "%02u: ", blk);
+        line += idxBuf;
+        for (uint8_t b = 0; b < blockSize; b++) {
+            char hb[4];
+            sprintf(hb, "%02X", rxBuf[1 + b]);
+            line += hb;
+            if (b < blockSize - 1) line += " ";
+        }
+        strAllPages += line + "\n";
+        dataPages++;
+    }
+
+    totalPages = (blockCount > 0) ? blockCount : dataPages;
+    ST25R_LOG("NFC-V read: %d/%d blocos lidos", dataPages, totalPages);
+
+    if (dataPages == 0) {
+        pageReadStatus = FAILURE;
+        return FAILURE;
+    }
+    pageReadStatus = SUCCESS;
+    pageReadSuccess = true;
+    return SUCCESS;
+}
+
+void ST25R3916::_parseNfcB(rfalNfcDevice *dev) {
+    rfalNfcbListenDevice *nfcb = &dev->dev.nfcb;
+    const uint8_t *pupi = nfcb->sensbRes.nfcid0; // 4 bytes (PUPI / pseudo-UID)
+
+    printableUID.picc_type = "ISO14443B";
+    printableUID.sak = "--";
+    printableUID.atqa = "--";
+
+    printableUID.uid = "";
+    for (int i = 0; i < RFAL_NFCB_NFCID0_LEN; i++) {
+        char buf[3];
+        sprintf(buf, "%02X", pupi[i]);
+        printableUID.uid += buf;
+        if (i < RFAL_NFCB_NFCID0_LEN - 1) printableUID.uid += " ";
+    }
+
+    const uint8_t *appData = (const uint8_t *)&nfcb->sensbRes.appData;
+    const uint8_t *protInfo = (const uint8_t *)&nfcb->sensbRes.protInfo;
+
+    strAllPages = "";
+    strAllPages += "PUPI: " + printableUID.uid + "\n";
+    strAllPages += "Application data: " + _bytesToHex(appData, 4) + "\n";
+    strAllPages += "Protocol info: " + _bytesToHex(protInfo, 4) + "\n";
+
+    ST25R_LOG(
+        "NFC-B PUPI=%s appData=%02X%02X%02X%02X protInfo=%02X%02X%02X%02X",
+        printableUID.uid.c_str(),
+        appData[0],
+        appData[1],
+        appData[2],
+        appData[3],
+        protInfo[0],
+        protInfo[1],
+        protInfo[2],
+        protInfo[3]
+    );
+}
+
+int ST25R3916::_readFeliCa(rfalNfcDevice *dev) {
+    rfalNfcfListenDevice *nfcf = &dev->dev.nfcf;
+    const uint8_t *idm = nfcf->sensfRes.NFCID2;                // 8 bytes (IDm)
+    const uint8_t *pmm = (const uint8_t *)nfcf->sensfRes.PAD0; // 8 bytes contíguos (PMm)
+
+    printableUID.picc_type = "FeliCa";
+    printableUID.sak = "--";
+    printableUID.atqa = "--";
+
+    printableUID.uid = "";
+    for (int i = 0; i < RFAL_NFCF_NFCID2_LEN; i++) {
+        char buf[3];
+        sprintf(buf, "%02X", idm[i]);
+        printableUID.uid += buf;
+        if (i < RFAL_NFCF_NFCID2_LEN - 1) printableUID.uid += " ";
+    }
+
+    strAllPages = "";
+    strAllPages += "IDm: " + _bytesToHex(idm, 8) + "\n";
+    strAllPages += "PMm: " + _bytesToHex(pmm, 8) + "\n";
+
+    ST25R_LOG("FeliCa IDm=%s PMm=%s", _bytesToHex(idm, 8).c_str(), _bytesToHex(pmm, 8).c_str());
+
+    rfalNfcfServ service = 0x000B;
+    rfalNfcfBlockListElem block;
+    block.conf = 0x80; // 2-byte block list element, acesso normal
+    block.blockNum = 0;
+    rfalNfcfServBlockListParam servBlock;
+    servBlock.numServ = 1;
+    servBlock.servList = &service;
+    servBlock.numBlock = 1;
+    servBlock.blockList = &block;
+
+    uint8_t rxBuf[32] = {0};
+    uint16_t rcvdLen = 0;
+    auto err = _nfc->rfalNfcfPollerCheck(idm, &servBlock, rxBuf, sizeof(rxBuf), &rcvdLen);
+    if (err == ST_ERR_NONE && rcvdLen >= 16) {
+        // resposta T3T Check: status flags + dados do bloco (16 bytes)
+        strAllPages += "Block 00: " + _bytesToHex(rxBuf + (rcvdLen - 16), 16) + "\n";
+        ST25R_LOG("FeliCa block0 lido (%u bytes)", rcvdLen);
+        dataPages = 1;
+    } else {
+        ST25R_LOG("FeliCa Check err=%d len=%u (serviço pode exigir chave)", (int)err, rcvdLen);
+        dataPages = 0;
+    }
+
+    totalPages = dataPages;
+    pageReadStatus = SUCCESS;
+    pageReadSuccess = true;
+    return SUCCESS;
+}
+
+// ============================================================================
+// ISO-DEP / Type 4 Tag (T4T): DESFire, NDEF T4T, EMV
+// ============================================================================
+
+bool ST25R3916::_isoDepApdu(const uint8_t *tx, uint16_t txLen, uint8_t *rx, uint16_t rxCap, uint16_t *rxLen) {
+    if (rxLen) *rxLen = 0;
+    uint8_t *rxData = nullptr;
+    uint16_t *rcvLen = nullptr;
+    auto err =
+        _nfc->rfalNfcDataExchangeStart(const_cast<uint8_t *>(tx), txLen, &rxData, &rcvLen, RFAL_FWT_NONE);
+    if (err != ST_ERR_NONE) {
+        ST25R_LOG("isoDep APDU start err=%d", (int)err);
+        return false;
+    }
+
+    uint16_t total = 0;
+    uint32_t t0 = millis();
+    for (;;) {
+        _nfc->rfalNfcWorker();
+        err = _nfc->rfalNfcDataExchangeGetStatus();
+        if (err == ST_ERR_BUSY) {
+            if (millis() - t0 > 2000) {
+                ST25R_LOG("isoDep APDU timeout");
+                return false;
+            }
+            continue;
+        }
+        // Copia o bloco recebido (NONE = último; AGAIN = chaining, virão mais).
+        uint16_t n = (rcvLen != nullptr) ? *rcvLen : 0;
+        if (rxData != nullptr && rx != nullptr && n > 0 && total < rxCap) {
+            uint16_t cp = (total + n > rxCap) ? (uint16_t)(rxCap - total) : n;
+            memcpy(rx + total, rxData, cp);
+            total += cp;
+        }
+        if (err == ST_ERR_AGAIN) {
+            t0 = millis();
+            continue;
+        }
+        if (err != ST_ERR_NONE) {
+            ST25R_LOG("isoDep APDU status err=%d", (int)err);
+            return false;
+        }
+        break;
+    }
+    if (rxLen) *rxLen = total;
+    return true;
+}
+
+// Verifica se a resposta termina com Status Word 0x9000.
+static bool _swOk(const uint8_t *rx, uint16_t len) {
+    return (len >= 2 && rx[len - 2] == 0x90 && rx[len - 1] == 0x00);
+}
+
+// NDEF Type 4 Tag: SELECT NDEF App -> SELECT CC -> READ CC -> SELECT NDEF file -> READ.
+bool ST25R3916::_readNdefT4T() {
+    uint8_t rx[256];
+    uint16_t rxLen = 0;
+
+    // 1. SELECT NDEF Tag Application (AID D2 76 00 00 85 01 01)
+    static const uint8_t selApp[] = {
+        0x00, 0xA4, 0x04, 0x00, 0x07, 0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00
+    };
+    if (!_isoDepApdu(selApp, sizeof(selApp), rx, sizeof(rx), &rxLen) || !_swOk(rx, rxLen)) {
+        ST25R_LOG("T4T: SELECT NDEF App falhou");
+        return false;
+    }
+
+    // 2. SELECT Capability Container (file ID E1 03)
+    static const uint8_t selCC[] = {0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x03};
+    if (!_isoDepApdu(selCC, sizeof(selCC), rx, sizeof(rx), &rxLen) || !_swOk(rx, rxLen)) return false;
+
+    // 3. READ BINARY do CC (15 bytes)
+    static const uint8_t readCC[] = {0x00, 0xB0, 0x00, 0x00, 0x0F};
+    if (!_isoDepApdu(readCC, sizeof(readCC), rx, sizeof(rx), &rxLen) || !_swOk(rx, rxLen) || rxLen < 15 + 2) {
+        return false;
+    }
+    // CC: [7]=NDEF FileCtrl TLV tag(0x04) [8]=len(0x06) [9-10]=NDEF file ID [11-12]=max NDEF size
+    uint16_t ndefFileId = ((uint16_t)rx[9] << 8) | rx[10];
+    uint16_t maxNdef = ((uint16_t)rx[11] << 8) | rx[12];
+
+    // 4. SELECT NDEF file
+    uint8_t selNdef[] = {
+        0x00, 0xA4, 0x00, 0x0C, 0x02, (uint8_t)(ndefFileId >> 8), (uint8_t)(ndefFileId & 0xFF)
+    };
+    if (!_isoDepApdu(selNdef, sizeof(selNdef), rx, sizeof(rx), &rxLen) || !_swOk(rx, rxLen)) return false;
+
+    // 5. READ NLEN (2 bytes no offset 0)
+    static const uint8_t readNlen[] = {0x00, 0xB0, 0x00, 0x00, 0x02};
+    if (!_isoDepApdu(readNlen, sizeof(readNlen), rx, sizeof(rx), &rxLen) || rxLen < 4) return false;
+    uint16_t ndefLen = ((uint16_t)rx[0] << 8) | rx[1];
+
+    printableUID.picc_type = "NDEF T4T";
+    strAllPages = "";
+    strAllPages += "NDEF T4T\n";
+    char fidLine[40];
+    sprintf(fidLine, "NDEF file: %04X (max %u)\n", ndefFileId, maxNdef);
+    strAllPages += fidLine;
+    strAllPages += "NDEF len: " + String(ndefLen) + "\n";
+
+    // 6. READ BINARY da mensagem NDEF (offset 2). Limita a um único READ.
+    if (ndefLen > 0) {
+        uint16_t toRead = (ndefLen > 240) ? 240 : ndefLen;
+        uint8_t readMsg[] = {0x00, 0xB0, 0x00, 0x02, (uint8_t)toRead};
+        if (_isoDepApdu(readMsg, sizeof(readMsg), rx, sizeof(rx), &rxLen) && rxLen >= toRead) {
+            strAllPages += "NDEF: " + _bytesToHex(rx, toRead) + "\n";
+        }
+    }
+    dataPages = 1;
+    pageReadSuccess = true;
+    pageReadStatus = SUCCESS;
+    return true;
+}
+
+// MIFARE DESFire: GetVersion (0x60) e lista de aplicações (0x6A), via APDU wrapped.
+bool ST25R3916::_readDESFireInfo() {
+    uint8_t rx[64];
+    uint16_t rxLen = 0;
+
+    static const uint8_t getVer[] = {0x90, 0x60, 0x00, 0x00, 0x00};
+    if (!_isoDepApdu(getVer, sizeof(getVer), rx, sizeof(rx), &rxLen) || rxLen < 2) return false;
+    // DESFire responde SW1=0x91 com SW2 0xAF (additional frame) ou 0x00.
+    if (rx[rxLen - 2] != 0x91) {
+        ST25R_LOG("DESFire GetVersion SW=%02X%02X (não-DESFire)", rx[rxLen - 2], rx[rxLen - 1]);
+        return false;
+    }
+
+    printableUID.picc_type = "MIFARE DESFire";
+    strAllPages = "";
+    strAllPages += "MIFARE DESFire\n";
+    if (rxLen >= 7 + 2) {
+        // HW info: vendor type subtype major minor storage proto
+        strAllPages += "HW: " + _bytesToHex(rx, 7) + "\n";
+    }
+
+    // Coleta frames adicionais (SW 91 AF) — limite de segurança de 3 frames.
+    int guard = 0;
+    while (rxLen >= 2 && rx[rxLen - 2] == 0x91 && rx[rxLen - 1] == 0xAF && guard++ < 3) {
+        static const uint8_t more[] = {0x90, 0xAF, 0x00, 0x00, 0x00};
+        if (!_isoDepApdu(more, sizeof(more), rx, sizeof(rx), &rxLen) || rxLen < 2) break;
+        strAllPages += "Frame: " + _bytesToHex(rx, (uint16_t)(rxLen - 2)) + "\n";
+    }
+
+    // GetApplicationIDs (0x6A) — lista AIDs de 3 bytes.
+    static const uint8_t getApps[] = {0x90, 0x6A, 0x00, 0x00, 0x00};
+    if (_isoDepApdu(getApps, sizeof(getApps), rx, sizeof(rx), &rxLen) && rxLen >= 2 &&
+        rx[rxLen - 2] == 0x91) {
+        uint16_t n = (uint16_t)(rxLen - 2);
+        strAllPages += "AIDs: " + (n > 0 ? _bytesToHex(rx, n) : String("none")) + "\n";
+    }
+
+    dataPages = 1;
+    pageReadSuccess = true;
+    pageReadStatus = SUCCESS;
+    return true;
+}
+
+// Cartão EMV (pagamento): SELECT PPSE e lista os AIDs públicos (tag 4F). Sem dados sensíveis.
+bool ST25R3916::_probeEmv() {
+    uint8_t rx[256];
+    uint16_t rxLen = 0;
+
+    // SELECT PPSE "2PAY.SYS.DDF01"
+    static const uint8_t selPpse[] = {0x00, 0xA4, 0x04, 0x00, 0x0E, 0x32, 0x50, 0x41, 0x59, 0x2E,
+                                      0x53, 0x59, 0x53, 0x2E, 0x44, 0x44, 0x46, 0x30, 0x31, 0x00};
+    if (!_isoDepApdu(selPpse, sizeof(selPpse), rx, sizeof(rx), &rxLen) || !_swOk(rx, rxLen)) {
+        ST25R_LOG("EMV: SELECT PPSE falhou");
+        return false;
+    }
+
+    printableUID.picc_type = "EMV";
+    strAllPages = "";
+    strAllPages += "EMV (payment card)\n";
+    uint16_t fciLen = (uint16_t)(rxLen - 2);
+    strAllPages += "FCI: " + _bytesToHex(rx, fciLen) + "\n";
+
+    // Procura tags 4F (Application Identifier) na resposta FCI.
+    bool foundAid = false;
+    for (uint16_t i = 0; i + 1 < fciLen; i++) {
+        if (rx[i] == 0x4F) {
+            uint8_t len = rx[i + 1];
+            if (len >= 5 && len <= 16 && (uint16_t)(i + 2 + len) <= fciLen) {
+                strAllPages += "AID: " + _bytesToHex(rx + i + 2, len) + "\n";
+                foundAid = true;
+            }
+        }
+    }
+    if (!foundAid) strAllPages += "AID: (não encontrado no PPSE)\n";
+
+    dataPages = 1;
+    pageReadSuccess = true;
+    pageReadStatus = SUCCESS;
+    return true;
+}
+
+// Orquestra a leitura ISO-DEP: ATS + NDEF T4T -> DESFire -> EMV.
+int ST25R3916::_readIsoDep(rfalNfcDevice *dev) {
+    strAllPages = "";
+    dataPages = 0;
+    totalPages = 0;
+
+    // Extrai ATS (NFC-A) — útil para identificação. RFAL grava o ATS bruto na struct.
+    String atsHex;
+    if (dev->type == RFAL_NFC_LISTEN_TYPE_NFCA) {
+        uint8_t atsLen = dev->proto.isoDep.activation.A.Listener.ATSLen;
+        const uint8_t *ats = (const uint8_t *)&dev->proto.isoDep.activation.A.Listener.ATS;
+        if (atsLen > 0 && atsLen <= 20) atsHex = _bytesToHex(ats, atsLen);
+        ST25R_LOG("ISO-DEP NFC-A ATS(%u)=%s", atsLen, atsHex.c_str());
+    } else {
+        atsHex = "(NFC-B ISO-DEP)";
+    }
+
+    // Tenta NDEF T4T (mais genérico), depois DESFire, depois EMV.
+    bool ok = _readNdefT4T();
+    if (!ok) ok = _readDESFireInfo();
+    if (!ok) ok = _probeEmv();
+
+    if (!ok) {
+        // ISO-DEP ativo mas sem aplicação reconhecida — reporta o que se tem.
+        printableUID.picc_type = "ISO14443-4";
+        strAllPages = "ISO-DEP activated (no known application)\n";
+        ST25R_LOG("ISO-DEP: nenhuma aplicação T4T/DESFire/EMV reconhecida");
+    }
+
+    // Prefixa a linha de ATS ao dump.
+    if (atsHex.length()) strAllPages = "ATS: " + atsHex + "\n" + strAllPages;
+
+    totalPages = dataPages;
+    pageReadStatus = SUCCESS;
+    pageReadSuccess = true;
+    return SUCCESS;
+}
+
 static String _bytesToHex(const uint8_t *data, size_t len) {
     String out;
     char buf[4];
@@ -1107,7 +1837,7 @@ static String _bytesToHex(const uint8_t *data, size_t len) {
     return out;
 }
 
-// Milestone 1 — dump no formato .nfc do Flipper Zero.
+// dump no formato .nfc do Flipper Zero.
 int ST25R3916::saveFlipper(String filename) {
     FS *fs;
     if (!getFsStorage(fs)) return FAILURE;
@@ -1119,9 +1849,11 @@ int ST25R3916::saveFlipper(String filename) {
 
     file.println("Filetype: Flipper NFC device");
     file.println("Version: 4");
-    file.println("# Device type can be ISO14443-3A, ISO14443-3B, ISO14443-4A, ISO14443-4B, "
-                 "ISO15693-3, FeliCa, NTAG/Ultralight, Mifare Classic, Mifare DESFire, SLIX, "
-                 "ST25TB, EMV");
+    file.println(
+        "# Device type can be ISO14443-3A, ISO14443-3B, ISO14443-4A, ISO14443-4B, "
+        "ISO15693-3, FeliCa, NTAG/Ultralight, Mifare Classic, Mifare DESFire, SLIX, "
+        "ST25TB, EMV"
+    );
     file.println("Device type: " + devType);
     file.println("# UID is common for all formats");
     file.println("UID: " + printableUID.uid);
@@ -1164,6 +1896,12 @@ int ST25R3916::save(String filename) {
     file.println("UID: " + printableUID.uid);
     file.println("SAK: " + printableUID.sak);
     file.println("ATQA: " + printableUID.atqa);
+    // NTAG/Ultralight: persiste versão e assinatura p/ emulação fiel (ex.: amiibo).
+    if (ntagHasVersion) file.println("Mifare version: " + _bytesToHex(ntagVersion, 8));
+    if (ntagHasSignature) file.println("Signature: " + _bytesToHex(ntagSignature, 32));
+    if (ntagHasCounters) {
+        for (int i = 0; i < 3; i++) file.println("Counter " + String(i) + ": " + String(ntagCounters[i]));
+    }
     file.println("# Memory dump");
     file.println("Pages total: " + String(totalPages > 0 ? totalPages : dataPages));
     if (!pageReadSuccess) file.println("Pages read: " + String(dataPages));

@@ -4,9 +4,9 @@
 #include "RFIDInterface.h"
 #include <SPI.h>
 #include <Wire.h>
-#include <vector>
 #include <rfal_nfc.h>
 #include <rfal_rfst25r3916.h>
+#include <vector>
 
 class ST25R3916 : public RFIDInterface {
 public:
@@ -67,10 +67,32 @@ private:
     bool _writeMagicGen1UID(rfalNfcDevice *dev);
     bool _writeMagicGen2UID(rfalNfcDevice *dev);
 
-    // Milestone 1 helpers
+    // helpers
     String _getNtagVariant();
     bool _readNtagSignature();
     bool _readNtagCounters();
+
+    // ISO15693 (NFC-V), NFC-B e NFC-F (FeliCa)
+    int _readNfcV(rfalNfcDevice *dev);
+    void _parseNfcB(rfalNfcDevice *dev);
+    int _readFeliCa(rfalNfcDevice *dev);
+
+    // ISO-DEP / Type 4 Tag (T4T): DESFire, NDEF T4T, EMV
+    int _readIsoDep(rfalNfcDevice *dev);
+    bool _isoDepApdu(const uint8_t *tx, uint16_t txLen, uint8_t *rx, uint16_t rxCap, uint16_t *rxLen);
+    bool _readNdefT4T();
+    bool _readDESFireInfo();
+    bool _probeEmv();
+
+    // Emulation NFC-A
+    bool _setupListenMode(const uint8_t *uidBuf, uint8_t uidLen, const uint8_t *atqa, uint8_t sak);
+    void _listenStop();
+    int _handleListenLoop(uint32_t timeoutMs);
+    bool _listenRespond(const uint8_t *resp, uint16_t len);
+    int _buildEmuPages();
+
+    uint8_t _emuPages[256][4];
+    int _emuPageCount = 0;
 };
 
 #endif // !LITE_VERSION
