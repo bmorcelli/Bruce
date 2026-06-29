@@ -225,8 +225,10 @@ bool ST25R3916::_initSPI() {
 
     if (bruceConfigPins.ST25R_bus.mosi == (gpio_num_t)TFT_MOSI &&
         bruceConfigPins.ST25R_bus.mosi != GPIO_NUM_NC) {
+#if TFT_MOSI >= 0
         ST25R_LOG("_initSPI: sharing TFT SPI");
         _spi = &tft.getSPIinstance();
+#endif
     } else if (bruceConfigPins.ST25R_bus.mosi == bruceConfigPins.SDCARD_bus.mosi) {
         ST25R_LOG("_initSPI: sharing SDCARD SPI");
         _spi = &sdcardSPI;
