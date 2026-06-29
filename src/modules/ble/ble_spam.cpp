@@ -1463,6 +1463,14 @@ static void bleSpamDeinitAdvertiser() {
 #else
     BLEDevice::deinit();
 #endif
+#ifdef CONFIG_BT_NIMBLE_ENABLED
+    // NimBLEDevice::m_ownAddrType is a static class member that survives
+    // deinit()/init() cycles. bleSpamRestartAdvertiserForMac() flips it to
+    // BLE_OWN_ADDR_RANDOM for MAC rotation; every other module's scan/connect/
+    // advertise call reads that same static value, so leaving it set breaks
+    // all Bluetooth elsewhere in the firmware until a reboot clears statics.
+    NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);
+#endif
 }
 
 // CHANGED: replaces the old bleSpamRestartAdvertiserForMac which did a full deinit/init.
