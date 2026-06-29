@@ -15,7 +15,8 @@ enum RFIDModules {
     PN532_SPI_MODULE = 2,
     RC522_SPI_MODULE = 3,
     ST25R3916_SPI_MODULE = 4,
-    PN532_I2C_SPI_MODULE = 5
+    PN532_I2C_SPI_MODULE = 5,
+    ST25R3916_I2C_MODULE = 6,
 };
 
 enum RFModules {
@@ -159,6 +160,19 @@ public:
     SPIPins PN532_bus;
 #endif
 
+#ifdef ST25R_SCLK
+    SPIPins ST25R_bus = {
+        (gpio_num_t)ST25R_SCLK,
+        (gpio_num_t)ST25R_MISO,
+        (gpio_num_t)ST25R_MOSI,
+        (gpio_num_t)ST25R_CS,
+        (gpio_num_t)ST25R_IRQ,
+        GPIO_NUM_NC
+    };
+#else
+    SPIPins ST25R_bus;
+#endif
+
 #ifdef SDCARD_SCK
     SPIPins SDCARD_bus = {
         (gpio_num_t)SDCARD_SCK, (gpio_num_t)SDCARD_MISO, (gpio_num_t)SDCARD_MOSI, (gpio_num_t)SDCARD_CS
@@ -249,6 +263,7 @@ public:
     void setPn532Pins(SPIPins value);
     void setSDCardPins(SPIPins value);
 #if !defined(LITE_VERSION)
+    void setSR25RPins(SPIPins value);
     void setLoRaPins(SPIPins value);
     void setW5500Pins(SPIPins value);
 #endif
