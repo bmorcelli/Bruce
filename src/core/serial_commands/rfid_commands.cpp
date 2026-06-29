@@ -159,28 +159,7 @@ uint32_t rfidEmulateCallback(cmd *c) {
                 if (value.length() > 0) value += " ";
                 value += cmd.getArgument(i).getValue();
             }
-            if (value.length() > 0) {
-                memset(&_rfid->ndefMessage, 0, sizeof(_rfid->ndefMessage));
-                _rfid->ndefMessage.begin = 0x03;
-                _rfid->ndefMessage.header = 0xD1;
-                _rfid->ndefMessage.tnf = 0x01;
-                _rfid->ndefMessage.end = 0xFE;
-                if (type == "text") {
-                    _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_TEXT;
-                    _rfid->ndefMessage.payload[0] = 0x02;
-                    _rfid->ndefMessage.payload[1] = 'e';
-                    _rfid->ndefMessage.payload[2] = 'n';
-                    uint8_t len = min((int)value.length(), 96);
-                    for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 3] = value.charAt(i);
-                    _rfid->ndefMessage.payloadSize = len + 3;
-                } else {
-                    _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_URI;
-                    _rfid->ndefMessage.payload[0] = 0x00; // no prefix abbreviation
-                    uint8_t len = min((int)value.length(), 99);
-                    for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 1] = value.charAt(i);
-                    _rfid->ndefMessage.payloadSize = len + 1;
-                }
-            }
+            if (value.length() > 0) { _rfid->buildNdefMessage(type, value); }
         }
     }
 
@@ -245,76 +224,13 @@ uint32_t rfidLoadFileCallback(cmd *c) {
 
     if (!_ensureRfid()) return false;
 
-    FS *fs;
-    if (!getFsStorage(fs)) {
-        serialDevice->println("Load: " + _rfid->statusMessage(RFIDInterface::FAILURE));
-        return false;
-    }
-
-    File file = fs->open(filepath, FILE_READ);
-    if (!file) {
-        serialDevice->println("Load: file not found");
-        return false;
-    }
-
-    String line;
-    String strData;
-    _rfid->strAllPages = "";
-    _rfid->totalPages = 0;
-    _rfid->dataPages = 0;
-    _rfid->pageReadSuccess = true;
-    _rfid->pageReadStatus = RFIDInterface::SUCCESS;
-
-    while (file.available()) {
-        line = file.readStringUntil('\n');
-        line.trim();
-        strData = line.substring(line.indexOf(":") + 1);
-        strData.trim();
-
-        if (line.startsWith("Device type:")) _rfid->printableUID.picc_type = strData;
-        else if (line.startsWith("UID:")) _rfid->printableUID.uid = strData;
-        else if (line.startsWith("SAK:")) _rfid->printableUID.sak = strData;
-        else if (line.startsWith("ATQA:")) _rfid->printableUID.atqa = strData;
-        else if (line.startsWith("Pages total:")) _rfid->totalPages = strData.toInt();
-        else if (line.startsWith("Pages read:")) _rfid->pageReadSuccess = false;
-        else if (line.startsWith("Page ")) {
-            _rfid->strAllPages += line + "\n";
-            _rfid->dataPages++;
-        }
-        // MIFARE Classic dumps (.rfid/.nfc): keep Block and Key lines so the
-        // driver can rebuild the dump for clone/emulate.
-        else if (line.startsWith("Block ")) {
-            _rfid->strAllPages += line + "\n";
-            _rfid->dataPages++;
-        } else if (line.startsWith("Key A sector ") || line.startsWith("Key B sector ")) {
-            _rfid->strAllPages += line + "\n";
-        }
-    }
-    file.close();
-
-    String uidStr = _rfid->printableUID.uid;
-    uidStr.trim();
-    uidStr.replace(" ", "");
-    _rfid->uid.size = uidStr.length() / 2;
-    if (_rfid->uid.size > sizeof(_rfid->uid.uidByte)) _rfid->uid.size = sizeof(_rfid->uid.uidByte);
-    for (int i = 0; i < _rfid->uid.size; i++) {
-        _rfid->uid.uidByte[i] = strtoul(uidStr.substring(i * 2, i * 2 + 2).c_str(), NULL, 16);
-    }
-    _rfid->uid.sak = strtoul(_rfid->printableUID.sak.c_str(), NULL, 16);
-
-    String atqaStr = _rfid->printableUID.atqa;
-    atqaStr.replace(" ", "");
-    if (atqaStr.length() >= 4) {
-        // ATQA is stored in transmission order (atqaByte[0] first), matching
-        // _parseDevice()/_parseLoadedData(). Keep the same order here.
-        _rfid->uid.atqaByte[0] = strtoul(atqaStr.substring(0, 2).c_str(), NULL, 16);
-        _rfid->uid.atqaByte[1] = strtoul(atqaStr.substring(2, 4).c_str(), NULL, 16);
-    }
-    if (_rfid->totalPages == 0) _rfid->totalPages = _rfid->dataPages;
-
-    serialDevice->println("Load: " + _rfid->statusMessage(RFIDInterface::SUCCESS));
-    _printTagInfo();
-    return true;
+    // loadFromFile() lives in the driver (or, by default, in RFIDInterface), so
+    // the serial command and the GUI 'Load file' share one implementation and
+    // never diverge in behavior.
+    int loaded = _rfid->loadFromFile(filepath);
+    serialDevice->println("Load: " + _rfid->statusMessage(loaded));
+    if (loaded == RFIDInterface::SUCCESS) _printTagInfo();
+    return loaded == RFIDInterface::SUCCESS;
 }
 
 // rfid ndef [url|text] [value]
@@ -331,28 +247,7 @@ uint32_t rfidNdefCallback(cmd *c) {
 
     if (!_ensureRfid()) return false;
 
-    memset(&_rfid->ndefMessage, 0, sizeof(_rfid->ndefMessage));
-    _rfid->ndefMessage.begin = 0x03;
-    _rfid->ndefMessage.header = 0xD1;
-    _rfid->ndefMessage.tnf = 0x01;
-    _rfid->ndefMessage.end = 0xFE;
-
-    if (type == "text") {
-        _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_TEXT;
-        _rfid->ndefMessage.payload[0] = 0x02;
-        _rfid->ndefMessage.payload[1] = 'e';
-        _rfid->ndefMessage.payload[2] = 'n';
-        uint8_t len = min((int)value.length(), 96);
-        for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 3] = value.charAt(i);
-        _rfid->ndefMessage.payloadSize = len + 3;
-    } else {
-        _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_URI;
-        _rfid->ndefMessage.payload[0] = 0x00;
-        uint8_t len = min((int)value.length(), 99);
-        for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 1] = value.charAt(i);
-        _rfid->ndefMessage.payloadSize = len + 1;
-    }
-    _rfid->ndefMessage.messageSize = _rfid->ndefMessage.payloadSize + 4;
+    _rfid->buildNdefMessage(type, value);
 
     int result = _rfid->write_ndef();
     serialDevice->println("NDEF: " + _rfid->statusMessage(result));

@@ -251,9 +251,8 @@ bool ST25R3916::_initSPI() {
 }
 
 bool ST25R3916::_initI2C() {
-    int irq = (int)bruceConfigPins.ST25R_bus.io0;
     Wire.begin(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
-    _hw = new RfalRfST25R3916Class(&Wire, irq);
+    _hw = new RfalRfST25R3916Class(&Wire, GPIO_NUM_NC);
     return _hw != nullptr;
 }
 
@@ -277,7 +276,7 @@ bool ST25R3916::begin() {
     return (err == ST_ERR_NONE);
 }
 
-static void _notifyCb(rfalNfcState st) { ST25R_LOG("notifyCb: %s(%d)", _stateStr(st), (int)st); }
+static void _notifyCb(rfalNfcState st) { /* ST25R_LOG("notifyCb: %s(%d)", _stateStr(st), (int)st); */ }
 
 bool ST25R3916::_startDiscovery() {
     _deselectSharedSpiDevices();
@@ -532,19 +531,22 @@ int ST25R3916::read(int cardBaudRate) {
     ntagHasCounters = false;
     _ntagPagesHint = 0;
     bool isNfcaT2T = (dev->type == RFAL_NFC_LISTEN_TYPE_NFCA && uid.sak == 0x00);
+
+    // Read data blocks FIRST. GET_VERSION (0x60) is unsupported by non-EV1
+    // MIFARE Ultralight and puts the PICC into HALT, which would make every
+    // subsequent READ time out. _readDataBlocks detects the size from the CC
+    // page when _ntagPagesHint is 0, so the GET_VERSION hint is not required.
+    int blkResult = _readDataBlocks(dev);
+    ST25R_LOG("_readDataBlocks -> %d pages=%d", blkResult, dataPages);
+
     if (isNfcaT2T) {
-        // GET_VERSION first: identifies the variant and the authoritative page count
+        // Variant/signature/counter are NTAG21x extras; running them after the
+        // data read means a HALT from an unsupported command no longer hurts.
         String variant = _getNtagVariant();
         if (variant.length() > 0) {
             ntagVariant = variant;
             printableUID.picc_type = variant;
         }
-    }
-
-    int blkResult = _readDataBlocks(dev);
-    ST25R_LOG("_readDataBlocks -> %d pages=%d", blkResult, dataPages);
-
-    if (isNfcaT2T) {
         _readNtagSignature();
         _readNtagCounters();
     }
@@ -1071,8 +1073,11 @@ int ST25R3916::_handleListenLoop(uint32_t timeoutMs) {
     uint8_t traceCmd[96];
     uint8_t traceArg[96];
     uint16_t traceN = 0;
-
+    LongPress = true;
     while ((int32_t)(deadline - millis()) > 0) {
+        // WaitForInterruptsTimed faz busy-wait sem ceder CPU; este yield dá tempo
+        // ao task de input (xHandle) para setar EscPress, senão não dá p/ sair.
+        vTaskDelay(pdMS_TO_TICKS(1)); // time to pull EscPress from other tasks
         if (check(EscPress)) {
             ST25R_LOG("emulate: Esc — encerrando");
             break;
@@ -1081,7 +1086,7 @@ int ST25R3916::_handleListenLoop(uint32_t timeoutMs) {
         uint32_t irqs = _hw->st25r3916WaitForInterruptsTimed(
             ST25R3916_IRQ_MASK_WU_A | ST25R3916_IRQ_MASK_WU_A_X | ST25R3916_IRQ_MASK_RXE |
                 ST25R3916_IRQ_MASK_EOF,
-            200
+            50
         );
         if (irqs == 0U) continue;
 
@@ -1226,6 +1231,33 @@ int ST25R3916::_handleListenLoop(uint32_t timeoutMs) {
                 ST25R_LOG(
                     "emulate: reader saiu (cmds=%u reads=%lu): %s", traceN, (unsigned long)nRead, tr.c_str()
                 );
+                if (_emuIsMfc) {
+                    ST25R_LOG(
+                        "emu mfc: authReq=%u authOk=%u badAr=%u noNr=%u reads=%u lastNrBits=%u",
+                        _emuMfcAuthReq,
+                        _emuMfcAuthOk,
+                        _emuMfcBadAr,
+                        _emuMfcNoNr,
+                        _emuMfcReads,
+                        _emuMfcLastNrBits
+                    );
+                    ST25R_LOG(
+                        "emu mfc dbg: blk=%u nt=%08lX enc=%02X%02X%02X%02X|%02X%02X%02X%02X arCalc=%08lX "
+                        "arExp=%08lX",
+                        _emuDbgBlock,
+                        (unsigned long)_emuDbgNt,
+                        _emuDbgEnc[0],
+                        _emuDbgEnc[1],
+                        _emuDbgEnc[2],
+                        _emuDbgEnc[3],
+                        _emuDbgEnc[4],
+                        _emuDbgEnc[5],
+                        _emuDbgEnc[6],
+                        _emuDbgEnc[7],
+                        (unsigned long)_emuDbgArCalc,
+                        (unsigned long)_emuDbgArExp
+                    );
+                }
             }
             active = false;
             _hw->st25r3916ClrRegisterBits(
@@ -1234,6 +1266,7 @@ int ST25R3916::_handleListenLoop(uint32_t timeoutMs) {
             _hw->st25r3916ExecuteCommand(ST25R3916_CMD_GOTO_SENSE);
         }
     }
+    LongPress = false;
     return readers;
 }
 
@@ -1307,6 +1340,7 @@ int ST25R3916::emulate() {
         if (sak == 0x00) sak = (mfcDump.totalBlocks == 256) ? 0x18 : 0x08;
         if (atqa[0] == 0 && atqa[1] == 0) atqa[0] = 0x04;
         _emuMfcAuthed = false;
+        _emuMfcAuthReq = _emuMfcAuthOk = _emuMfcBadAr = _emuMfcNoNr = _emuMfcReads = _emuMfcLastNrBits = 0;
     } else {
         _buildEmuPages();
     }
@@ -1340,11 +1374,20 @@ int ST25R3916::emulate() {
 }
 
 int ST25R3916::load() {
+    // GUI path: pick a file, then delegate to the shared parser so the serial
+    // command (rfid loadfile) and the GUI behave identically.
     FS *fs;
     if (!getFsStorage(fs)) return FAILURE;
 
     String filepath = loopSD(*fs, true, "RFID|NFC", "/BruceRFID");
     if (filepath.length() == 0) return FAILURE;
+
+    return loadFromFile(filepath);
+}
+
+int ST25R3916::loadFromFile(const String &filepath) {
+    FS *fs;
+    if (!getFsStorage(fs)) return FAILURE;
 
     File file = fs->open(filepath, FILE_READ);
     if (!file) return FAILURE;
@@ -1394,6 +1437,14 @@ int ST25R3916::load() {
         } else if (line.startsWith("Page ")) {
             strAllPages += line + "\n";
             dataPages++;
+        }
+        // MIFARE Classic dumps (.rfid/.nfc): keep Block and Key lines so the
+        // driver can rebuild the dump for clone/emulate (mesma lógica do loadfile serial).
+        else if (line.startsWith("Block ")) {
+            strAllPages += line + "\n";
+            dataPages++;
+        } else if (line.startsWith("Key A sector ") || line.startsWith("Key B sector ")) {
+            strAllPages += line + "\n";
         }
     }
 
@@ -2784,6 +2835,14 @@ uint16_t ST25R3916::_emuRxRaw(uint8_t *out, uint8_t maxBytes, uint32_t toMs) {
     return (uint16_t)(inc ? ((nb - 1) * 8 + inc) : (nb * 8));
 }
 
+void ST25R3916::_emuParityOff() {
+    _hw->st25r3916ChangeRegisterBits(
+        ST25R3916_REG_ISO14443A_NFC,
+        ST25R3916_REG_ISO14443A_NFC_no_tx_par | ST25R3916_REG_ISO14443A_NFC_no_rx_par,
+        ST25R3916_REG_ISO14443A_NFC_no_tx_par_off | ST25R3916_REG_ISO14443A_NFC_no_rx_par_off
+    );
+}
+
 bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
     uint8_t cmd = fifo[0];
     if ((cmd != 0x60 && cmd != 0x61) || n < 2) return false; // only AUTH bootstraps a session
@@ -2791,6 +2850,7 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
     uint8_t block = fifo[1];
     uint8_t sector = _mfcBlockToSector(block);
     if (sector >= mfcDump.sectors) return false;
+    _emuMfcAuthReq++;
 
     static const uint8_t ffKey[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t *key = (cmd == 0x60) ? mfcDump.keyA[sector] : mfcDump.keyB[sector];
@@ -2812,8 +2872,11 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
     // Receive reader answer: {nr}{ar} = 8 encrypted bytes + parity (72 bits).
     uint8_t raw[16] = {0};
     uint16_t bits = _emuRxRaw(raw, sizeof(raw), 30);
+    _emuMfcLastNrBits = bits;
     if (bits < 64) {
+        _emuMfcNoNr++;
         _emuMfcAuthed = false;
+        _emuParityOff();
         return false;
     }
     uint8_t enc[8] = {0};
@@ -2824,9 +2887,15 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
         uint8_t ks = crypto1_byte(&_emuCipher, 0, 0);
         ar = (ar << 8) | (uint8_t)(ks ^ enc[4 + i]);
     }
-    if (ar != prng_successor(_emuNt, 64)) {
-        ST25R_LOG("emu mfc auth blk=%u bad AR", block);
+    _emuDbgNt = _emuNt;
+    _emuDbgBlock = block;
+    memcpy(_emuDbgEnc, enc, 8);
+    _emuDbgArCalc = ar;
+    _emuDbgArExp = prng_successor(_emuNt, 64);
+    if (ar != _emuDbgArExp) {
+        _emuMfcBadAr++;
         _emuMfcAuthed = false;
+        _emuParityOff();
         return false;
     }
 
@@ -2842,10 +2911,14 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
     uint16_t nbits = _mfcPackBits(atEnc, atPar, 4, bs);
     _emuTxBits(bs, nbits);
     _emuMfcAuthed = true;
-    ST25R_LOG("emu mfc auth blk=%u OK", block);
+    _emuMfcAuthOk++;
 
-    // Encrypted session: serve READ/WRITE until HALT or field off.
+    // Encrypted session: serve READ/WRITE until HALT, field off or Esc.
     while (true) {
+        // Yield 1ms so the input task can set EscPress (RXE IRQ stays latched,
+        // so the next reader command is not lost). Lets the user abort mid-session.
+        vTaskDelay(pdMS_TO_TICKS(1));
+        if (EscPress) break;
         uint8_t rbuf[40] = {0};
         uint16_t rbits = _emuRxRaw(rbuf, sizeof(rbuf), 40);
         if (rbits < 8) break;
@@ -2870,6 +2943,7 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
             uint8_t ob[24] = {0};
             uint16_t nb = _mfcPackBits(e, p, 18, ob);
             _emuTxBits(ob, nb);
+            _emuMfcReads++;
         } else if (c == 0xA0 && cnt >= 2) { // WRITE block (2 phases)
             uint8_t blk = dec[1];
             // ACK phase 1 (4-bit 0x0A, encrypted)
@@ -2897,6 +2971,7 @@ bool ST25R3916::_emuMfcHandle(uint8_t *fifo, uint16_t n) {
     }
 
     _emuMfcAuthed = false;
+    _emuParityOff(); // restore HW parity so the next plain AUTH is received intact
     return true;
 }
 
@@ -3094,15 +3169,15 @@ int ST25R3916::_handleFelicaListen(uint32_t timeoutMs) {
     uint32_t deadline = millis() + timeoutMs;
     int polls = 0;
     uint8_t fifo[64];
-
+    LongPress = true;
     while ((int32_t)(deadline - millis()) > 0) {
         vTaskDelay(pdMS_TO_TICKS(1));
-        if (check(EscPress)) {
+        if (EscPress) {
             ST25R_LOG("emulate felica: Esc — encerrando");
             break;
         }
         uint32_t irqs = _hw->st25r3916WaitForInterruptsTimed(
-            ST25R3916_IRQ_MASK_WU_F | ST25R3916_IRQ_MASK_RXE | ST25R3916_IRQ_MASK_EOF, 200
+            ST25R3916_IRQ_MASK_WU_F | ST25R3916_IRQ_MASK_RXE | ST25R3916_IRQ_MASK_EOF, 50
         );
         if (irqs == 0U) continue;
 
@@ -3139,6 +3214,7 @@ int ST25R3916::_handleFelicaListen(uint32_t timeoutMs) {
 
         if (irqs & ST25R3916_IRQ_MASK_EOF) { _hw->st25r3916ExecuteCommand(ST25R3916_CMD_GOTO_SENSE); }
     }
+    LongPress = false;
     return polls;
 }
 

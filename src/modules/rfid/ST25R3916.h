@@ -26,6 +26,7 @@ public:
     int write_ndef() override;
     int emulate() override;
     int load() override;
+    int loadFromFile(const String &filepath) override;
     int save(String filename) override;
     int saveFlipper(String filename) override;
 
@@ -138,6 +139,19 @@ private:
     Crypto1State _emuCipher;
     bool _emuMfcAuthed = false;
     uint32_t _emuNt = 0;
+    void _emuParityOff(); // restore HW parity (TX+RX) after an encrypted session
+    // Deferred diagnostics (printed on field-off so logging doesn't break timing).
+    uint16_t _emuMfcAuthReq = 0;
+    uint16_t _emuMfcAuthOk = 0;
+    uint16_t _emuMfcBadAr = 0;
+    uint16_t _emuMfcNoNr = 0;
+    uint16_t _emuMfcReads = 0;
+    uint16_t _emuMfcLastNrBits = 0;
+    uint32_t _emuDbgNt = 0;
+    uint8_t _emuDbgEnc[8] = {0};
+    uint32_t _emuDbgArCalc = 0;
+    uint32_t _emuDbgArExp = 0;
+    uint8_t _emuDbgBlock = 0;
     bool _buildEmuMfc();                 // parse strAllPages -> mfcDump (keys injected into trailers)
     bool _emuMfcHandle(uint8_t *fifo, uint16_t n);          // handle one MFC command in listen loop
     void _emuTxClear(const uint8_t *data, uint8_t n, bool withCrc); // plain TX (HW parity)

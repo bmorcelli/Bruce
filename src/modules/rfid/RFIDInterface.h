@@ -97,8 +97,18 @@ public:
     virtual int write_ndef() = 0;
     virtual int emulate() { return NOT_IMPLEMENTED; }
     virtual int load() = 0;
+    // Load + parse a dump file by path (shared by the GUI and the serial CLI so
+    // their behavior never diverges). The base class provides a generic Bruce
+    // .rfid parser; drivers may override it for richer handling (e.g. MIFARE
+    // Classic blocks/keys, NTAG version/signature/counters in ST25R3916).
+    virtual int loadFromFile(const String &filepath);
     virtual int save(String filename) = 0;
     virtual int saveFlipper(String filename) { return NOT_IMPLEMENTED; }
+
+    // Build `ndefMessage` from a type ("url"/"text") and value. Shared by the
+    // serial `rfid ndef` and `rfid emulate t4t` paths so the encoding is
+    // identical regardless of entry point.
+    void buildNdefMessage(const String &type, const String &value);
 
     String statusMessage(int status) const {
         switch (status) {
