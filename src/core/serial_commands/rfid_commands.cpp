@@ -130,11 +130,61 @@ uint32_t rfidCloneCallback(cmd *c) {
     return result == RFIDInterface::SUCCESS;
 }
 
-// rfid emulate
+// rfid emulate [t4t|felica] [value]
 uint32_t rfidEmulateCallback(cmd *c) {
+    Command cmd(c);
+    String mode = cmd.countArgs() > 0 ? cmd.getArgument(0).getValue() : String("");
+    mode.toLowerCase();
+
     if (!_ensureRfid()) return false;
 
-    serialDevice->println("Starting RFID emulation...");
+    _rfid->emuMode = "";
+    if (mode == "t4t" || mode == "felica") {
+        _rfid->emuMode = mode;
+        // For T4T allow an inline NDEF (URL by default, or "text <value>").
+        if (mode == "t4t") {
+            String type = "url";
+            String value = "";
+            int start = 1;
+            if (cmd.countArgs() > 1) {
+                String a1 = cmd.getArgument(1).getValue();
+                String a1l = a1;
+                a1l.toLowerCase();
+                if (a1l == "text" || a1l == "url") {
+                    type = a1l;
+                    start = 2;
+                }
+            }
+            for (int i = start; i < cmd.countArgs(); i++) {
+                if (value.length() > 0) value += " ";
+                value += cmd.getArgument(i).getValue();
+            }
+            if (value.length() > 0) {
+                memset(&_rfid->ndefMessage, 0, sizeof(_rfid->ndefMessage));
+                _rfid->ndefMessage.begin = 0x03;
+                _rfid->ndefMessage.header = 0xD1;
+                _rfid->ndefMessage.tnf = 0x01;
+                _rfid->ndefMessage.end = 0xFE;
+                if (type == "text") {
+                    _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_TEXT;
+                    _rfid->ndefMessage.payload[0] = 0x02;
+                    _rfid->ndefMessage.payload[1] = 'e';
+                    _rfid->ndefMessage.payload[2] = 'n';
+                    uint8_t len = min((int)value.length(), 96);
+                    for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 3] = value.charAt(i);
+                    _rfid->ndefMessage.payloadSize = len + 3;
+                } else {
+                    _rfid->ndefMessage.payloadType = RFIDInterface::NDEF_URI;
+                    _rfid->ndefMessage.payload[0] = 0x00; // no prefix abbreviation
+                    uint8_t len = min((int)value.length(), 99);
+                    for (uint8_t i = 0; i < len; i++) _rfid->ndefMessage.payload[i + 1] = value.charAt(i);
+                    _rfid->ndefMessage.payloadSize = len + 1;
+                }
+            }
+        }
+    }
+
+    serialDevice->println("Starting RFID emulation" + (mode.length() ? (" (" + mode + ")") : String("")) + "...");
     int result = _rfid->emulate();
     serialDevice->println("Emulate: " + _rfid->statusMessage(result));
     return result == RFIDInterface::SUCCESS;
@@ -231,6 +281,14 @@ uint32_t rfidLoadFileCallback(cmd *c) {
             _rfid->strAllPages += line + "\n";
             _rfid->dataPages++;
         }
+        // MIFARE Classic dumps (.rfid/.nfc): keep Block and Key lines so the
+        // driver can rebuild the dump for clone/emulate.
+        else if (line.startsWith("Block ")) {
+            _rfid->strAllPages += line + "\n";
+            _rfid->dataPages++;
+        } else if (line.startsWith("Key A sector ") || line.startsWith("Key B sector ")) {
+            _rfid->strAllPages += line + "\n";
+        }
     }
     file.close();
 
@@ -247,8 +305,10 @@ uint32_t rfidLoadFileCallback(cmd *c) {
     String atqaStr = _rfid->printableUID.atqa;
     atqaStr.replace(" ", "");
     if (atqaStr.length() >= 4) {
-        _rfid->uid.atqaByte[1] = strtoul(atqaStr.substring(0, 2).c_str(), NULL, 16);
-        _rfid->uid.atqaByte[0] = strtoul(atqaStr.substring(2, 4).c_str(), NULL, 16);
+        // ATQA is stored in transmission order (atqaByte[0] first), matching
+        // _parseDevice()/_parseLoadedData(). Keep the same order here.
+        _rfid->uid.atqaByte[0] = strtoul(atqaStr.substring(0, 2).c_str(), NULL, 16);
+        _rfid->uid.atqaByte[1] = strtoul(atqaStr.substring(2, 4).c_str(), NULL, 16);
     }
     if (_rfid->totalPages == 0) _rfid->totalPages = _rfid->dataPages;
 
@@ -354,13 +414,36 @@ uint32_t rfidAutotestCallback(cmd *c) {
         return result == RFIDInterface::SUCCESS;
     }
 
+    // MIFARE Classic: dict-attack dump (uses the normal read path, which
+    // dispatches to the Crypto1 reader when the SAK is a MIFARE Classic SAK).
+    if (mode == "mfc") {
+        int result = _readTagWithTimeout(timeout_ms);
+        serialDevice->println("MFC read: " + _rfid->statusMessage(result));
+        if (result == RFIDInterface::SUCCESS) _printTagInfo();
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "mfc-write") {
+        int result = _rfid->write();
+        serialDevice->println("MFC write: " + _rfid->statusMessage(result));
+        return result == RFIDInterface::SUCCESS;
+    }
+
+    if (mode == "mfc-clone") {
+        int result = _rfid->clone();
+        serialDevice->println("MFC clone: " + _rfid->statusMessage(result));
+        return result == RFIDInterface::SUCCESS;
+    }
+
     if (mode == "emulate") {
         int result = _rfid->emulate();
         serialDevice->println("Emulate: " + _rfid->statusMessage(result));
         return result == RFIDInterface::SUCCESS;
     }
 
-    serialDevice->println("Invalid mode. Use: read, write, read-write, clone, emulate");
+    serialDevice->println(
+        "Invalid mode. Use: read, write, read-write, clone, emulate, mfc, mfc-write, mfc-clone"
+    );
     return false;
 }
 
@@ -376,7 +459,7 @@ void createRfidCommands(SimpleCLI *cli) {
     Command cloneCmd = cmd.addCommand("clone", rfidCloneCallback);
     cloneCmd.addPosArg("timeout", "5000");
 
-    cmd.addCommand("emulate", rfidEmulateCallback);
+    cmd.addBoundlessCommand("emulate", rfidEmulateCallback);
     cmd.addCommand("erase", rfidEraseCallback);
     cmd.addCommand("info", rfidInfoCallback);
     Command saveCmd = cmd.addCommand("save", rfidSaveCallback);

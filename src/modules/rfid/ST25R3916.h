@@ -2,6 +2,7 @@
 #if !defined(LITE_VERSION)
 
 #include "RFIDInterface.h"
+#include "crypto1.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <rfal_nfc.h>
@@ -41,6 +42,23 @@ public:
     bool ntagHasCounters = false;
     int _ntagPagesHint = 0; // page count derived from GET_VERSION (0 = unknown)
 
+    // Milestone 5 — MIFARE Classic dump (1K / 4K / Mini)
+    struct MifareClassicDump {
+        uint8_t blocks[256][16];      // up to 256 blocks (4K)
+        uint8_t keyA[40][6];          // recovered Key A per sector
+        uint8_t keyB[40][6];          // recovered Key B per sector
+        bool blockRead[256];          // which blocks were read successfully
+        bool keyAFound[40];           // which Key A were found
+        bool keyBFound[40];           // which Key B were found
+        uint8_t sectors;              // 5 (Mini), 16 (1K), 40 (4K)
+        uint16_t totalBlocks;         // 20, 64 or 256
+    };
+    MifareClassicDump mfcDump;
+    bool mfcLoaded = false;           // true when mfcDump holds a valid MIFARE Classic dump
+    String mfcType;                   // "Mini", "1K", "4K"
+
+    bool isMifareClassicSak(uint8_t sak) const;
+
 private:
     CONNECTION_TYPE _connection_type;
     RfalRfST25R3916Class *_hw = nullptr;
@@ -66,6 +84,27 @@ private:
     bool _isUltralightUserPage(int page) const;
     bool _writeMagicGen1UID(rfalNfcDevice *dev);
     bool _writeMagicGen2UID(rfalNfcDevice *dev);
+
+    // MIFARE Classic (Crypto1) — Milestone 5
+    Crypto1State _mfcCipher;
+    bool _mfcAuthed = false;
+    int _readMifareClassic(rfalNfcDevice *dev);
+    uint32_t _mfcUid32() const;
+    uint8_t _mfcSectorFirstBlock(uint8_t sector) const;
+    uint8_t _mfcSectorBlockCount(uint8_t sector) const;
+    uint8_t _mfcBlockToSector(uint16_t block) const;
+    ::ReturnCode _mifareTransceiveRaw(
+        uint8_t *txBuf, uint16_t txBits, uint8_t *rxBuf, uint16_t rxCapBytes, uint16_t *rxBits, uint32_t fwt,
+        uint32_t flags
+    );
+    bool _mifareAuth(uint8_t block, const uint8_t key[6], bool useKeyB);
+    bool _mifareReadBlock(uint8_t block, uint8_t data[16]);
+    bool _mifareWriteBlock(uint8_t block, const uint8_t data[16]);
+    void _mfcHalt();
+    int _writeMifareClassic(rfalNfcDevice *dev);       // authenticated write of loaded dump
+    int _writeMifareClassicMagic(rfalNfcDevice *dev);  // clone to Magic Gen1
+    void _mfcRebuildStrAllPages();
+    int _saveMifareClassicFlipper(const String &filename);
 
     // helpers
     String _getNtagVariant();
@@ -93,6 +132,35 @@ private:
 
     uint8_t _emuPages[256][4];
     int _emuPageCount = 0;
+
+    // MIFARE Classic emulation (listener-side Crypto1) — Milestone 5
+    bool _emuIsMfc = false;
+    Crypto1State _emuCipher;
+    bool _emuMfcAuthed = false;
+    uint32_t _emuNt = 0;
+    bool _buildEmuMfc();                 // parse strAllPages -> mfcDump (keys injected into trailers)
+    bool _emuMfcHandle(uint8_t *fifo, uint16_t n);          // handle one MFC command in listen loop
+    void _emuTxClear(const uint8_t *data, uint8_t n, bool withCrc); // plain TX (HW parity)
+    void _emuTxBits(const uint8_t *bitstream, uint16_t nbits);      // raw TX, no HW parity
+    uint16_t _emuRxRaw(uint8_t *out, uint8_t maxBytes, uint32_t toMs); // RX keeping parity, returns bits
+
+    // Type 4 Tag (NDEF) emulation over the NFC-A target — Milestone 6
+    bool _emuIsT4T = false;
+    uint8_t _t4tCC[15];
+    uint8_t _t4tNdef[512];   // NLEN(2) + NDEF message
+    uint16_t _t4tNdefLen = 0;
+    uint8_t _t4tSelected = 0; // 0 = none, 1 = CC, 2 = NDEF
+    void _buildT4TFiles();
+    bool _emuT4THandle(uint8_t *fifo, uint16_t n);
+    uint16_t _t4tProcessApdu(const uint8_t *c, uint16_t clen, uint8_t *r);
+
+    // FeliCa (NFC-F) emulation — Milestone 6
+    uint8_t _felicaIDm[8];
+    uint8_t _felicaPMm[8];
+    uint8_t _felicaSys[2];
+    bool _setupListenModeF();
+    int _handleFelicaListen(uint32_t timeoutMs);
+    int _emulateFelica();
 };
 
 #endif // !LITE_VERSION

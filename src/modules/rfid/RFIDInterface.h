@@ -72,6 +72,9 @@ public:
     PrintableUID printableUID;
     NdefMessage ndefMessage;
     String strAllPages = "";
+    // Optional forced emulation mode set by the CLI (e.g. "t4t", "felica").
+    // Empty = auto-detect from the loaded tag. Honored by drivers that support it.
+    String emuMode = "";
     int totalPages = 0;
     int dataPages = 0;
     bool pageReadSuccess = false;
