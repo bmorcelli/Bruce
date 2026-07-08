@@ -145,7 +145,6 @@ void cc1101ApplyPreciseCalibration(float frequency, bool isTx) {
 }
 
 void cc1101ApplyFixedFreqOokPreset(bool isTx) {
-    ELECHOUSE_cc1101.SpiWriteReg(CC1101_FIFOTHR, 0x47);
     ELECHOUSE_cc1101.SpiWriteReg(CC1101_FSCTRL1, 0x06);
     ELECHOUSE_cc1101.SpiWriteReg(CC1101_MDMCFG0, 0x00);
     ELECHOUSE_cc1101.SpiWriteReg(CC1101_MDMCFG1, 0x00);
@@ -156,11 +155,13 @@ void cc1101ApplyFixedFreqOokPreset(bool isTx) {
     ELECHOUSE_cc1101.SpiWriteReg(CC1101_FOCCFG, 0x18);
     ELECHOUSE_cc1101.SpiWriteReg(CC1101_FREND0, 0x11);
     if (isTx) {
+        ELECHOUSE_cc1101.SpiWriteReg(CC1101_FIFOTHR, 0x47);
         ELECHOUSE_cc1101.setPA(12);
     } else {
+        ELECHOUSE_cc1101.SpiWriteReg(CC1101_FIFOTHR, 0x07);
         ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL0, 0x40);
-        ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL1, 0x00);
-        ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL2, 0x03);
+        ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL1, 0x01);
+        ELECHOUSE_cc1101.SpiWriteReg(CC1101_AGCCTRL2, 0xC7);
         ELECHOUSE_cc1101.SpiWriteReg(CC1101_FREND1, 0xB6);
     }
 }
@@ -299,10 +300,8 @@ bool initRfModule(String mode, float frequency) {
         }
         // else
         // ELECHOUSE_cc1101.setRxBW(812.50);  // reset to default
-        if (bruceConfigPins.rfFxdFreq == 1) {
-            cc1101_mode_hint = (mode == "tx") ? 1 : ((mode == "rx") ? 2 : 0);
-            cc1101ApplyFixedFreqOokPreset(cc1101_mode_hint == 1);
-        } else {
+        const bool fixedFreq = bruceConfigPins.rfFxdFreq;
+        if (!fixedFreq) {
             ELECHOUSE_cc1101.setRxBW(256); // generic profile for scan/hopping
             ELECHOUSE_cc1101.setDRate(50);
         }
@@ -322,6 +321,10 @@ bool initRfModule(String mode, float frequency) {
         setMHZ(frequency);
         cc1101_mode_hint = 0;
         Serial.println("cc1101 setMHZ(frequency);");
+        if (fixedFreq) {
+            cc1101_mode_hint = (mode == "tx") ? 1 : ((mode == "rx") ? 2 : 0);
+            cc1101ApplyFixedFreqOokPreset(cc1101_mode_hint == 1);
+        }
 
         /* MEMO: cannot change other params after this is executed */
         if (mode == "tx") {
@@ -436,7 +439,7 @@ void setMHZ(float frequency) {
             vTaskDelay(10 / portTICK_PERIOD_MS); // time to settle the antenna signal
         }
 #endif
-        const bool preciseCalibration = (bruceConfigPins.rfFxdFreq == 1);
+        const bool preciseCalibration = (bruceConfigPins.rfFxdFreq);
         const uint8_t previousMode = preciseCalibration ? ELECHOUSE_cc1101.getMode() : 0;
         const uint8_t targetMode =
             preciseCalibration ? (previousMode != 0 ? previousMode : cc1101_mode_hint) : 0;
@@ -578,7 +581,7 @@ void rf_range_selection(float currentFrequency) {
     int option = 0;
     options = {
         {String("Fixed [" + String(bruceConfigPins.rfFreq) + "]").c_str(),
-         [=]() { bruceConfigPins.setRfFreq(bruceConfigPins.rfFreq, 2); }                                               },
+         [=]() { bruceConfigPins.setRfFreq(bruceConfigPins.rfFreq, 1); }                                               },
         {String("Choose Fixed").c_str(),                                   [&]() { option = 1; }                       },
         {subghz_frequency_ranges[0],                                       [=]() { bruceConfigPins.setRfScanRange(0); }},
         {subghz_frequency_ranges[1],                                       [=]() { bruceConfigPins.setRfScanRange(1); }},
@@ -596,7 +599,7 @@ void rf_range_selection(float currentFrequency) {
         for (int i = 0; i < arraySize; i++) {
             String tmp = String(subghz_frequency_list[i], 2) + "Mhz";
             options.push_back({tmp.c_str(), [=]() {
-                                   bruceConfigPins.setRfFreq(subghz_frequency_list[i], 2);
+                                   bruceConfigPins.setRfFreq(subghz_frequency_list[i], 1);
                                }});
             if (int(currentFrequency * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
         }
