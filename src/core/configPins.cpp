@@ -203,12 +203,12 @@ void BruceConfigPins::fromJson(JsonObject obj) {
         log_e("Fail");
     }
 #endif
-    // if (!root["sys_i2c"].isNull()) {
-    //     sys_i2c.fromJson(root["sys_i2c"].as<JsonObject>());
-    // } else {
-    //     count++;
-    //     log_e("Fail");
-    // }
+    if (!root["sys_i2c"].isNull()) {
+        sys_i2c.fromJson(root["sys_i2c"].as<JsonObject>());
+    } else {
+        count++;
+        log_e("Fail");
+    }
     if (!root["i2c_bus"].isNull()) {
         i2c_bus.fromJson(root["i2c_bus"].as<JsonObject>());
     } else {
@@ -271,8 +271,8 @@ void BruceConfigPins::toJson(JsonObject obj) const {
     JsonObject _ST25R = root["ST25R_Pins"].to<JsonObject>();
     ST25R_bus.toJson(_ST25R);
 #endif
-    // JsonObject _si2c = root["sys_i2c"].as<JsonObject>();
-    // sys_i2c.toJson(_si2c);
+    JsonObject _si2c = root["sys_i2c"].as<JsonObject>();
+    sys_i2c.toJson(_si2c);
     JsonObject _di2c = root["i2c_bus"].to<JsonObject>();
     i2c_bus.toJson(_di2c);
     JsonObject _uart = root["uart_bus"].to<JsonObject>();
@@ -390,6 +390,7 @@ void BruceConfigPins::validateConfig() {
     validateSpiPins(NRF24_bus);
     validateSpiPins(PN532_bus);
     validateSpiPins(SDCARD_bus);
+    validateI2CPins(sys_i2c);
     validateI2CPins(i2c_bus);
     validateUARTPins(uart_bus);
     validateUARTPins(gps_bus);

@@ -126,6 +126,9 @@ void _post_setup_gpio() {
         Keyboard.begin();
         return;
     }
+    bruceConfigPins.sys_i2c.sda = (gpio_num_t)8;
+    bruceConfigPins.sys_i2c.scl = (gpio_num_t)9;
+
     bruceConfigPins.gps_bus.rx = (gpio_num_t)15;
     bruceConfigPins.gps_bus.tx = (gpio_num_t)13;
     bruceConfigPins.gpsBaudrate = 115200;
