@@ -7,6 +7,7 @@
  */
 
 #include "tag_o_matic.h"
+#include "core/bus_HAL.h"
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "esp_task_wdt.h" //Include for Headless mode (long write trigger watchdog in JS)
@@ -40,6 +41,7 @@ TagOMatic::~TagOMatic() {
         _scanned_tags.clear();
     }
     delete _rfid; // Deallocate memory for _rfid object
+    releaseI2CBus();
 }
 
 void TagOMatic::set_rfid_module() {

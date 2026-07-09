@@ -1,3 +1,4 @@
+#include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <M5Unified.h>
@@ -57,6 +58,7 @@ void IRAM_ATTR isr_dw_btn() {
 void _setup_gpio() {
     M5.begin();
     Wire1.begin(47, 48);
+    setSysI2CBus(M5.In_I2C.getPort() == I2C_NUM_1 ? &Wire1 : &Wire);
 
     pinMode(SEL_BTN, INPUT);
     pinMode(DW_BTN, INPUT);

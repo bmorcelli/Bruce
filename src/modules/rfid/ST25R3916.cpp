@@ -7,6 +7,7 @@
 // Card emulation/listen mode is not wired in this driver yet.
 // ISO15693 writes are not implemented.
 
+#include "core/bus_HAL.h"
 #include "core/sd_functions.h"
 #include "modules/rfid/apdu.h"
 #include <esp_random.h>
@@ -253,8 +254,8 @@ bool ST25R3916::_initSPI() {
 }
 
 bool ST25R3916::_initI2C() {
-    Wire.begin(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
-    _hw = new RfalRfST25R3916Class(&Wire, GPIO_NUM_NC);
+    TwoWire *Wire = acquireI2CBus();
+    _hw = new RfalRfST25R3916Class(Wire, GPIO_NUM_NC);
     return _hw != nullptr;
 }
 

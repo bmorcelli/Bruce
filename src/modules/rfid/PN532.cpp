@@ -8,6 +8,7 @@
 
 #include "PN532.h"
 #include "apdu.h"
+#include "core/bus_HAL.h"
 #include "core/display.h"
 #include "core/i2c_finder.h"
 #include "core/sd_functions.h"
@@ -269,20 +270,29 @@ PN532::PN532(CONNECTION_TYPE connection_type) {
 }
 
 bool PN532::begin() {
+    TwoWire *Wire = nullptr;
 #ifdef M5STICK
     if (_connection_type == CONNECTION_TYPE::I2C_SPI) {
-        Wire.begin(GPIO_NUM_26, GPIO_NUM_25);
+        Wire = acquireI2CBus(GPIO_NUM_26, GPIO_NUM_25);
     } else if (_connection_type == CONNECTION_TYPE::I2C) {
-        Wire.begin(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
+        Wire = acquireI2CBus();
     }
 #else
-    Wire.begin(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
+    Wire = acquireI2CBus();
 #endif
 
+    if (_use_i2c && Wire != &::Wire) {
+        // The vendored Adafruit_PN532/Adafruit_I2CDevice libs always talk to the default global
+        // `Wire` object and have no way to be pointed at another TwoWire instance. If bus_HAL had
+        // to remap i2c_bus to Wire1 to avoid colliding with sys_i2c, PN532 can't work here.
+        displayError("I2C bus conflicts with system I2C bus", true);
+        return false;
+    }
+
     bool i2c_check = true;
-    if (_use_i2c) {
-        Wire.beginTransmission(PN532_I2C_ADDRESS);
-        int error = Wire.endTransmission();
+    if (_use_i2c && Wire != nullptr) {
+        Wire->beginTransmission(PN532_I2C_ADDRESS);
+        int error = Wire->endTransmission();
         i2c_check = (error == 0);
     }
 
@@ -431,8 +441,9 @@ int PN532::emulate() {
 
     if (_use_i2c) {
         // PN532 target mode is sensitive to ESP32 I2C timing/clock stretching.
-        Wire.setClock(100000);
-        Wire.setTimeOut(50);
+        TwoWire *Wire = acquireI2CBus();
+        Wire->setClock(100000);
+        Wire->setTimeOut(50);
     }
     // `begin()` already wakes and SAMConfig's the PN532. Avoid reusing Adafruit's I2C RDY polling path here.
 

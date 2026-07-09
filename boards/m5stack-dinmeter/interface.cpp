@@ -1,3 +1,4 @@
+#include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include <M5Unified.h>
 #include <interface.h>
@@ -14,6 +15,7 @@ IRAM_ATTR void checkPosition() { encoder->tick(); }
 ***************************************************************************************/
 void _setup_gpio() {
     M5.begin();
+    setSysI2CBus(M5.In_I2C.getPort() == I2C_NUM_1 ? &Wire1 : &Wire);
     bruceConfig.colorInverted = 0;
     pinMode(ENCODER_KEY, INPUT);
     encoder = new RotaryEncoder(ENCODER_INA, ENCODER_INB, RotaryEncoder::LatchMode::TWO03);

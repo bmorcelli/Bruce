@@ -203,12 +203,14 @@ void BruceConfigPins::fromJson(JsonObject obj) {
         log_e("Fail");
     }
 #endif
-    if (!root["sys_i2c"].isNull()) {
-        sys_i2c.fromJson(root["sys_i2c"].as<JsonObject>());
-    } else {
-        count++;
-        log_e("Fail");
-    }
+    // DO NOT UPDATE THESE VALIES, THEY ARE USED INTERNALLY BY THE SYSTEM,
+    // THEY NEVER CHANGE EXCEPT FOR CARDPUTER/CARDPUTER ADV environment
+    // if (!root["sys_i2c"].isNull()) {
+    //     sys_i2c.fromJson(root["sys_i2c"].as<JsonObject>());
+    // } else {
+    //     count++;
+    //     log_e("Fail");
+    // }
     if (!root["i2c_bus"].isNull()) {
         i2c_bus.fromJson(root["i2c_bus"].as<JsonObject>());
     } else {
