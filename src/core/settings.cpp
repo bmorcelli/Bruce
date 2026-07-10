@@ -693,7 +693,7 @@ void setRFModuleMenu() {
         if (initRfModule()) {
             bruceConfigPins.setRfModule(CC1101_SPI_MODULE);
             deinitRfModule();
-            if (pins_setup == 1) CC_NRF_SPI.end();
+            if (pins_setup == 1) AUX_SPI.end();
             return;
         }
         // else display an error

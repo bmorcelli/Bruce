@@ -1,3 +1,4 @@
+#include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <Wire.h>
@@ -170,11 +171,15 @@ void _setup_gpio() {
 
     pinMode(LORA_RST, OUTPUT);
     digitalWrite(LORA_RST, HIGH);
-    Wire.begin(GROVE_SDA, GROVE_SCL);
+    setSysI2CBus(&Wire); // PMU/keyboard/RTC/codec all live on the default Wire object
+#if defined(HAS_RTC)
+    _rtc.setWire(getSysI2CBus());
+#endif
+    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
 
     // Power management
     bool pmu_ret = false;
-    pmu_ret = PPM.init(Wire, GROVE_SDA, GROVE_SCL, BQ25896_SLAVE_ADDRESS);
+    pmu_ret = PPM.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, BQ25896_SLAVE_ADDRESS);
     if (pmu_ret) {
         // https://github.com/Xinyuan-LilyGO/LilyGoLib/blob/a64fc6ca94757baa5401ad71b39fb7f92cd1a7e9/src/LilyGo_LoRa_Pager.cpp#L442-L452
         PPM.resetDefault();

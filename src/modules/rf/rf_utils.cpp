@@ -1,4 +1,5 @@
 #include "rf_utils.h"
+#include "core/bus_HAL.h"
 #include "core/sd_functions.h"
 #include "core/settings.h"
 
@@ -238,41 +239,15 @@ bool initRfModule(String mode, float frequency) {
     if (!frequency) frequency = bruceConfigPins.rfFreq;
 
     if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) { // CC1101 in use
-        if (bruceConfigPins.CC1101_bus.mosi == (gpio_num_t)TFT_MOSI &&
-            bruceConfigPins.CC1101_bus.mosi != GPIO_NUM_NC) { // (T_EMBED), CORE2 and others
-#if TFT_MOSI > 0
-            initCC1101once(&tft.getSPIinstance());
-#else
-            yield();
-#endif
-        } else if (bruceConfigPins.CC1101_bus.mosi == bruceConfigPins.SDCARD_bus.mosi) { // (CARDPUTER) and
-                                                                                         // (ESP32S3DEVKITC1)
-                                                                                         // and devices that
-                                                                                         // share CC1101 pin
-                                                                                         // with only SDCard
-            initCC1101once(&sdcardSPI);
-        } else if (
-            bruceConfigPins.NRF24_bus.mosi == bruceConfigPins.CC1101_bus.mosi &&
-            bruceConfigPins.CC1101_bus.mosi != bruceConfigPins.SDCARD_bus.mosi
-        ) { // This board uses the same Bus for NRF and CC1101, but with
-            // different CS pins, different from Stick_Cs down below..
-
-            CC_NRF_SPI.end(); // Closes in case it was already in use, it will overwrite the attempt
-                              // of SD start over to save configurations
-            delay(10);
-            if (!CC_NRF_SPI.begin(
-                    bruceConfigPins.CC1101_bus.sck,
-                    bruceConfigPins.CC1101_bus.miso,
-                    bruceConfigPins.CC1101_bus.mosi
-                )) {
-                Serial.println("Failed to start CC1101 SPI on NRF24 pins!");
-            }
-
-            initCC1101once(&CC_NRF_SPI);
+        SPIClass *ccSpi = acquireSPIBus(
+            bruceConfigPins.CC1101_bus.sck, bruceConfigPins.CC1101_bus.miso, bruceConfigPins.CC1101_bus.mosi
+        );
+        if (ccSpi) {
+            ELECHOUSE_cc1101.setBeginEndLogic(false);
+            initCC1101once(ccSpi);
         } else {
-            // (STICK_C_PLUS) || (STICK_C_PLUS2) and others that doesn´t share SPI with other devices (need to
-            // change it when Bruce board comes to shore)
-            // make sure to use BeginEndLogic for StickCs in the shared pins (not bus) config
+            // No hardware SPI controller left for these pins (or the display has no SPI bus at
+            // all): let the driver manage the default SPI object itself around each transaction.
             ELECHOUSE_cc1101.setBeginEndLogic(true);
             initCC1101once(NULL);
         }

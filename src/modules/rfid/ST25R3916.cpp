@@ -224,28 +224,12 @@ bool ST25R3916::_initSPI() {
         (int)bruceConfigPins.ST25R_bus.sck
     );
 
-    if (bruceConfigPins.ST25R_bus.mosi == (gpio_num_t)TFT_MOSI &&
-        bruceConfigPins.ST25R_bus.mosi != GPIO_NUM_NC) {
-#if TFT_MOSI >= 0
-        ST25R_LOG("_initSPI: sharing TFT SPI");
-        _spi = &tft.getSPIinstance();
-#endif
-    } else if (bruceConfigPins.ST25R_bus.mosi == bruceConfigPins.SDCARD_bus.mosi) {
-        ST25R_LOG("_initSPI: sharing SDCARD SPI");
-        _spi = &sdcardSPI;
-    } else {
-        ST25R_LOG("_initSPI: creating dedicated HSPI");
-        static SPIClass st25rSPI(HSPI);
-        static bool spiStarted = false;
-        if (!spiStarted) {
-            st25rSPI.begin(
-                (int)bruceConfigPins.ST25R_bus.sck,
-                (int)bruceConfigPins.ST25R_bus.miso,
-                (int)bruceConfigPins.ST25R_bus.mosi
-            );
-            spiStarted = true;
-        }
-        _spi = &st25rSPI;
+    _spi = acquireSPIBus(
+        bruceConfigPins.ST25R_bus.sck, bruceConfigPins.ST25R_bus.miso, bruceConfigPins.ST25R_bus.mosi
+    );
+    if (!_spi) {
+        ST25R_LOG("_initSPI: no hardware SPI bus available for these pins");
+        return false;
     }
 
     _hw = new RfalRfST25R3916Class(_spi, cs, irq);

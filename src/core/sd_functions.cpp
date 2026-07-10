@@ -1,4 +1,5 @@
 #include "sd_functions.h"
+#include "bus_HAL.h"
 #include "display.h" // using displayRedStripe as error msg
 #include "modules/badusb_ble/ducky_typer.h"
 #include "modules/bjs_interpreter/interpreter.h"
@@ -72,45 +73,43 @@ bool setupSdCard(uint8_t maxFiles) {
     if (task) {
         if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs, SPI, 4000000UL, "/sd", maxFiles)) result = false;
         // Serial.println("Task not activated");
-    }
-    // SDCard in the same Bus as TFT, in this case we call the SPI TFT Instance
-    else if (
-        bruceConfigPins.SDCARD_bus.mosi == (gpio_num_t)TFT_MOSI &&
-        bruceConfigPins.SDCARD_bus.mosi != GPIO_NUM_NC
-    ) {
-        Serial.println("SDCard in the same Bus as TFT, using TFT SPI instance");
-#if TFT_MOSI > 0 // condition for Headless and 8bit displays (no SPI bus)
-        if (!SD.begin(bruceConfigPins.SDCARD_bus.cs, tft.getSPIinstance(), 4000000UL, "/sd", maxFiles)) {
-            result = false;
-            Serial.println("SDCard in the same Bus as TFT, but failed to mount");
-        }
-#else
-        goto NEXT; // destination for Headless and 8bit displays (no SPI bus)
-#endif
-
-    }
-    // If not using TFT Bus, use a specific bus
-    else {
-    NEXT:
-        if (!sdcardSPI.begin(
-                (int8_t)bruceConfigPins.SDCARD_bus.sck,
-                (int8_t)bruceConfigPins.SDCARD_bus.miso,
-                (int8_t)bruceConfigPins.SDCARD_bus.mosi,
-                (int8_t)bruceConfigPins.SDCARD_bus.cs
-            )) {
-            Serial.println("Failed starting SPI Bus");
-        } // start SPI communications
-        delay(20);
-        if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs, sdcardSPI, 4000000UL, "/sd", maxFiles)) {
-            result = false;
-            Serial.println("SDCard in a different Bus, sdcardSPI failed to mount");
+    } else {
+        // acquireSPIBus() never begin()s the display's bus (it's already running), so a non-null,
+        // non-sdcardSPI result means these pins are physically the display's own bus. Reusing the
+        // pointer it returns (instead of calling tft.getSPIinstance() here) also keeps this file
+        // buildable on boards with a non-SPI (e.g. parallel) display, where that accessor doesn't
+        // exist at all.
+        SPIClass *bus = acquireSPIBus(
+            bruceConfigPins.SDCARD_bus.sck, bruceConfigPins.SDCARD_bus.miso, bruceConfigPins.SDCARD_bus.mosi
+        );
+        if (bus != nullptr && bus != &sdcardSPI) {
+            Serial.println("SDCard in the same Bus as TFT, using TFT SPI instance");
+            if (!SD.begin(bruceConfigPins.SDCARD_bus.cs, *bus, 4000000UL, "/sd", maxFiles)) {
+                result = false;
+                Serial.println("SDCard in the same Bus as TFT, but failed to mount");
+            }
+        } else {
+            // SDCard on a dedicated bus: it's the anchor/owner of sdcardSPI, so start it here.
+            if (!sdcardSPI.begin(
+                    (int8_t)bruceConfigPins.SDCARD_bus.sck,
+                    (int8_t)bruceConfigPins.SDCARD_bus.miso,
+                    (int8_t)bruceConfigPins.SDCARD_bus.mosi,
+                    (int8_t)bruceConfigPins.SDCARD_bus.cs
+                )) {
+                Serial.println("Failed starting SPI Bus");
+            } // start SPI communications
+            delay(20);
+            if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs, sdcardSPI, 4000000UL, "/sd", maxFiles)) {
+                result = false;
+                Serial.println("SDCard in a different Bus, sdcardSPI failed to mount");
 #if defined(ARDUINO_M5STICK_C_PLUS) || defined(ARDUINO_M5STICK_C_PLUS2)
-            // If using Shared SPI, do not stop the bus if SDCard is not present
-            // If using Legacy, release the pins from this SPI Bus
-            if (bruceConfigPins.SDCARD_bus.miso != bruceConfigPins.CC1101_bus.miso) sdcardSPI.end();
+                // If using Shared SPI, do not stop the bus if SDCard is not present
+                // If using Legacy, release the pins from this SPI Bus
+                if (bruceConfigPins.SDCARD_bus.miso != bruceConfigPins.CC1101_bus.miso) sdcardSPI.end();
 #endif
+            }
+            Serial.println("SDCard in a different Bus, using sdcardSPI instance");
         }
-        Serial.println("SDCard in a different Bus, using sdcardSPI instance");
     }
 #endif
 

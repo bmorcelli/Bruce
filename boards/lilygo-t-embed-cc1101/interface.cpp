@@ -1,3 +1,4 @@
+#include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include <bq27220.h>
 #include <globals.h>
@@ -63,8 +64,9 @@ void _setup_gpio() {
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH); // Power on CC1101 and LED
     bool pmu_ret = false;
-    Wire.begin(GROVE_SDA, GROVE_SCL);
-    pmu_ret = PPM.init(Wire, GROVE_SDA, GROVE_SCL, BQ25896_SLAVE_ADDRESS);
+    setSysI2CBus(&Wire); // PPM/bq27220 live on the default Wire object (GROVE == sys_i2c on this variant)
+    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
+    pmu_ret = PPM.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, BQ25896_SLAVE_ADDRESS);
     if (pmu_ret) {
         // https://github.com/Xinyuan-LilyGO/T-Embed-CC1101/blob/3e6df69af51befdbd5c96761aca28b9a784413eb/examples/factory_test/factory_test.ino#L399-L425
 
@@ -79,7 +81,7 @@ void _setup_gpio() {
     bruceConfigPins.irRx = 1;
     bruceConfigPins.irTx = 2;
 #else
-    Wire.begin(GROVE_SDA, GROVE_SCL);
+    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
     Wire.beginTransmission(0x40);
     if (Wire.endTransmission() == 0) {
         Serial.println("ES7210 Online, No CC1101 version");
@@ -205,7 +207,7 @@ void powerOff() {
 void powerDownNFC() {
     Adafruit_PN532 nfc = Adafruit_PN532(17, 45);
     bool i2c_check = check_i2c_address(PN532_I2C_ADDRESS);
-    nfc.setInterface(GROVE_SDA, GROVE_SCL);
+    nfc.setInterface(SYS_I2C_SDA, SYS_I2C_SCL);
     nfc.begin();
     uint32_t versiondata = nfc.getFirmwareVersion();
     if (i2c_check || versiondata) {

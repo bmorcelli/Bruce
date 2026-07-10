@@ -10,6 +10,7 @@
  * from ever colliding with, or shutting down, the sys_i2c bus.
  */
 
+#include <SPI.h>
 #include <Wire.h>
 
 // Tells the HAL which TwoWire instance is physically wired to bruceConfigPins.sys_i2c.
@@ -30,3 +31,23 @@ TwoWire *acquireI2CBus();
 // Ends the i2c_bus TwoWire instance started by acquireI2CBus(), unless it turned out to be the
 // same physical bus as sys_i2c (which must stay on).
 void releaseI2CBus();
+
+/*
+ * SPI bus arbitration.
+ *
+ * The ESP32 family only has two general-purpose hardware SPI controllers available at runtime.
+ * One is permanently owned by the display (and, when physically wired to the same pins, the SD
+ * card too) — both are alive for the entire program lifetime, so they always win. The other is a
+ * single auxiliary hardware bus, reused one owner at a time by whichever peripheral
+ * (CC1101/NRF24/LoRa/W5500/ST25R3916/...) is actively in use.
+ *
+ * A peripheral wired to a third, genuinely distinct set of pins has no hardware controller left:
+ * acquireSPIBus() returns nullptr and the caller must fall back to its own software/bit-banged
+ * SPI path (if the underlying driver supports one) or fail outright.
+ */
+
+// Picks the SPIClass instance that should be used for a peripheral wired to the given pins,
+// following priority Display > SDCard > shared auxiliary bus (starting/restarting the auxiliary
+// bus only when the requested pins differ from whoever last used it). Returns nullptr if sck,
+// miso or mosi is unset, or if the pins matched the display's bus but the board is headless.
+SPIClass *acquireSPIBus(gpio_num_t sck, gpio_num_t miso, gpio_num_t mosi);
