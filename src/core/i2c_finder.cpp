@@ -33,6 +33,7 @@ void find_i2c_addresses() {
             returnToMenu = true;
             break;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
     releaseI2CBus();
 }

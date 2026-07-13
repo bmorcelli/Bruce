@@ -97,6 +97,7 @@ void TagOMatic::loop() {
             case ERASE_MODE: erase_card(); break;
             case SAVE_MODE: save_file(); break;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

@@ -64,6 +64,7 @@ void selectRecentIrMenu() {
             selected_code = NULL;
         }
         if (check(EscPress) || exit) break;
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
     options.clear();
 
@@ -193,7 +194,7 @@ bool txIrFile(FS *fs, const String &filepath, bool hideDefaultUI) {
         // if user is pushing (holding down) TRIGGER button, stop transmission early
         if (check(SelPress)) // Pause TV-B-Gone
         {
-            while (check(SelPress)) yield();
+            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
             if (!hideDefaultUI) { displayTextLine("Paused"); }
 
             while (!check(SelPress)) { // If Presses Select again, continues
@@ -201,8 +202,9 @@ bool txIrFile(FS *fs, const String &filepath, bool hideDefaultUI) {
                     endingEarly = true;
                     break;
                 }
+                vTaskDelay(pdMS_TO_TICKS(1));
             }
-            while (check(SelPress)) { yield(); }
+            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
             if (endingEarly) break; // Cancels  custom IR Spam
             if (!hideDefaultUI) { displayTextLine("Running, Wait"); }
         }

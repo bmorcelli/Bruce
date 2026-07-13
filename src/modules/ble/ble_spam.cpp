@@ -859,6 +859,7 @@ static int bleSpamListLoop(
         } else if (check(SelPress)) {
             return state.cursor;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -1709,6 +1710,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
                 redrawRows = true;
             }
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -1822,6 +1824,7 @@ static bool bleSpamStoppedPrompt(const BleSpamSelection &selection, uint32_t sen
         } else if (check(SelPress)) {
             return (cursor == 0);
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -1961,7 +1964,7 @@ static void bleSpamRunScreen(const BleSpamSelection &selection, BleSpamConfig &c
             statsDirty = false;
             configDirty = false;
             blinkDirty = false;
-            yield();
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
         bleSpamDeinitAdvertiser();
@@ -2003,6 +2006,7 @@ static int bleSpamTwoOptionPrompt(const String &title, const char *opt0, const c
             cursor = (cursor + 1) % 2;
             redraw = true;
         } else if (check(SelPress)) return cursor;
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

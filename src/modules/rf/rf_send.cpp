@@ -193,6 +193,7 @@ void loopEmulate(RfCodes &data) {
                 display_info(data);
             }
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

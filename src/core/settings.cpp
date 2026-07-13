@@ -171,6 +171,7 @@ void setSleepMode() {
             returnToMenu = true;
             break;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

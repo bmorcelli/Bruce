@@ -1075,6 +1075,7 @@ void responder() {
             smbState.active = false;
             Serial.println(F("Client SMB disconnected."));
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 
     // waitAndReturnToMenu("Return to menu");

@@ -513,6 +513,7 @@ bool playAudioFile(FS *fs, String filepath, PlaybackMode mode) {
 
         while (generator->isRunning()) {
             if (!generator->loop() || check(AnyKeyPress)) { generator->stop(); }
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
         audioout->stop();
@@ -581,6 +582,7 @@ bool playAudioRTTTLString(String song, PlaybackMode mode) {
 
         while (generator->isRunning()) {
             if (!generator->loop() || check(AnyKeyPress)) { generator->stop(); }
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
         audioout->stop();
@@ -716,6 +718,7 @@ void playTone(unsigned int frequency, unsigned long duration, short waveType) {
 
     while (wav->isRunning()) {
         if (!wav->loop() || check(AnyKeyPress)) { wav->stop(); }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 
     delete file;

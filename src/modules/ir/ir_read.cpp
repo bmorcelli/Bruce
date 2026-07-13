@@ -170,6 +170,7 @@ void IrRead::loop() {
             if (check(PrevPress)) discard_signal();
             read_signal();
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

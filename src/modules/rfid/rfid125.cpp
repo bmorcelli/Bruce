@@ -82,6 +82,7 @@ void RFID125::loop() {
             //     break;
             case SAVE_MODE: save_file(); break;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 

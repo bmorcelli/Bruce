@@ -527,7 +527,7 @@ void ducky_setup(HIDInterface *&hid, bool ble) {
                 delay(2000); // Time to Computer or device recognize the USB HID
             } else {
                 printStatusBadUSBBLE("Waiting Victim");
-                while (!hid->isConnected() && !check(EscPress));
+                while (!hid->isConnected() && !check(EscPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
                 if (hid->isConnected()) {
                     BLEConnected = true;
                     printStatusBadUSBBLE("Preparing BLE");
@@ -784,7 +784,7 @@ void ducky_keyboard(HIDInterface *&hid, bool ble) {
 
     if (ble) {
         displayTextLine("Waiting Victim");
-        while (!hid->isConnected() && !check(EscPress));
+        while (!hid->isConnected() && !check(EscPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
         if (hid->isConnected()) {
             BLEConnected = true;
         } else {
@@ -1168,7 +1168,9 @@ bool waitForButtonPress() {
 // Helper function to handle pause/resume logic during script execution
 // Returns true to continue, false to exit
 bool handlePauseResume() {
-    while (check(SelPress)); // hold the code in this position until release the btn
+    while (check(SelPress)) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+    } // hold the code in this position until release the btn
     printStatusBadUSBBLE("Paused - " + String(BTN_ALIAS) + " to resume");
     if (!waitForButtonPress()) {
         printStatusBadUSBBLE("Canceled");
@@ -1190,7 +1192,7 @@ void PresenterMode(HIDInterface *&hid, bool ble) {
 
     displayTextLine("Pairing...");
 
-    while (!hid->isConnected() && !check(EscPress));
+    while (!hid->isConnected() && !check(EscPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
 
     if (!hid->isConnected()) {
         displayWarning("Canceled", true);

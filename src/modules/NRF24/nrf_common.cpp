@@ -24,7 +24,7 @@ void nrf_info() {
         "things go wrong."
     );
     delay(1000);
-    while (!check(AnyKeyPress));
+    while (!check(AnyKeyPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
 }
 
 bool nrf_start(NRF24_MODE mode) {

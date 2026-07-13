@@ -739,7 +739,9 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                         {"Close Menu", [&]() { yield(); }                                                  },
                         {"Main Menu",  [&]() { exit = true; }                                              },
                     };
-                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
+                    while (check(SelPress)) {
+                        vTaskDelay(pdMS_TO_TICKS(1));
+                    } // wait for SEL release to avoid repeated activations
                     loopOptions(options);
                     tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
                     reload = true;
@@ -753,7 +755,9 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                     if (fileToCopy != "") options.push_back({"Paste", [=]() { pasteFile(fs, Folder); }});
                     options.push_back({"Close Menu", [&]() { yield(); }});
                     options.push_back({"Main Menu", [&]() { exit = true; }});
-                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
+                    while (check(SelPress)) {
+                        vTaskDelay(pdMS_TO_TICKS(1));
+                    } // wait for SEL release to avoid repeated activations
                     loopOptions(options);
                     tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
                     reload = true;
@@ -766,7 +770,9 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                              fileList[index].filename; // Folder=="/"? "":"/" +
                     // Debug viewer
                     Serial.println(Folder);
-                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
+                    while (check(SelPress)) {
+                        vTaskDelay(pdMS_TO_TICKS(1));
+                    } // wait for SEL release to avoid repeated activations
                     redraw = true;
                 } else if (fileList[index].folder == false && fileList[index].operation == false) {
                     // Save the file/folder info to Clear memory to allow other functions to work better
@@ -923,7 +929,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                     options.push_back({"Main Menu", [&]() { exit = true; }});
                     if (!filePicker) {
                         while (check(SelPress)) {
-                            yield();
+                            vTaskDelay(pdMS_TO_TICKS(1));
                         } // wait for SEL release to avoid repeated activations
                         loopOptions(options);
                     } else {

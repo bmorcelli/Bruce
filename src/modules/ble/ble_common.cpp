@@ -77,7 +77,7 @@ void ble_info(const String &name, const String &address, const String &signal) {
 
     delay(300);
     while (!check(SelPress)) {
-        while (!check(SelPress)) { yield(); } // timerless debounce
+        while (!check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); } // timerless debounce
         returnToMenu = true;
         break;
     }
@@ -333,6 +333,7 @@ void disPlayBLESend() {
             }
             wasConnected = false;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 
     tft.setTextColor(TFT_WHITE);

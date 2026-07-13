@@ -342,6 +342,7 @@ void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
             ESP_ERROR_CHECK(rmt_receive(rx_ch, item, sizeof(item), &receive_config));
             rx_size = 0;
         }
+        vTaskDelay(pdMS_TO_TICKS(1));
 
         // Periodically update RSSI
         rf_raw_record_update_status(status, fakeRssiPresent, rssiFeature);
@@ -405,6 +406,7 @@ void rf_raw_record() {
 
         if (returnToMenu || check(EscPress)) return;
         option = rf_raw_record_options(saved);
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
     for (auto &code : recorded.codes) free(code);
     recorded.codes.clear();
