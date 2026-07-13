@@ -1620,7 +1620,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
         if (redrawRows) {
             int rowH = max(12, FP * LH + 4);
             int rowStart = BORDER_PAD_Y + FM * LH + 10;
-            int startRowY = rowStart + rowH * 4 + (tftHeight > 135) ? rowH : 0;
+            int startRowY = rowStart + rowH * 4 + ((tftHeight > 135) ? rowH : 0);
 
             bleSpamRenderConfigRows(config, cursor, editState, rowStart, rowH);
 
@@ -1678,7 +1678,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
                     config.gap_ms = bleSpamAdjustMs(config.gap_ms, 1);
                     configChanged = true;
                 } else if (editState.edit_row == 2) {
-                    config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 1) % 4);
+                    config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 3) % 4);
                     configChanged = true;
                 } else if (editState.edit_row == 3) {
                     config.mac_rand_mode = static_cast<BleSpamMacRandMode>((config.mac_rand_mode + 1) % 8);
@@ -1693,7 +1693,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
                     config.gap_ms = bleSpamAdjustMs(config.gap_ms, -1);
                     configChanged = true;
                 } else if (editState.edit_row == 2) {
-                    config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 3) % 4);
+                    config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 1) % 4);
                     configChanged = true;
                 } else if (editState.edit_row == 3) {
                     config.mac_rand_mode = static_cast<BleSpamMacRandMode>((config.mac_rand_mode + 7) % 8);
@@ -1915,7 +1915,7 @@ static void bleSpamRunScreen(const BleSpamSelection &selection, BleSpamConfig &c
                     } else if (editState.edit_row == 1) {
                         config.gap_ms = bleSpamAdjustMs(config.gap_ms, 1);
                     } else if (editState.edit_row == 2) {
-                        config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 1) % 4);
+                        config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 3) % 4);
                     } else if (editState.edit_row == 3) {
                         config.mac_rand_mode =
                             static_cast<BleSpamMacRandMode>((config.mac_rand_mode + 1) % 8);
@@ -1928,7 +1928,7 @@ static void bleSpamRunScreen(const BleSpamSelection &selection, BleSpamConfig &c
                     } else if (editState.edit_row == 1) {
                         config.gap_ms = bleSpamAdjustMs(config.gap_ms, -1);
                     } else if (editState.edit_row == 2) {
-                        config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 3) % 4);
+                        config.tx_power = static_cast<BleSpamTxPower>((config.tx_power + 1) % 4);
                     } else if (editState.edit_row == 3) {
                         config.mac_rand_mode =
                             static_cast<BleSpamMacRandMode>((config.mac_rand_mode + 7) % 8);
