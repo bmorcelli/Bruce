@@ -51,7 +51,6 @@ void displayScrollingText(const String &text, Opt_Coord &coord) {
             bruceConfig.bgColor
         ); // Clear display area
         tft.setCursor(coord.x, coord.y);
-        tft.setCursor(coord.x, coord.y);
         tft.print(scrollingPart);
         if (i >= scrollLen - coord.size) i = -1; // Loop back
         _lastmillis = millis();
@@ -129,8 +128,40 @@ bool wakeUpScreen() {
 }
 
 /***************************************************************************************
+** Function name: wrapText
+** Description:   Wrap text to fit within a maximum width, returning vector of lines
+***************************************************************************************/
+std::vector<String> wrapText(const String& text, int maxCharsPerLine) {
+    std::vector<String> lines;
+    if (maxCharsPerLine <= 0) return lines;
+    
+    String remaining = text;
+    while (remaining.length() > 0) {
+        if (remaining.length() <= maxCharsPerLine) {
+            lines.push_back(remaining);
+            break;
+        }
+        // Find last space within maxCharsPerLine
+        int splitPos = -1;
+        for (int i = maxCharsPerLine - 1; i >= 0; i--) {
+            if (remaining[i] == ' ' || remaining[i] == '-' || remaining[i] == '_') {
+                splitPos = i;
+                break;
+            }
+        }
+        if (splitPos <= 0) {
+            // No word boundary found, force split at max
+            splitPos = maxCharsPerLine;
+        }
+        lines.push_back(remaining.substring(0, splitPos));
+        remaining = remaining.substring(splitPos + 1);
+    }
+    return lines;
+}
+
+/***************************************************************************************
 ** Function name: displayRedStripe
-** Description:   Display Red Stripe with information
+** Description:   Display Red Stripe with information (supports multi-line text wrapping)
 ***************************************************************************************/
 void displayRedStripe(const String &text, uint16_t fgcolor, uint16_t bgcolor) {
     // detect if not running in interactive mode -> show nothing onscreen and return immediately
@@ -138,23 +169,40 @@ void displayRedStripe(const String &text, uint16_t fgcolor, uint16_t bgcolor) {
 
     int size;
     if (fgcolor == bgcolor && fgcolor == TFT_WHITE) fgcolor = TFT_BLACK;
-    if (text.length() * LW * FM < (tftWidth - 2 * FM * LW)) size = FM;
-    else size = FP;
-    tft.drawPixel(0, 0, 0);
-    tft.fillRoundRect(10, tftHeight / 2 - 13, tftWidth - 20, 26, 7, bgcolor);
-    tft.setTextColor(fgcolor, bgcolor);
-    if (size == FM) {
-        tft.setTextSize(FM);
-        tft.drawCentreString(text, tftWidth / 2, tftHeight / 2 - 8);
+    
+    // Calculate max chars per line based on font size
+    int maxCharsFM = (tftWidth - 20) / (LW * FM);
+    int maxCharsFP = (tftWidth - 20) / (LW * FP);
+    
+    // Determine if we need to wrap the text
+    std::vector<String> wrappedLines;
+    int boxHeight = 26;  // Default height for single line
+    
+    if (text.length() * LW * FM < (tftWidth - 2 * FM * LW)) {
+        // Text fits with FM font
+        size = FM;
+        wrappedLines = wrapText(text, maxCharsFM);
     } else {
-        tft.setTextSize(FP);
-        int text_size = text.length();
-        if (text_size < (tftWidth - 20) / (LW * FP))
-            tft.drawCentreString(text, tftWidth / 2, tftHeight / 2 - 8);
-        else {
-            tft.drawCentreString(text.substring(0, text_size / 2), tftWidth / 2, tftHeight / 2 - 9);
-            tft.drawCentreString(text.substring(text_size / 2), tftWidth / 2, tftHeight / 2 + 1);
-        }
+        // Text needs FP font or larger
+        size = FP;
+        wrappedLines = wrapText(text, maxCharsFP);
+    }
+    
+    // Adjust box height based on number of lines
+    if (wrappedLines.size() > 1) {
+        boxHeight = 13 + (wrappedLines.size() * (size == FM ? 8 : 10));
+    }
+    
+    tft.drawPixel(0, 0, 0);
+    tft.fillRoundRect(10, tftHeight / 2 - boxHeight / 2, tftWidth - 20, boxHeight, 7, bgcolor);
+    tft.setTextColor(fgcolor, bgcolor);
+    tft.setTextSize(size);
+    
+    // Draw each line centered
+    int lineHeight = size == FM ? 8 : 10;
+    int startY = tftHeight / 2 - (wrappedLines.size() * lineHeight) / 2;
+    for (size_t i = 0; i < wrappedLines.size(); i++) {
+        tft.drawCentreString(wrappedLines[i], tftWidth / 2, startY + i * lineHeight);
     }
 }
 
@@ -283,8 +331,8 @@ void displayWarning(const String &txt, bool waitKeyPress) {
     while (waitKeyPress && !check(AnyKeyPress)) vTaskDelay(10 / portTICK_PERIOD_MS);
 }
 
+
 void displayInfo(const String &txt, bool waitKeyPress) {
-    // todo: add newlines to txt if too long
     displayRedStripe(txt, TFT_WHITE, TFT_BLUE);
     Serial.println("INFO: " + txt);
 #ifndef HAS_SCREEN
@@ -296,7 +344,6 @@ void displayInfo(const String &txt, bool waitKeyPress) {
 }
 
 void displaySuccess(const String &txt, bool waitKeyPress) {
-    // todo: add newlines to txt if too long
     displayRedStripe(txt, TFT_WHITE, TFT_DARKGREEN);
     Serial.println("SUCCESS: " + txt);
 #ifndef HAS_SCREEN
@@ -307,7 +354,6 @@ void displaySuccess(const String &txt, bool waitKeyPress) {
 }
 
 void displayTextLine(const String &txt, bool waitKeyPress) {
-    // todo: add newlines to txt if too long
     displayRedStripe(txt, getComplementaryColor2(bruceConfig.priColor), bruceConfig.priColor);
     Serial.println("MESSAGE: " + txt);
 #ifndef HAS_SCREEN
@@ -709,7 +755,6 @@ Opt_Coord drawOptions(
             fgcolor
         );
     }
-
     tft.setTextColor(fgcolor, bgcolor);
     tft.setTextSize(FM);
     tft.setCursor(tftWidth * 0.10 + 5, tftHeight / 2 - menuSize * (FM * 8 + 4) / 2);
@@ -719,8 +764,30 @@ Opt_Coord drawOptions(
     int cont = 1;
     menuSize = options.size();
     if (index >= MAX_MENU_SIZE) init = index - MAX_MENU_SIZE + 1;
+    
+    // Calculate selection highlight position
+    int selectedItemPos = -1;
+    for (int j = 0; j < index; j++) {
+        if (j >= init && cont <= MAX_MENU_SIZE) cont++;
+    }
+    selectedItemPos = cont - 1;
+    cont = 1;
+    
     for (i = 0; i < menuSize; i++) {
         if (i >= init) {
+            // Draw selection highlight bar
+            if (i == index) {
+                int16_t cursorY = tft.getCursorY();
+                tft.fillRoundRect(
+                    tftWidth * 0.10 + 2,
+                    cursorY + 2,
+                    tftWidth * 0.8 - 4,
+                    FM * 8,
+                    3,
+                    bruceConfig.priColor
+                );
+            }
+            
             if (options[i].selected) tft.setTextColor(selcolor, bgcolor); // if selected, change Text color
             else tft.setTextColor(fgcolor, bgcolor);
             if (!options[i].enabled) tft.setTextColor(TFT_DARKGREY, bgcolor);
@@ -736,7 +803,16 @@ Opt_Coord drawOptions(
             } else text += " ";
             text += String(options[i].label) + "              ";
             tft.setCursor(tftWidth * 0.10 + 5, tft.getCursorY() + 4);
+            
+            // Draw text with appropriate colors for selection
+            if (i == index) {
+                tft.setTextColor(bgcolor, bruceConfig.priColor);
+            }
             tft.println(text.substring(0, (tftWidth * 0.8 - 10) / (LW * FM) - 1));
+            
+            // Reset text color for next item
+            tft.setTextColor(fgcolor, bgcolor);
+            
             cont++;
         }
         if (cont > MAX_MENU_SIZE) goto Exit;
