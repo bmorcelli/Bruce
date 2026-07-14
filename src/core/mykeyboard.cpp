@@ -260,13 +260,14 @@ keyStroke _getKeyPress() {
 ** location: mykeyboard.cpp
 ** runs a function called by the shortcut action
 **********************************************************************/
-void checkShortcutPress() {
+bool checkShortcutPress() {
     static JsonDocument shortcutsJson; // parsed only once
+    bool executed = false;
 
     // lazy init
     if (shortcutsJson.size() == 0) {
         FS *fs;
-        if (!getFsStorage(fs)) return;
+        if (!getFsStorage(fs)) return false;
         File file = fs->open("/shortcuts.json", FILE_READ);
         if (!file) {
             log_e("Shortcuts Config file not found. Using default values");
@@ -277,13 +278,13 @@ void checkShortcutPress() {
             shortcuts["b"] = "loader open badusb";
             shortcuts["w"] = "loader open webui";
             shortcuts["f"] = "loader open files";
-            return;
+            return false;
         }
         // else
         if (deserializeJson(shortcutsJson, file)) {
             log_e("Failed to parse shortcuts.json");
             file.close();
-            return;
+            return false;
         }
         file.close();
     }
@@ -300,9 +301,11 @@ void checkShortcutPress() {
             if (i == *shortcut_key) { // compare the 1st char of the key string
                 // execute the associated action
                 serialCli.parse(String(shortcut_value));
+                executed = true;
             }
         }
     }
+    return executed;
 }
 
 /*********************************************************************

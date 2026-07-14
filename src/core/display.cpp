@@ -559,7 +559,7 @@ int loopOptions(
         );
     if (index >= options.size()) index = 0;
     bool firstRender = true;
-    static unsigned long menuOpenTs = 0; // timestamp when menu was first rendered
+    unsigned long menuOpenTs = 0; // timestamp when this menu was first rendered (per-invocation, not shared across nested menus)
     drawMainBorder();
     while (1) {
         // Check for shutdown before drawing menu to avoid drawing a black bar on the screen
@@ -606,7 +606,11 @@ int loopOptions(
 
         // handleSerialCommands(); // always use serial task for it
 #ifdef HAS_KEYBOARD
-        checkShortcutPress(); // shortctus to quickly start apps without navigating the menus
+        // Only process shortcuts on the main menu; the menuType check must short-circuit
+        // checkShortcutPress() so a held key can't re-fire inside the submenu it just opened.
+        // Break so the caller rebuilds the menu, since the shortcut refilled the shared global
+        // `options` (like selecting an option does) rather than repainting stale options.
+        if (menuType == MENU_TYPE_MAIN && checkShortcutPress()) break;
 #endif
 
         if (menuType == MENU_TYPE_REGULAR) {

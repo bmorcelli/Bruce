@@ -27,6 +27,6 @@ keyStroke _getKeyPress(); // This function must be implemented in the interface.
                           // by using the flag HAS_KEYBOARD
 
 // Core functions, depends on the implementation of the funtions above in the interface.h
-void checkShortcutPress();
+bool checkShortcutPress();
 int checkNumberShortcutPress();
 char checkLetterShortcutPress();
