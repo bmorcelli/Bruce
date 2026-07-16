@@ -105,6 +105,10 @@ public:
     virtual int save(const String &filename) = 0;
     virtual int saveFlipper(const String &filename) { return NOT_IMPLEMENTED; }
 
+    // One-line warning shown before emulation starts if the driver can't
+    // fully reproduce the loaded tag. Empty = nothing to warn about.
+    virtual String emulationCaveat() const { return ""; }
+
     // Build `ndefMessage` from a type ("url"/"text") and value. Shared by the
     // serial `rfid ndef` and `rfid emulate t4t` paths so the encoding is
     // identical regardless of entry point.

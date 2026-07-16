@@ -23,6 +23,7 @@ public:
         WRITE_MODE,
         WRITE_NDEF_MODE,
         EMULATE_MODE,
+        EMULATE_NDEF_MODE,
         ERASE_MODE,
         LOAD_MODE,
         SAVE_MODE
@@ -82,6 +83,7 @@ private:
     void select_state();
     void set_state(RFID_State state);
     void delayWithReturn(uint32_t ms);
+    bool ndefEmulationSupported();
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Operations
@@ -95,6 +97,7 @@ private:
     void erase_card();
     void write_data();
     void write_ndef_data();
+    void emulate_ndef_data();
     void save_file();
     void save_scan_result();
     void load_file();
@@ -105,6 +108,10 @@ private:
     void create_ndef_message();
     void create_ndef_url();
     void create_ndef_text();
+    void create_ndef_wifi();
+    void create_ndef_link();
+    void build_ndef_text_payload(const String &text);
+    void build_ndef_url_payload(const String &url);
 };
 
 #endif

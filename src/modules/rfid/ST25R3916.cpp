@@ -390,10 +390,12 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
         return FAILURE;
     }
 
-    // Detect NTAG size from CC page (page 3)
+    // Detect NTAG size from CC page (page 3). Uses _t2tReadPage() (a longer,
+    // configurable timeout) instead of rfalT2TPollerRead() directly - see
+    // kT2tPostActivationTimeoutMs comment above _getNtagVariant().
     uint8_t ccBuf[16] = {0};
     uint16_t rcvLen = 0;
-    auto ccErr = _nfc->rfalT2TPollerRead(3, ccBuf, sizeof(ccBuf), &rcvLen);
+    auto ccErr = _t2tReadPage(3, ccBuf, sizeof(ccBuf), &rcvLen);
     if (ccErr != ST_ERR_NONE || rcvLen < 4) {
         pageReadStatus = FAILURE;
         return FAILURE;
@@ -413,7 +415,7 @@ int ST25R3916::_readDataBlocks(rfalNfcDevice *dev) {
     for (int page = 0; page < totalPages; page++) {
         uint8_t pageData[16] = {0};
         uint16_t len = 0;
-        auto err = _nfc->rfalT2TPollerRead(page, pageData, sizeof(pageData), &len);
+        auto err = _t2tReadPage(page, pageData, sizeof(pageData), &len);
         if (err != ST_ERR_NONE || len < 4) {
             pageReadStatus = FAILURE;
             return FAILURE;
@@ -1444,6 +1446,24 @@ int ST25R3916::loadFromFile(const String &filepath) {
     return SUCCESS;
 }
 
+// RFAL's rfalT2TPollerRead()/GET_VERSION/READ_SIG default timeouts (5-20ms,
+// see rfal_t2t.cpp's RFAL_FDT_POLL_READ_MAX) assume near-instant silicon tag
+// response. A software tag emulator relaying through an MCU (e.g. Bruce's own
+// PN532 emulate(), I2C-bound and deliberately clocked slow for target-mode
+// stability) can easily take longer than that to answer post-activation
+// commands, causing spurious ST_ERR_TIMEOUT even though the emulator would
+// have answered given a bit more time. Used for all raw post-activation T2T
+// reads issued directly via rfalTransceiveBlockingTxRx() in this file.
+static constexpr uint32_t kT2tPostActivationTimeoutMs = 60;
+
+::ReturnCode ST25R3916::_t2tReadPage(uint8_t page, uint8_t *rxBuf, uint16_t rxBufLen, uint16_t *rcvLen) {
+    uint8_t cmd[2] = {0x30, page}; // NFC Forum Type 2 Tag READ command (T2T 1.0 5.2, table 11)
+    return _hw->rfalTransceiveBlockingTxRx(
+        cmd, sizeof(cmd), rxBuf, rxBufLen, rcvLen, RFAL_TXRX_FLAGS_DEFAULT,
+        rfalConvMsTo1fc(kT2tPostActivationTimeoutMs)
+    );
+}
+
 String ST25R3916::_getNtagVariant() {
     ntagHasVersion = false;
     memset(ntagVersion, 0, sizeof(ntagVersion));
@@ -1452,7 +1472,7 @@ String ST25R3916::_getNtagVariant() {
     uint8_t rx[10] = {0};
     uint16_t rxLen = 0;
     auto err = _hw->rfalTransceiveBlockingTxRx(
-        &cmd, 1, rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+        &cmd, 1, rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(kT2tPostActivationTimeoutMs)
     );
     if (err != ST_ERR_NONE || rxLen < 8) {
         ST25R_LOG("_getNtagVariant: GET_VERSION failed err=%d len=%u", (int)err, rxLen);
@@ -1500,7 +1520,8 @@ bool ST25R3916::_readNtagSignature() {
     uint8_t rx[40] = {0};
     uint16_t rxLen = 0;
     auto err = _hw->rfalTransceiveBlockingTxRx(
-        cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+        cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT,
+        rfalConvMsTo1fc(kT2tPostActivationTimeoutMs)
     );
     if (err != ST_ERR_NONE || rxLen < 32) {
         ST25R_LOG("_readNtagSignature: READ_SIG failed err=%d len=%u", (int)err, rxLen);
@@ -1523,7 +1544,8 @@ bool ST25R3916::_readNtagCounters() {
         uint8_t rx[4] = {0};
         uint16_t rxLen = 0;
         auto err = _hw->rfalTransceiveBlockingTxRx(
-            cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT, rfalConvMsTo1fc(20)
+            cmd, sizeof(cmd), rx, sizeof(rx), &rxLen, RFAL_TXRX_FLAGS_DEFAULT,
+            rfalConvMsTo1fc(kT2tPostActivationTimeoutMs)
         );
         if (err == ST_ERR_NONE && rxLen >= 3) {
             ntagCounters[idx] = (uint32_t)rx[0] | ((uint32_t)rx[1] << 8) | ((uint32_t)rx[2] << 16);

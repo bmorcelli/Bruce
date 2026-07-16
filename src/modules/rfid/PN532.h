@@ -51,6 +51,7 @@ public:
     int emulate() override;
     int load();
     int save(const String &filename);
+    String emulationCaveat() const override;
 
 private:
     bool _use_i2c;
