@@ -32,6 +32,16 @@ TwoWire *acquireI2CBus();
 // same physical bus as sys_i2c (which must stay on).
 void releaseI2CBus();
 
+// Watchdog for a wedged sys_i2c bus (a peripheral holding SDA/SCL low indefinitely - e.g. a
+// target-mode PN532 session torn down mid-transaction - can leave the ESP32's I2C driver
+// permanently in ESP_ERR_INVALID_STATE, taking down every other peripheral sharing the bus, such
+// as the PMIC, until the whole device is power-cycled). Reads SDA/SCL via digitalRead() only, so
+// it never issues an I2C transaction and can't itself contend with one in progress. Call
+// periodically (a few times a second is plenty) from a task that always runs regardless of what
+// menu/app is active, e.g. InputHandler(). Returns true if a stuck bus was detected and the
+// standard 9-clock recovery + Wire re-init was performed.
+bool checkAndRecoverSysI2CBus();
+
 /*
  * SPI bus arbitration.
  *
