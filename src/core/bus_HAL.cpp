@@ -2,6 +2,8 @@
 #include "core/configPins.h"
 #include "globals.h"
 #include "soc/soc_caps.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // # define BUSHAL_DBG
 #ifdef BUSHAL_DBG
@@ -14,6 +16,36 @@
 #include <M5Unified.h>
 #define BRUCE_HAS_M5UNIFIED 1
 #endif
+
+#ifdef BRUCE_HAS_M5UNIFIED
+// Guards every sys_i2c transaction issued through M5SysWireAdapter (below) against M5.update()'s
+// own internal I2C polling, which bypasses the adapter entirely and would otherwise race it from
+// a different FreeRTOS task - see the comment on lockSysI2CBus() in bus_HAL.h.
+static SemaphoreHandle_t sysI2CMutex() {
+    static SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
+    return mutex;
+}
+#endif
+
+void lockSysI2CBus() {
+#ifdef BRUCE_HAS_M5UNIFIED
+    xSemaphoreTake(sysI2CMutex(), portMAX_DELAY);
+#endif
+}
+
+void unlockSysI2CBus() {
+#ifdef BRUCE_HAS_M5UNIFIED
+    xSemaphoreGive(sysI2CMutex());
+#endif
+}
+
+bool trylockSysI2CBus() {
+#ifdef BRUCE_HAS_M5UNIFIED
+    return xSemaphoreTake(sysI2CMutex(), 0) == pdTRUE;
+#else
+    return true;
+#endif
+}
 
 // Some chips (e.g. ESP32-C6/-C5: SOC_HP_I2C_NUM == 1) only have one general-purpose I2C
 // controller. Wire1 may still exist as a symbol there (backed by the separate, restricted
@@ -52,7 +84,11 @@ public:
         return true;
     }
 
+    // Held from the first bus access of a transaction (beginTransmission, or a standalone
+    // requestFrom) until the actual I2C stop condition is issued - see lockSysI2CBus() in
+    // bus_HAL.h. Matches _open's write->restart-read chaining, not just a 1:1 call wrapper.
     void beginTransmission(uint8_t address) override {
+        lockSysI2CBus();
         _addr = address;
         _open = _i2c.start(address, false, _freq);
     }
@@ -61,18 +97,21 @@ public:
         if (stopBit) {
             _i2c.stop();
             _open = false;
+            unlockSysI2CBus();
         }
         return 0;
     }
     uint8_t endTransmission() override { return endTransmission(true); }
 
     size_t requestFrom(uint8_t address, size_t len, bool stopBit) override {
+        if (!_open) lockSysI2CBus(); // standalone read, not chained off beginTransmission
         if (len > sizeof(_rxbuf)) len = sizeof(_rxbuf);
         bool ok = _open ? _i2c.restart(address, true, _freq) : _i2c.start(address, true, _freq);
         _open = false;
         _rxLen = _rxPos = 0;
         if (ok && _i2c.read(_rxbuf, len, true)) _rxLen = len;
         if (stopBit) _i2c.stop();
+        unlockSysI2CBus(); // requestFrom is always the terminal call of a transaction
         return _rxLen;
     }
     size_t requestFrom(uint8_t address, size_t len) override { return requestFrom(address, len, true); }

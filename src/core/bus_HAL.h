@@ -42,6 +42,25 @@ void releaseI2CBus();
 // standard 9-clock recovery + Wire re-init was performed.
 bool checkAndRecoverSysI2CBus();
 
+// On M5Unified boards, sys_i2c transactions issued through the M5SysWireAdapter (used by RFID
+// drivers such as ST25R3916 that share sys_i2c) go straight to m5::I2C_Class, bypassing whatever
+// locking M5Unified's own internal peripheral polling (PMIC/touch/IMU, driven by M5.update())
+// uses. Two FreeRTOS tasks hitting the same I2C peripheral registers concurrently (the RFID
+// driver's discovery loop on one task, M5.update() on taskInputHandler) corrupts M5GFX's I2C
+// mutex bookkeeping and crashes with a `xTaskPriorityDisinherit` assert. The adapter takes this
+// lock (blocking) around its own transactions; no-ops on boards without M5Unified.
+void lockSysI2CBus();
+void unlockSysI2CBus();
+
+// Non-blocking variant for InputHandler()'s M5.update() call: RFAL's NFC-A anti-collision timing
+// is tight enough (FDTMIN ~5ms) that blocking it for a whole M5.update() cycle (several PMIC/
+// touch/IMU transactions) to wait out an in-progress RFID transaction reliably broke tag
+// activation. M5.update() only needs to run roughly 5x/second, so skipping a cycle whenever the
+// RFID driver currently holds the bus is free - it just runs again next tick. Returns true (and
+// holds the lock, pair with unlockSysI2CBus()) if the bus was free; false if it was busy and the
+// caller should skip. Always returns true on boards without M5Unified.
+bool trylockSysI2CBus();
+
 /*
  * SPI bus arbitration.
  *

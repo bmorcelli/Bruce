@@ -20,7 +20,7 @@
 #define GPIO_NUM_25 25
 #endif
 
-// #define PN532_DEBUG
+#define PN532_DEBUG
 #ifdef PN532_DEBUG
 #define PN532_DBG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -570,20 +570,20 @@ int PN532::emulate() {
     // the chip can represent them; falls back to a placeholder otherwise.
     uint8_t sensRes[2] = {0x08, 0x00};
     uint8_t nfcid1[3] = {0xDC, 0x44, 0x20};
-    if (printableUID.uid.length() > 0 && !wantFelica) {
-        if (uid.size == 4) {
-            // Chip always answers anti-collision with a fixed first UID byte -
-            // only the trailing 3 bytes (nfcid11..13) are configurable.
-            nfcid1[0] = uid.uidByte[1];
-            nfcid1[1] = uid.uidByte[2];
-            nfcid1[2] = uid.uidByte[3];
-        } else if (uid.size == 7) {
-            // Double-size (cascade level 2) UIDs aren't representable at all -
-            // best-effort with the trailing 3 bytes.
-            nfcid1[0] = uid.uidByte[4];
-            nfcid1[1] = uid.uidByte[5];
-            nfcid1[2] = uid.uidByte[6];
-        }
+    if (printableUID.uid.length() > 0 && !wantFelica && uid.size == 4) {
+        // Chip always answers anti-collision with a fixed first UID byte -
+        // only the trailing 3 bytes (nfcid11..13) are configurable, and only
+        // for single-size (4-byte) UIDs; TgInitAsTarget has no cascade-level-2
+        // support at all. The tag's real ATQA is only safe to reuse here too:
+        // a double/triple-size UID's ATQA declares that size to the reader,
+        // but we can only ever deliver a single-size NFCID1t - copying that
+        // ATQA anyway (as an earlier version of this code did) advertises a
+        // cascade sequence the chip can't actually perform, and breaks
+        // activation for every reader, not just flaky ones. Anything other
+        // than a 4-byte UID keeps the single-size-safe placeholder identity.
+        nfcid1[0] = uid.uidByte[1];
+        nfcid1[1] = uid.uidByte[2];
+        nfcid1[2] = uid.uidByte[3];
         if (printableUID.atqa.length() >= 4) {
             sensRes[0] = uid.atqaByte[0];
             sensRes[1] = uid.atqaByte[1];
