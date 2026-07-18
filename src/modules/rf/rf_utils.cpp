@@ -554,6 +554,8 @@ bool setMHZMenu() {
 
 void rf_range_selection(float currentFrequency) {
     int option = 0;
+    float freq = currentFrequency > 0 ? currentFrequency : bruceConfigPins.rfFreq;
+    int idx = bruceConfigPins.rfFxdFreq ? 0 : 2 + constrain(bruceConfigPins.rfScanRange, 0, 3);
     options = {
         {String("Fixed [" + String(bruceConfigPins.rfFreq) + "]").c_str(),
          [=]() { bruceConfigPins.setRfFreq(bruceConfigPins.rfFreq, 1); }                                               },
@@ -564,7 +566,7 @@ void rf_range_selection(float currentFrequency) {
         {subghz_frequency_ranges[3],                                       [=]() { bruceConfigPins.setRfScanRange(3); }},
     };
 
-    loopOptions(options);
+    loopOptions(options, idx);
     options.clear();
 
     if (option == 1) { // Fixed Frequency Selector
@@ -573,10 +575,10 @@ void rf_range_selection(float currentFrequency) {
         int arraySize = sizeof(subghz_frequency_list) / sizeof(subghz_frequency_list[0]);
         for (int i = 0; i < arraySize; i++) {
             String tmp = String(subghz_frequency_list[i], 2) + "Mhz";
+            if (int(freq * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
             options.push_back({tmp.c_str(), [=]() {
                                    bruceConfigPins.setRfFreq(subghz_frequency_list[i], 1);
                                }});
-            if (int(currentFrequency * 100) == int(subghz_frequency_list[i] * 100)) ind = i;
         }
         loopOptions(options, ind);
         options.clear();

@@ -13,6 +13,12 @@
 // limitations under the License.
 #include "USBHID.h"
 
+// ESP32 Arduino framework defines CFG_TUD_ENDOINT_SIZE (typo, missing 'P').
+// Alias the correct spelling only if the misspelled version exists.
+#if !defined(CFG_TUD_ENDPOINT_SIZE) && defined(CFG_TUD_ENDOINT_SIZE)
+#define CFG_TUD_ENDPOINT_SIZE CFG_TUD_ENDOINT_SIZE
+#endif
+
 #if CONFIG_TINYUSB_HID_ENABLED
 
 #include "USB.h"

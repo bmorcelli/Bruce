@@ -505,15 +505,16 @@ void RFScan::reset_signals() {
 }
 
 void RFScan::set_threshold() {
+    int idx = constrain((-rssiThreshold - 55) / 5, 0, 5);
     options = {
         {"(-55) More Accurate", [&]() { rssiThreshold = -55; }},
         {"(-60)",               [&]() { rssiThreshold = -60; }},
-        {"(-65) Default ",      [&]() { rssiThreshold = -65; }},
+        {"(-65) Default",       [&]() { rssiThreshold = -65; }},
         {"(-70)",               [&]() { rssiThreshold = -70; }},
         {"(-75)",               [&]() { rssiThreshold = -75; }},
         {"(-80) Less Accurate", [&]() { rssiThreshold = -80; }},
     };
-    loopOptions(options);
+    loopOptions(options, idx);
 }
 /*
 // Using similar function from rf_utils.h

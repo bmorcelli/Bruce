@@ -38,4 +38,5 @@ uint8_t getPwngridTotalPeers();
 String getPwngridLastFriendName();
 signed int getPwngridClosestRssi();
 void checkPwngridGoneFriends();
+void clearPwngridPeers();
 #endif

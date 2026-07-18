@@ -60,6 +60,11 @@ void add_new_peer(JsonDocument &json, signed int rssi) {
 }
 
 // Delete pwngrid peers
+void clearPwngridPeers() {
+    pwngrid_peers.clear();
+    pwngrid_friends_tot = 0;
+    pwngrid_last_friend_name = "";
+}
 void delete_peer_gone() { // Delete peers wigh pwngrid_peers.gone = true
     std::vector<int>
         peer_gone; // Create a vector of integers to save the index value of the element to be deleted

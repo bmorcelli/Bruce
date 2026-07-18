@@ -3,7 +3,6 @@
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/radio_mem.h"
-#include "core/ram_profile.h"
 #include "core/sd_functions.h"
 #include "core/utils.h"
 #if defined(USB_as_HID)
