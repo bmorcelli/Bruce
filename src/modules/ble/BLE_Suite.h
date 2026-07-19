@@ -1,52 +1,18 @@
 #ifndef BLE_SUITE_H
 #define BLE_SUITE_H
 #if !defined(LITE_VERSION)
-#include <NimBLEDevice.h>
-#include "fastpair_crypto.h"
+
+// Include display header FIRST so TFT color definitions are available
+#include "core/display.h"
+
 #include "HFP_Exploit.h"
+#include "fastpair_crypto.h"
+#include <NimBLEDevice.h>
 #include <WString.h>
-#include <vector>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <functional>
-
-#if __has_include(<NimBLEExtAdvertising.h>)
-#define NIMBLE_V2_PLUS 1
-#endif
-
-#ifndef TFT_WHITE
-#define TFT_WHITE 0xFFFF
-#endif
-#ifndef TFT_BLACK
-#define TFT_BLACK 0x0000
-#endif
-#ifndef TFT_RED
-#define TFT_RED 0xF800
-#endif
-#ifndef TFT_GREEN
-#define TFT_GREEN 0x07E0
-#endif
-#ifndef TFT_BLUE
-#define TFT_BLUE 0x001F
-#endif
-#ifndef TFT_YELLOW
-#define TFT_YELLOW 0xFFE0
-#endif
-#ifndef TFT_CYAN
-#define TFT_CYAN 0x07FF
-#endif
-#ifndef TFT_MAGENTA
-#define TFT_MAGENTA 0xF81F
-#endif
-#ifndef TFT_ORANGE
-#define TFT_ORANGE 0xFDA0
-#endif
-#ifndef TFT_GRAY
-#define TFT_GRAY 0x8410
-#endif
-#ifndef TFT_DARKGREEN
-#define TFT_DARKGREEN 0x03E0
-#endif
+#include <vector>
 
 extern volatile int tftWidth;
 extern volatile int tftHeight;
@@ -56,6 +22,43 @@ class BruceConfig;
 extern BruceConfig bruceConfig;
 
 bool check(int key);
+
+//=============================================================================
+// NimBLE Version Detection - Must match ble_common.h
+//=============================================================================
+
+// Detect NimBLE 2.x by checking for features only available in v2+
+#if defined(NIMBLE_VERSION)
+    #if NIMBLE_VERSION >= 20000
+        #define NIMBLE_V2_PLUS 1
+    #endif
+#elif defined(NIMBLE_CPP_VERSION) && NIMBLE_CPP_VERSION >= 2
+    #define NIMBLE_V2_PLUS 1
+#elif defined(NIMBLE_VERSION_MAJOR) && NIMBLE_VERSION_MAJOR >= 2
+    #define NIMBLE_V2_PLUS 1
+#elif defined(NIMBLE_VERSION_MAJOR) && NIMBLE_VERSION_MAJOR == 1 && NIMBLE_VERSION_MINOR >= 5
+    #define NIMBLE_V2_PLUS 1
+#elif __has_include(<NimBLEExtAdvertising.h>)
+    #define NIMBLE_V2_PLUS 1
+#endif
+
+// If none of the above matched, default to v1 behavior (safe fallback)
+#ifndef NIMBLE_V2_PLUS
+    #define NIMBLE_V2_PLUS 0
+#endif
+
+//=============================================================================
+// BLE Scan Constants
+//=============================================================================
+
+#define ACTIVE_SCAN_TIME 8
+#define PASSIVE_SCAN_TIME 8
+#define SCAN_INT 100
+#define SCAN_WINDOW 99
+
+//=============================================================================
+// Enums
+//=============================================================================
 
 enum {
     BLE_ESC_PRESS = 0,
@@ -78,6 +81,73 @@ enum FastPairExploitType {
     FP_EXPLOIT_HANDSHAKE_FAULT,
     FP_EXPLOIT_RAPID_CONNECTION,
     FP_EXPLOIT_ALL
+};
+
+//=============================================================================
+// DeviceInfo and DeviceSnapshot structures
+//=============================================================================
+
+struct DeviceInfo {
+    String address;
+    String name;
+    int rssi;
+    bool hasFastPair;
+    bool hasHFP;
+    uint8_t deviceType;
+};
+
+struct DeviceSnapshot {
+    uint32_t version;
+    uint32_t count;
+    uint32_t timestamp;
+    std::vector<String> names;
+    std::vector<String> addresses;
+    std::vector<int> rssi;
+    std::vector<bool> fastPair;
+    std::vector<bool> hfp;
+    std::vector<uint8_t> types;
+    
+    DeviceSnapshot() : version(0), count(0), timestamp(0) {}
+};
+
+//=============================================================================
+// SelectedDevice for passing device info to attacks
+//=============================================================================
+
+struct SelectedDevice {
+    String address;
+    String name;
+    int rssi;
+    bool hasFastPair;
+    bool hasHFP;
+    uint8_t deviceType;
+};
+
+//=============================================================================
+// ScannerData with snapshot methods
+//=============================================================================
+
+struct ScannerData {
+    std::vector<String> deviceNames;
+    std::vector<String> deviceAddresses;
+    std::vector<int> deviceRssi;
+    std::vector<bool> deviceFastPair;
+    std::vector<bool> deviceHasHFP;
+    std::vector<uint8_t> deviceTypes;
+    SemaphoreHandle_t mutex;
+    int foundCount;
+    
+    uint32_t dataVersion;
+    DeviceSnapshot* snapshotCache;
+    uint32_t cacheTimestamp;
+
+    ScannerData();
+    ~ScannerData();
+    void addDevice(const String& name, const String& address, int rssi, bool fastPair, bool hasHFP, uint8_t type);
+    void clear();
+    size_t size();
+    DeviceSnapshot* getSnapshot();
+    bool getDeviceInfo(int index, DeviceInfo &info);
 };
 
 struct CharacteristicInfo {
@@ -133,22 +203,9 @@ struct DuckyCommand {
     int delay_ms;
 };
 
-struct ScannerData {
-    std::vector<String> deviceNames;
-    std::vector<String> deviceAddresses;
-    std::vector<int> deviceRssi;
-    std::vector<bool> deviceFastPair;
-    std::vector<bool> deviceHasHFP;
-    std::vector<uint8_t> deviceTypes;
-    SemaphoreHandle_t mutex;
-    int foundCount;
-
-    ScannerData();
-    ~ScannerData();
-    void addDevice(const String& name, const String& address, int rssi, bool fastPair, bool hasHFP, uint8_t type);
-    void clear();
-    size_t size();
-};
+//=============================================================================
+// AutoCleanup Class
+//=============================================================================
 
 class AutoCleanup {
 private:
@@ -161,6 +218,10 @@ public:
     void disable();
     void enable();
 };
+
+//=============================================================================
+// BLEStateManager Class
+//=============================================================================
 
 class BLEStateManager {
 private:
@@ -179,6 +240,10 @@ public:
     static size_t getActiveClientCount();
 };
 
+//=============================================================================
+// BLEAttackManager Class
+//=============================================================================
+
 class BLEAttackManager {
 public:
     void prepareForConnection();
@@ -187,7 +252,10 @@ public:
     DeviceProfile profileDevice(NimBLEAddress target);
 };
 
-// FastPair structs
+//=============================================================================
+// FastPair Structures and Functions
+//=============================================================================
+
 struct FastPairDeviceInfo {
     NimBLEAddress address;
     String name;
@@ -220,6 +288,10 @@ enum FastPairVersion {
 
 FastPairVersion detectFastPairVersion(NimBLEAddress target);
 
+//=============================================================================
+// FastPairExploitEngine Class
+//=============================================================================
+
 class FastPairExploitEngine {
 public:
     std::vector<FastPairDeviceInfo> scanForFastPairDevices(int duration);
@@ -227,12 +299,10 @@ public:
     void spamFastPairPopups(FastPairPopupType popupType, int count);
     bool testVulnerability(NimBLEAddress target);
 
-    // v3.1: Smart FastPair attack with Samsung detection
     bool smartExploit(NimBLEAddress target);
     bool exploitSamsungFastPair(NimBLEAddress target);
     bool exploitGoogleFastPair(NimBLEAddress target);
 
-    // Public exploit methods
     bool executeMemoryCorruption(NimBLERemoteCharacteristic* pChar);
     bool executeStateConfusion(NimBLERemoteCharacteristic* pChar);
     bool executeCryptoOverflow(NimBLERemoteCharacteristic* pChar);
@@ -258,6 +328,10 @@ private:
     void generateRandomMac(uint8_t* mac);
 };
 
+//=============================================================================
+// HIDExploitEngine Class
+//=============================================================================
+
 class HIDExploitEngine {
 public:
     HIDDeviceProfile analyzeHIDDevice(NimBLEAddress target, const String& name, int rssi);
@@ -276,6 +350,10 @@ public:
     bool testHIDVulnerability(NimBLEAddress target);
 };
 
+//=============================================================================
+// WhisperPairExploit Class
+//=============================================================================
+
 class WhisperPairExploit {
 public:
     WhisperPairExploit();
@@ -293,6 +371,10 @@ public:
     bool executeAdvanced(NimBLEAddress target, int attackType);
 };
 
+//=============================================================================
+// AudioAttackService Class
+//=============================================================================
+
 class AudioAttackService {
 public:
     bool findAndAttackAudioServices(NimBLEClient* pClient);
@@ -303,6 +385,10 @@ public:
     bool injectMediaCommands(NimBLEAddress target);
     bool crashAudioStack(NimBLEAddress target);
 };
+
+//=============================================================================
+// DuckyScriptEngine Class
+//=============================================================================
 
 class DuckyScriptEngine {
 public:
@@ -326,6 +412,10 @@ private:
     bool scriptLoaded;
 };
 
+//=============================================================================
+// HIDDuckyService Class
+//=============================================================================
+
 class HIDDuckyService {
 public:
     HIDDuckyService();
@@ -347,6 +437,10 @@ private:
     bool sendGUIKey(NimBLERemoteCharacteristic* pChar, char key);
 };
 
+//=============================================================================
+// AuthBypassEngine Class
+//=============================================================================
+
 class AuthBypassEngine {
 private:
     struct PairedDevice {
@@ -366,6 +460,10 @@ public:
     bool exploitAuthBypass(NimBLEAddress target);
 };
 
+//=============================================================================
+// MultiConnectionAttack Class
+//=============================================================================
+
 class MultiConnectionAttack {
 public:
     MultiConnectionAttack();
@@ -384,6 +482,10 @@ private:
     std::vector<NimBLEClient*> activeConnections;
 };
 
+//=============================================================================
+// VulnerabilityScanner Class
+//=============================================================================
+
 class VulnerabilityScanner {
 private:
     struct VulnCheck {
@@ -401,6 +503,10 @@ public:
     std::vector<String> getVulnerabilities();
 };
 
+//=============================================================================
+// Attack Service Classes
+//=============================================================================
+
 class HIDAttackServiceClass {
 public:
     bool injectKeystrokes(NimBLEAddress target);
@@ -417,6 +523,10 @@ public:
     bool connectionFlood(NimBLEAddress target);
     bool advertisingSpam(NimBLEAddress target);
 };
+
+//=============================================================================
+// Debug Memory Macros
+//=============================================================================
 
 #ifdef DEBUG_MEMORY
 class HeapMonitor {
@@ -445,6 +555,10 @@ public:
 #define MEM_CHECK()
 #endif
 
+//=============================================================================
+// Function Declarations
+//=============================================================================
+
 void cleanupBLEStack();
 
 NimBLEClient* attemptConnectionWithStrategies(NimBLEAddress target, String& connectionMethod);
@@ -460,8 +574,32 @@ void runDuckyScriptAttack(NimBLEAddress target);
 void runPINBruteForce(NimBLEAddress target);
 void runConnectionFlood(NimBLEAddress target);
 void runAdvertisingSpam(NimBLEAddress target);
-void runQuickTest(NimBLEAddress target);
-void runDeviceProfiling(NimBLEAddress target);
+
+//=============================================================================
+// Attack functions with SelectedDevice parameter
+//=============================================================================
+
+void runQuickTest(NimBLEAddress target, SelectedDevice deviceInfo);
+void runDeviceProfiling(NimBLEAddress target, SelectedDevice deviceInfo);
+void runUniversalAttack(NimBLEAddress target, SelectedDevice deviceInfo);
+
+//=============================================================================
+// Submenu functions with SelectedDevice parameter
+//=============================================================================
+
+void showFastPairSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showHFPSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showAudioSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showHIDSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+void showTestingSubMenu(NimBLEAddress target, SelectedDevice deviceInfo);
+
+//=============================================================================
+// Original function declarations
+//=============================================================================
+
 void runWriteAccessTest(NimBLEAddress target);
 void runProtocolFuzzer(NimBLEAddress target);
 void runJamConnectAttack(NimBLEAddress target);
@@ -500,11 +638,13 @@ void runFastPairCryptoOverflow(NimBLEAddress target);
 void runFastPairPopupSpam(NimBLEAddress target, FastPairPopupType type);
 void runFastPairAllExploits(NimBLEAddress target);
 void runFastPairHIDChain(NimBLEAddress target);
-void runUniversalAttack(NimBLEAddress target);
 String selectFileFromSD();
 bool loadScriptFromSD(const String &filename);
 
-// Forward declarations for submenu functions
+// BLE Sniffer
+void BLE_Sniffer();
+
+// Forward declarations for old submenu functions (for compatibility)
 void showFastPairSubMenu(NimBLEAddress target);
 void showHFPSubMenu(NimBLEAddress target);
 void showAudioSubMenu(NimBLEAddress target);
