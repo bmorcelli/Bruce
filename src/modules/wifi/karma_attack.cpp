@@ -1767,7 +1767,9 @@ void checkPortals() {
     lastPortalHeartbeat = now;
 }
 
-void launchBackgroundPortal(const String &ssid, uint8_t channel, const String &templateName) {
+void launchBackgroundPortal(
+    const String &ssid, uint8_t channel, const String &templateName, const String &templateFile
+) {
     if (activePortal != nullptr) return;
     if (ssid.isEmpty() || ssid == "*WILDCARD*") return;
 
@@ -1781,7 +1783,7 @@ void launchBackgroundPortal(const String &ssid, uint8_t channel, const String &t
     portal->clientFingerprint = 0;
     portal->portalId = generatePortalId(templateName);
 
-    portal->instance = new (std::nothrow) EvilPortal(ssid, channel, false, false, true, true);
+    portal->instance = new (std::nothrow) EvilPortal(ssid, channel, false, false, true, true, templateFile);
     if (portal->instance == nullptr) {
         delete portal;
         return;
@@ -2005,7 +2007,7 @@ void saveCredentialsToFile(const String &ssid, const String &password) {
 
 void launchTieredEvilPortal(PendingPortal &portal) {
     Serial.printf("[TIER-%d] Launching background portal for %s\n", portal.tier, portal.ssid.c_str());
-    launchBackgroundPortal(portal.ssid, portal.channel, portal.templateName);
+    launchBackgroundPortal(portal.ssid, portal.channel, portal.templateName, portal.templateFile);
 
     if (portal.isCloneAttack) cloneAttacksLaunched++;
     else autoPortalsLaunched++;
@@ -2113,7 +2115,7 @@ void launchManualEvilPortal(const String &ssid, uint8_t channel, bool verifyPwd)
         return;
     }
     Serial.printf("[MANUAL] Launching background portal for %s (ch%d)\n", ssid.c_str(), channel);
-    launchBackgroundPortal(ssid, channel, selectedTemplate.name);
+    launchBackgroundPortal(ssid, channel, selectedTemplate.name, selectedTemplate.filename);
 }
 
 void handleBroadcastResponse(const String &ssid, const String &mac) {

