@@ -79,6 +79,7 @@ private:
     int previousTotalCapturedCredentials = -1;
     String capturedCredentialsHtml = "";
     bool verifyPass = false;
+    bool _pendingWifiRestart = false;
 
     CaptiveRequestHandler *_captiveHandler = nullptr;
 

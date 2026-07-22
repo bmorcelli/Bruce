@@ -122,8 +122,8 @@ static const uint8_t ADC = 10;
 // FM Radio
 #define FM_SI4713
 
-#define SPI_SCK_PIN 0
-#define SPI_MOSI_PIN GROVE_SDA
-#define SPI_MISO_PIN GROVE_SCL
+#define SPI_SCK_PIN 36
+#define SPI_MOSI_PIN 37
+#define SPI_MISO_PIN 35
 #define SPI_SS_PIN 26
 #endif /* Pins_Arduino_h */

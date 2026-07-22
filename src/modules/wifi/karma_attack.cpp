@@ -1830,7 +1830,6 @@ void loadPortalTemplates() {
                 file = root.openNextFile();
             }
         }
-        LittleFS.end();
     }
     FS *fs = nullptr;
     if (getFsStorage(fs) && fs == &SD) {
@@ -1955,7 +1954,6 @@ bool selectPortalTemplate(bool isInitialSetup) {
                                   delay(1000);
                               }
                           }
-                          LittleFS.end();
                       } else {
                           displayTextLine("LittleFS error!");
                           delay(1000);

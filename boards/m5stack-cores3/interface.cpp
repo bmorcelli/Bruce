@@ -11,6 +11,8 @@
 ***************************************************************************************/
 void _setup_gpio() {
     M5.begin();
+    M5.Power.setUsbOutput(false);
+    M5.Power.setExtOutput(true);
     setSysI2CBus(M5.In_I2C.getPort() == I2C_NUM_1 ? &Wire1 : &Wire);
 #if defined(HAS_RTC)
     _rtc.setWire(getSysI2CBus());

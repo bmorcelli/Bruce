@@ -11,6 +11,7 @@
 #include "core/utils.h"
 #include "core/wifi/webInterface.h"
 #include "core/wifi/wifi_common.h"
+#include "deauther.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "evil_portal.h"
@@ -20,7 +21,6 @@
 #include <Arduino.h>
 #include <globals.h>
 #include <nvs_flash.h>
-#include "deauther.h"
 
 #define WIFI_ATK_NAME "BruceAttack"
 extern bool showHiddenNetworks;
@@ -121,7 +121,7 @@ void nextChannel() {
     }
 }
 
-void wifi_complete_cleanup() {
+void wifi_complete_cleanup(bool wait = true) {
     Serial.println("[WIFI_ATK] Complete WiFi cleanup");
     esp_wifi_set_promiscuous(false);
     esp_wifi_set_promiscuous_rx_cb(NULL);
@@ -131,7 +131,7 @@ void wifi_complete_cleanup() {
     // esp_wifi_restore(); // REMOVED
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-    delay(300);
+    if (wait) delay(300);
 }
 
 void checkHeap(const char *tag) {
@@ -226,7 +226,6 @@ bool wifi_atk_setWifi() {
     if (WiFi.getMode() != WIFI_MODE_NULL) { return true; }
 
     wifi_complete_cleanup();
-    delay(100);
 
     if (WiFi.getMode() != WIFI_MODE_APSTA) {
         if (!WiFi.mode(WIFI_MODE_APSTA)) {
@@ -271,21 +270,18 @@ bool wifi_atk_unsetWifi() {
 void wifi_atk_menu() {
     resetGlobalState();
 
-    if (WiFi.getMode() == WIFI_MODE_NULL) {
-        wifi_complete_cleanup();
-        delay(500);
-    }
+    if (WiFi.getMode() == WIFI_MODE_NULL) wifi_complete_cleanup(false);
 
     checkHeap("Wifi menu start");
 
     bool scanAtks = false;
     options = {
-        {"Target Atks",  [&]() { scanAtks = true; }    },
+        {"Target Atks",     [&]() { scanAtks = true; }     },
 #ifndef LITE_VERSION
-        {"Karma Attack", [=]() { karma_setup(); }      },
+        {"Karma Attack",    [=]() { karma_setup(); }       },
 #endif
-        {"Beacon SPAM",  [=]() { beaconAttack(); }     },
-        {"Deauth Flood", [=]() { deauthFloodAttack(); }},
+        {"Beacon SPAM",     [=]() { beaconAttack(); }      },
+        {"Deauth Flood",    [=]() { deauthFloodAttack(); } },
         {"Enhanced Deauth", [=]() { enhancedDeauthMenu(); }},
     };
     addOptionToMainMenu();
@@ -542,7 +538,6 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel) 
     checkHeap("Handshake start");
 
     wifi_complete_cleanup();
-    delay(100);
 
     if (!WiFi.mode(WIFI_MODE_APSTA)) {
         displayError("Failed starting WIFI", true);
@@ -588,9 +583,7 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel) 
         autoDeauthTimer = millis();
     };
 
-    auto deauthInterval = [&]() -> unsigned long {
-        return (phase == SCANNING) ? 10000UL : 15000UL;
-    };
+    auto deauthInterval = [&]() -> unsigned long { return (phase == SCANNING) ? 10000UL : 15000UL; };
 
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FM);
@@ -673,14 +666,10 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel) 
             needRedraw = false;
         }
 
-        if (check(SelPress) && phase != CAPTURED) {
-            sendDeauthBurst();
-        }
+        if (check(SelPress) && phase != CAPTURED) { sendDeauthBurst(); }
 
         if (phase != CAPTURED) {
-            if (millis() - autoDeauthTimer >= deauthInterval()) {
-                sendDeauthBurst();
-            }
+            if (millis() - autoDeauthTimer >= deauthInterval()) { sendDeauthBurst(); }
         }
 
         if (check(EscPress)) { break; }
@@ -1063,16 +1052,10 @@ void enhancedDeauthMenu() {
     resetGlobalState();
 
     options = {
-        {"Station Deauth (Single)", [=]() {
-            showTargetSelection();
-        }},
-        {"Deauth All Clients", [=]() {
-            deauthAllMenu();
-        }},
-        {"Deauth Target List", [=]() {
-            deauthTargetListMenu();
-        }},
-        {"Back", [=]() { returnToMenu = true; }},
+        {"Station Deauth (Single)", [=]() { showTargetSelection(); } },
+        {"Deauth All Clients",      [=]() { deauthAllMenu(); }       },
+        {"Deauth Target List",      [=]() { deauthTargetListMenu(); }},
+        {"Back",                    [=]() { returnToMenu = true; }   },
     };
     addOptionToMainMenu();
     loopOptions(options);

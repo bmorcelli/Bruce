@@ -195,6 +195,11 @@ void ConfigMenu::advancedMenu() {
             {"Toggle BLE API", [this]() { enableBLEAPI(); }       },
             {"BadUSB/BLE",     [this]() { setBadUSBBLEMenu(); }   },
 #endif
+            {"BLE name",
+                                      [this]() {
+                 String name = keyboard(bruceConfigPins.bleName, 30, "BLE device name");
+                 if (name.length() > 0 && name != "\x1B") bruceConfigPins.setBleName(name);
+             }                                                                             },
             {"Network Creds",  [this]() { setNetworkCredsMenu(); }},
             {"Factory Reset",
                                       []() {

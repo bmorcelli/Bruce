@@ -88,8 +88,6 @@ void _setup_gpio() {
     pinMode(46, OUTPUT);
     digitalWrite(46, LOW); // Infrared LED Off
 
-    pinMode(SEL_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
     attachInterrupt(DW_BTN, isr_dw_btn, CHANGE);
     pinMode(TFT_BL, OUTPUT);
     bruceConfig.colorInverted = 0;
@@ -159,7 +157,7 @@ void InputHandler(void) {
     unsigned long dwPressStart = dw_press_ms;
     unsigned long dwFirstRelease = dw_first_release_ms;
 
-    AnyKeyPress = selPressed || dwPressed || dwWaiting || dwDoubleReady;
+    AnyKeyPress = selPressed || dwPressed;
 
     if (selPressed) {
         SelPress = true;

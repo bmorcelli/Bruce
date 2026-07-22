@@ -191,7 +191,7 @@ String readUTF16(uint8_t *pkt, uint32_t offset, uint16_t len) {
 
 void updateHashUI() {
     // auto& d = M5Cardputer.Display;
-    // drawMainBorderWithTitle("RESPONDER", true); // clear
+    drawMainBorderWithTitle("RESPONDER", true); // clear
 
     // 1) NTLM count
     tft.setTextSize(FP);
@@ -285,6 +285,7 @@ void extractAndPrintHash(uint8_t *pkt, uint32_t smbLength, uint8_t *ntlm) {
     Serial.println(F("------------------------------------"));
 
     // 8. Save sur SD
+    if (!SD.exists("/NTLM")) SD.mkdir("/NTLM");
     File file = SD.open("/NTLM/ntlm_hashes.txt", FILE_APPEND);
     if (file) {
         file.println(finalHash);
@@ -592,30 +593,26 @@ void responder() {
     smbState.active = false;
 
     Serial.println(F("Responder ready - Waiting for NBNS/LLMNR request..."));
-
+    unsigned long lastAnim = 0;
+    drawMainBorderWithTitle("RESPONDER", true);
     while (!check(EscPress)) {
         // M5Cardputer.update();
-        // unsigned long now = millis();
-        // if (now - lastAnim > 250) {
-        //  Choix de la fonction selon le count
-        if (hashCount == 0) {
-            // showWaitingAnimation();
-            tft.setCursor(10, BORDER_PAD_Y + FM * LH);
-            tft.setTextSize(FP);
-            tft.println("Waiting LLMNR Interact");
-        } else if (hashCount == 1) {
-            drawMainBorderWithTitle("RESPONDER", true);
-            tft.setCursor(10, BORDER_PAD_Y + FM * LH);
-            tft.setTextSize(FP);
-            tft.println("Found Interaction!\nthanks 7h30th3r0n3");
-        } else {
-            drawMainBorderWithTitle("RESPONDER", true);
-            tft.setCursor(10, BORDER_PAD_Y + FM * LH);
-            tft.setTextSize(FP);
-            tft.println("End");
+        unsigned long now = millis();
+        if (now - lastAnim > 250) {
+            //  Choix de la fonction selon le count
+            if (hashCount == 0) {
+                tft.setCursor(10, BORDER_PAD_Y + FM * LH);
+                tft.setTextSize(FP);
+                tft.println("Waiting LLMNR Interact");
+            } else if (hashCount == 1) {
+                tft.setCursor(10, tftHeight - (7 + 2 * FP * LH));
+                tft.setTextSize(FP);
+                tft.println("Found Interaction!");
+                tft.setCursor(10, tftHeight - (6 + FP * LH));
+                tft.println("thanks 7h30th3r0n3");
+            }
+            lastAnim = now;
         }
-        // lastAnim = now;
-        //}
 
         int packetSize = nbnsUDP.parsePacket();
         if (packetSize > 0) {

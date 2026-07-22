@@ -43,6 +43,7 @@ void BleMenu::optionsMenu() {
 #if !defined(LITE_VERSION)
     options.push_back({"BLE Suite", [=]() { BleSuiteMenu(); }});
     options.push_back({"Ninebot", [=]() { BLENinebot(); }});
+    options.push_back({"Presenter mode", [=]() { PresenterMode(hid_ble, true); }});
 #else
     options.push_back({"BLE Sniffer", [=]() { BLE_SnifferMenu(); }});
 #endif
