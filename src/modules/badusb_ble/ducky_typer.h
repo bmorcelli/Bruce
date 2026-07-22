@@ -15,7 +15,7 @@
 
 extern HIDInterface *hid_usb;
 extern HIDInterface *hid_ble;
-extern uint8_t _Ask_for_restart;
+extern int activeBLEInstances;
 
 struct DuckyCommand;
 struct DuckyCommandLookup;
@@ -25,7 +25,8 @@ struct DuckyCombination;
 void ducky_setup(HIDInterface *&hid, bool ble = false);
 
 // Setup the keyboard for badUSB or badBLE
-void ducky_startKb(HIDInterface *&hid, bool ble);
+// functionId: 0=Keyboard, 1=Media, 2=BadUSB, 3=Presenter
+void ducky_startKb(HIDInterface *&hid, bool ble, int functionId = 0);
 
 // Parses a file to run in the badUSB
 void key_input(FS fs, const String &bad_script, HIDInterface *hid);
@@ -56,6 +57,12 @@ bool handlePauseResume();
 
 // Presenter mode - press button to advance slides
 void PresenterMode(HIDInterface *&hid, bool ble = true);
+
+// Shared cleanup for ducky_typer BLE functions - cleans a specific instance
+void cleanupDuckyBLE(HIDInterface *&hid);
+
+// Double cleanup with cooling delay
+void safeCleanupDuckyBLE(HIDInterface *&hid);
 
 #endif
 #endif
