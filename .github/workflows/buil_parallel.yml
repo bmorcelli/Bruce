@@ -311,6 +311,9 @@ jobs:
     environment: github_release
     needs: [compile_sketch]
     if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+      issues: write
     steps:
       - id: bruce_version
         name: Get Version
@@ -344,3 +347,22 @@ jobs:
           generate_release_notes: true
           files: |
             Bruce-*.bin
+
+      - name: Close "Fixed on Beta" issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.bruce_version.outputs.version }}
+        run: |
+          set -x
+          gh issue list \
+            --repo "${{ github.repository }}" \
+            --label "Fixed on Beta" \
+            --state open \
+            --limit 500 \
+            --json number \
+            --jq '.[].number' | while read -r issue; do
+            [ -z "$issue" ] && continue
+            gh issue close "$issue" \
+              --repo "${{ github.repository }}" \
+              --comment "Fixed on ${VERSION}. Issue automatically closed after release"
+          done
