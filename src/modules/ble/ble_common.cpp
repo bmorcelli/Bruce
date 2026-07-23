@@ -80,14 +80,7 @@ void ble_info(const String &name, const String &address, const String &signal) {
     }
 }
 
-#if NIMBLE_V2_PLUS
 class AdvertisedDeviceCallbacks : public NimBLEScanCallbacks {};
-#else
-class AdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-public:
-    void onResult(NimBLEAdvertisedDevice *advertisedDevice) override {}
-};
-#endif
 
 static AdvertisedDeviceCallbacks g_scanCallbacks;
 
@@ -148,7 +141,7 @@ bool ble_scan_setup() {
         returnToMenu = true;
         return false;
     }
-    
+
     BLEDevice::init("");
     is_ble_inited = true;
 
@@ -159,12 +152,7 @@ bool ble_scan_setup() {
         return false;
     }
 
-#if NIMBLE_V2_PLUS
     pBLEScan->setScanCallbacks(&g_scanCallbacks);
-#else
-    pBLEScan->setAdvertisedDeviceCallbacks(&g_scanCallbacks);
-#endif
-
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(SCAN_INT);
     pBLEScan->setWindow(SCAN_WINDOW);
@@ -205,23 +193,13 @@ void ble_scan() {
     pBLEScan->clearResults();
 
     try {
-#if NIMBLE_V2_PLUS
         BLEScanResults foundDevices = pBLEScan->getResults(scanTime * 1000, false);
-#else
-        BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
-#endif
-
         int deviceCount = foundDevices.getCount();
         int processedCount = 0;
-
         int maxToProcess = min(deviceCount, MAX_DISPLAY_DEVICES);
 
         for (int i = 0; i < maxToProcess && processedCount < MAX_DISPLAY_DEVICES; i++) {
-#if NIMBLE_V2_PLUS
             const NimBLEAdvertisedDevice *advertisedDevice = foundDevices.getDevice(i);
-#else
-            NimBLEAdvertisedDevice *advertisedDevice = foundDevices.getDevice(i);
-#endif
             if (!advertisedDevice) continue;
 
             String bt_title;
@@ -238,8 +216,8 @@ void ble_scan() {
             if (bt_title.isEmpty()) bt_title = bt_address;
 
             if (options.size() < MAX_DISPLAY_DEVICES) {
-                options.emplace_back(bt_title.c_str(), [=]() { 
-                    ble_info(bt_name, bt_address, bt_signal); 
+                options.emplace_back(bt_title.c_str(), [=]() {
+                    ble_info(bt_name, bt_address, bt_signal);
                 });
                 processedCount++;
             }
@@ -315,11 +293,6 @@ bool initBLEServer() {
         return false;
     }
     pRxCharacteristic->setCallbacks(new MyCallbacks());
-
-#if NIMBLE_V2_PLUS
-#else
-    pService->start();
-#endif
 
     return true;
 }

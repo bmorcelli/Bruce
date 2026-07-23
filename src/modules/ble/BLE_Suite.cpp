@@ -27,28 +27,6 @@
 #include <esp_random.h>
 #include <globals.h>
 
-//=============================================================================
-// NimBLE Version Detection
-//=============================================================================
-
-#if defined(NIMBLE_VERSION)
-    #if NIMBLE_VERSION >= 20000
-        #define NIMBLE_V2_PLUS 1
-    #endif
-#elif defined(NIMBLE_CPP_VERSION) && NIMBLE_CPP_VERSION >= 2
-    #define NIMBLE_V2_PLUS 1
-#elif defined(NIMBLE_VERSION_MAJOR) && NIMBLE_VERSION_MAJOR >= 2
-    #define NIMBLE_V2_PLUS 1
-#elif defined(NIMBLE_VERSION_MAJOR) && NIMBLE_VERSION_MAJOR == 1 && NIMBLE_VERSION_MINOR >= 5
-    #define NIMBLE_V2_PLUS 1
-#elif __has_include(<NimBLEExtAdvertising.h>)
-    #define NIMBLE_V2_PLUS 1
-#endif
-
-#ifndef NIMBLE_V2_PLUS
-    #define NIMBLE_V2_PLUS 0
-#endif
-
 int showSubMenu(const char *title, const char *options[], int optionCount);
 
 extern tft_logger tft;
@@ -64,7 +42,7 @@ std::vector<NimBLEClient *> BLEStateManager::activeClients;
 String BLEStateManager::currentDeviceName = "";
 
 // Scan state management
-static NimBLEScan* g_pBLEScan = nullptr;
+static NimBLEScan *g_pBLEScan = nullptr;
 static bool g_bleScanActive = false;
 
 // Device selection cache
@@ -159,10 +137,8 @@ void ScannerData::addDevice(
     }
 }
 
-DeviceSnapshot* ScannerData::getSnapshot() {
-    if (snapshotCache && (millis() - cacheTimestamp) < 1000) {
-        return snapshotCache;
-    }
+DeviceSnapshot *ScannerData::getSnapshot() {
+    if (snapshotCache && (millis() - cacheTimestamp) < 1000) { return snapshotCache; }
 
     if (xSemaphoreTake(mutex, 50 / portTICK_PERIOD_MS)) {
         if (snapshotCache) {
@@ -3311,19 +3287,10 @@ std::vector<FastPairDeviceInfo> FastPairExploitEngine::scanForFastPairDevices(in
     pScan->setInterval(97);
     pScan->setWindow(67);
 
-#if NIMBLE_V2_PLUS
     NimBLEScanResults results = pScan->getResults(duration * 1000, false);
-#else
-    NimBLEScanResults results = pScan->start(duration, false);
-#endif
 
     for (int i = 0; i < results.getCount(); i++) {
-#if NIMBLE_V2_PLUS
         const NimBLEAdvertisedDevice *device = results.getDevice(i);
-#else
-        NimBLEAdvertisedDevice *device = results.getDevice(i);
-#endif
-
         String address = String(device->getAddress().toString().c_str());
         String name = device->getName().c_str();
         int rssi = device->getRSSI();
@@ -3911,145 +3878,141 @@ static String parseManufacturerData(const std::vector<uint8_t> &payload) {
 void BLE_Sniffer() {
     // FIX: Always init - handles case where stack was deinit'd by another module
     BLEStateManager::initBLE("BruceSniffer", ESP_PWR_LVL_P9);
-    
-    drawMainBorderWithTitle("BLE SNIFFER");
-    padprintln("");
-    padprintln("Press [SEL] to start/stop capture");
-    padprintln("Press [ESC] to exit");
-    padprintln("");
-    padprintln("Status: READY");
-
     NimBLEScan *pScan = nullptr;
-    bool isCapturing = false;
     bool firstRun = true;
+    bool redraw = true;
 
     while (true) {
+        if (redraw) {
+            drawMainBorderWithTitle("BLE SNIFFER");
+            padprintln("");
+            padprintln("Press [SEL] to start/stop capture");
+            padprintln("Press [ESC] to exit");
+            padprintln("");
+            padprintln("Status: READY");
+            redraw = false;
+        }
         if (check(EscPress)) {
-            if (isCapturing) {
-                pScan->stop();
-                isCapturing = false;
-            }
             if (pScan) {
+                pScan->stop();
                 pScan->clearResults();
                 pScan = nullptr;
             }
             break;
         }
 
-        if (check(SelPress)) {
-            isCapturing = !isCapturing;
-            if (isCapturing) {
-                if (firstRun) {
-                    BLEStateManager::initBLE("BruceSniffer", ESP_PWR_LVL_P9);
-                    pScan = NimBLEDevice::getScan();
-                    if (!pScan) {
-                        displayError("Failed to init scanner");
-                        return;
-                    }
-                    pScan->setActiveScan(true);
-                    pScan->setInterval(97);
-                    pScan->setWindow(67);
-                    pScan->setDuplicateFilter(false);
-                    firstRun = false;
+        bool isSelPressed = check(SelPress);
+        if (isSelPressed && snifferPacketCount == 0) {
+            if (firstRun) {
+                BLEStateManager::initBLE("BruceSniffer", ESP_PWR_LVL_P9);
+                pScan = NimBLEDevice::getScan();
+                if (!pScan) {
+                    displayError("Failed to init scanner");
+                    return;
                 }
-                snifferPacketCount = 0;
-                snifferPackets.clear();
-                padprintln("");
-                padprintln("Status: CAPTURING...");
-                padprintln("Press [SEL] to stop");
-
-                NimBLEScanResults results = pScan->getResults(10 * 1000, true);
-
-                for (int i = 0; i < results.getCount(); i++) {
-#if NIMBLE_V2_PLUS
-                    const NimBLEAdvertisedDevice *device = results.getDevice(i);
-#else
-                    NimBLEAdvertisedDevice *device = results.getDevice(i);
-#endif
-
-                    SnifferPacket packet;
-                    packet.address = String(device->getAddress().toString().c_str());
-                    packet.name = String(device->getName().c_str());
-                    if (packet.name.isEmpty()) packet.name = "Unknown";
-                    packet.rssi = device->getRSSI();
-                    packet.timestamp = String(millis() / 1000);
-
-                    std::string manufData = device->getManufacturerData();
-                    packet.payload.assign(manufData.begin(), manufData.end());
-                    packet.payloadHex = payloadToHex(packet.payload);
-                    packet.channel = 37 + (i % 3);
-
-                    snifferPackets.push_back(packet);
-                    snifferPacketCount++;
-                }
-
-                pScan->stop();
-                isCapturing = false;
-                padprintln("");
-                padprintln("Status: DONE");
-                padprintln("Captured: " + String(snifferPacketCount) + " packets");
-                padprintln("");
-                padprintln("Press [SEL] to view packets");
-                padprintln("Press [NEXT] to save to SD/LittleFS");
-                padprintln("Press [ESC] to exit");
+                pScan->setActiveScan(true);
+                pScan->setInterval(97);
+                pScan->setWindow(67);
+                pScan->setDuplicateFilter(false);
+                firstRun = false;
             }
+            snifferPacketCount = 0;
+            snifferPackets.clear();
+
+            padprintln("Status: CAPTURING...");
+
+            NimBLEScanResults results = pScan->getResults(10 * 1000, true);
+
+            for (int i = 0; i < results.getCount(); i++) {
+                const NimBLEAdvertisedDevice *device = results.getDevice(i);
+                SnifferPacket packet;
+                packet.address = String(device->getAddress().toString().c_str());
+                packet.name = String(device->getName().c_str());
+                if (packet.name.isEmpty()) packet.name = "Unknown";
+                packet.rssi = device->getRSSI();
+                packet.timestamp = String(millis() / 1000);
+
+                std::string manufData = device->getManufacturerData();
+                packet.payload.assign(manufData.begin(), manufData.end());
+                packet.payloadHex = payloadToHex(packet.payload);
+                packet.channel = 37 + (i % 3);
+
+                snifferPackets.push_back(packet);
+                snifferPacketCount++;
+            }
+
+            pScan->stop();
+            drawMainBorderWithTitle("BLE SNIFFER");
+            padprintln("");
+            padprintln("Status: DONE");
+            padprintln("Captured: " + String(snifferPacketCount) + " packets");
+            padprintln("");
+            padprintln("[SEL]  - view packets");
+            padprintln("[NEXT] - save to SD/LittleFS");
+            padprintln("[ESC]  - exit");
         }
 
-        if (check(SelPress) && !isCapturing && snifferPacketCount > 0) {
+        if (isSelPressed && snifferPacketCount > 0) {
             int selected = 0;
             int scrollOffset = 0;
             bool viewing = true;
 
             while (viewing) {
+                int y = BORDER_PAD_Y + FM * LH + 4;
+                const int lineH = max(14, tftHeight / 12);
+                const int visibleItems = (tftHeight - y - 50) / lineH;
                 if (check(EscPress)) {
                     viewing = false;
+                    redraw = true; // main screen
                     break;
                 }
 
-                tft.fillScreen(bruceConfig.bgColor);
-                drawMainBorderWithTitle("CAPTURED PACKETS");
+                if (redraw) {
+                    tft.fillScreen(bruceConfig.bgColor);
+                    drawMainBorderWithTitle("CAPTURED PACKETS");
 
-                int y = BORDER_PAD_Y + FM * LH + 4;
-                int lineH = max(14, tftHeight / 12);
-                int visibleItems = (tftHeight - y - 50) / lineH;
-
-                tft.setTextSize(FP);
-                tft.setTextColor(TFT_CYAN, bruceConfig.bgColor);
-                tft.setCursor(10, y);
-                tft.println("Packets: " + String(snifferPacketCount));
-                y += lineH;
-
-                for (int i = 0; i < visibleItems && (scrollOffset + i) < snifferPacketCount && i < 5; i++) {
-                    int idx = scrollOffset + i;
-                    SnifferPacket &pkt = snifferPackets[idx];
-                    bool selectedItem = (idx == selected);
-                    uint16_t fg = selectedItem ? bruceConfig.bgColor : TFT_WHITE;
-                    uint16_t bg = selectedItem ? bruceConfig.priColor : bruceConfig.bgColor;
-
-                    tft.fillRect(10, y, tftWidth - 20, lineH - 2, bg);
-                    tft.setTextColor(fg, bg);
-                    String display = String(idx + 1) + ". " + pkt.name + " | " + pkt.address + " | " +
-                                     String(pkt.rssi) + "dB";
-                    if (display.length() > 35) display = display.substring(0, 32) + "...";
-                    tft.drawString(display, 15, y + 2, 1);
-                    y += lineH;
-                }
-
-                if (snifferPacketCount > visibleItems) {
+                    tft.setTextSize(FP);
                     tft.setTextColor(TFT_CYAN, bruceConfig.bgColor);
-                    tft.setCursor(tftWidth - 30, BORDER_PAD_Y + FM * LH + 4 + lineH);
-                    if (scrollOffset > 0)
-                        tft.drawString("^", tftWidth - 25, BORDER_PAD_Y + FM * LH + 4 + lineH, 1);
-                    if (scrollOffset + visibleItems < snifferPacketCount) {
-                        tft.drawString(
-                            "v", tftWidth - 25, BORDER_PAD_Y + FM * LH + 4 + lineH * (visibleItems - 1), 1
-                        );
-                    }
-                }
+                    tft.setCursor(10, y);
+                    tft.println("Packets: " + String(snifferPacketCount));
+                    y += lineH;
 
-                tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
-                tft.setCursor(10, tftHeight - 20);
-                tft.drawString("PREV/NEXT: Navigate  SEL: View Details  ESC: Back", 10, tftHeight - 20, 1);
+                    for (int i = 0; i < visibleItems && (scrollOffset + i) < snifferPacketCount && i < 5;
+                         i++) {
+                        int idx = scrollOffset + i;
+                        SnifferPacket &pkt = snifferPackets[idx];
+                        bool selectedItem = (idx == selected);
+                        uint16_t fg = selectedItem ? bruceConfig.bgColor : TFT_WHITE;
+                        uint16_t bg = selectedItem ? bruceConfig.priColor : bruceConfig.bgColor;
+
+                        tft.fillRect(10, y, tftWidth - 20, lineH - 2, bg);
+                        tft.setTextColor(fg, bg);
+                        String display = String(idx + 1) + ". " + pkt.name + " | " + pkt.address + " | " +
+                                         String(pkt.rssi) + "dB";
+                        if (display.length() > 35) display = display.substring(0, 32) + "...";
+                        tft.drawString(display, 15, y + 2, 1);
+                        y += lineH;
+                    }
+
+                    if (snifferPacketCount > visibleItems) {
+                        tft.setTextColor(TFT_CYAN, bruceConfig.bgColor);
+                        tft.setCursor(tftWidth - 30, BORDER_PAD_Y + FM * LH + 4 + lineH);
+                        if (scrollOffset > 0)
+                            tft.drawString("^", tftWidth - 25, BORDER_PAD_Y + FM * LH + 4 + lineH, 1);
+                        if (scrollOffset + visibleItems < snifferPacketCount) {
+                            tft.drawString(
+                                "v", tftWidth - 25, BORDER_PAD_Y + FM * LH + 4 + lineH * (visibleItems - 1), 1
+                            );
+                        }
+                    }
+
+                    tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+                    tft.setCursor(10, tftHeight - 20);
+                    tft.drawString(
+                        "PREV/NEXT: Navigate  SEL: View Details  ESC: Back", 10, tftHeight - 20, 1
+                    );
+                    redraw = false; // view screen
+                }
 
                 if (check(NextPress)) {
                     if (selected < snifferPacketCount - 1) {
@@ -4058,12 +4021,14 @@ void BLE_Sniffer() {
                             scrollOffset = selected - visibleItems + 1;
                         }
                     }
+                    redraw = true; // view screen
                 }
                 if (check(PrevPress)) {
                     if (selected > 0) {
                         selected--;
                         if (selected < scrollOffset) { scrollOffset = selected; }
                     }
+                    redraw = true; // view screen
                 }
                 if (check(SelPress)) {
                     SnifferPacket &pkt = snifferPackets[selected];
@@ -4105,12 +4070,14 @@ void BLE_Sniffer() {
                     while (!check(EscPress) && !check(SelPress) && !check(PrevPress) && !check(NextPress)) {
                         delay(50);
                     }
+                    redraw = true; // view screen
                 }
                 delay(100);
             }
+            redraw = true; // main screen
         }
 
-        if (check(NextPress) && !isCapturing && snifferPacketCount > 0) {
+        if (check(NextPress) && snifferPacketCount > 0) {
             FS *fs = nullptr;
             String storageType = "";
 
@@ -4158,6 +4125,7 @@ void BLE_Sniffer() {
                 displayError("No storage available");
             }
             delay(1000);
+            redraw = true; // main screen
         }
 
         delay(100);
@@ -4181,7 +4149,8 @@ String selectTargetFromScan(const char *title) {
 
     bool bleWasActiveBefore = BLEConnected || (BLEDevice::getServer() != nullptr);
 #if !defined(LITE_VERSION)
-    bleWasActiveBefore = bleWasActiveBefore || BLEStateManager::isBLEActive() || BLEStateManager::getActiveClientCount() > 0;
+    bleWasActiveBefore =
+        bleWasActiveBefore || BLEStateManager::isBLEActive() || BLEStateManager::getActiveClientCount() > 0;
 #endif
 
     // FIX: Always call initBLE - it handles the case where stack was deinit'd
@@ -4239,25 +4208,14 @@ String selectTargetFromScan(const char *title) {
     tft.print("Active scan (" + String(activeScanTime) + "s)...");
 
     try {
-#if NIMBLE_V2_PLUS
         BLEScanResults activeResults = g_pBLEScan->getResults(activeScanTime * 1000, false);
-#else
-        BLEScanResults activeResults = g_pBLEScan->start(activeScanTime, false);
-#endif
-
         for (int i = 0; i < activeResults.getCount(); i++) {
-#if NIMBLE_V2_PLUS
             const NimBLEAdvertisedDevice *device = activeResults.getDevice(i);
-#else
-            NimBLEAdvertisedDevice *device = activeResults.getDevice(i);
-#endif
             if (!device) continue;
 
             String address = String(device->getAddress().toString().c_str());
             String name = String(device->getName().c_str());
-            if (name.isEmpty() || name == "(null)" || name == "null" || name == "NULL") {
-                name = "Unknown";
-            }
+            if (name.isEmpty() || name == "(null)" || name == "null" || name == "NULL") { name = "Unknown"; }
             int rssi = device->getRSSI();
             if (rssi == 0) rssi = -100;
 
@@ -4283,25 +4241,15 @@ String selectTargetFromScan(const char *title) {
         tft.setCursor(20, 100);
         tft.print("Passive scan (" + String(passiveScanTime) + "s)...");
 
-#if NIMBLE_V2_PLUS
         BLEScanResults passiveResults = g_pBLEScan->getResults(passiveScanTime * 1000, false);
-#else
-        BLEScanResults passiveResults = g_pBLEScan->start(passiveScanTime, false);
-#endif
 
         for (int i = 0; i < passiveResults.getCount(); i++) {
-#if NIMBLE_V2_PLUS
             const NimBLEAdvertisedDevice *device = passiveResults.getDevice(i);
-#else
-            NimBLEAdvertisedDevice *device = passiveResults.getDevice(i);
-#endif
             if (!device) continue;
 
             String address = String(device->getAddress().toString().c_str());
             String name = String(device->getName().c_str());
-            if (name.isEmpty() || name == "(null)" || name == "null" || name == "NULL") {
-                name = "Unknown";
-            }
+            if (name.isEmpty() || name == "(null)" || name == "null" || name == "NULL") { name = "Unknown"; }
             int rssi = device->getRSSI();
             if (rssi == 0) rssi = -100;
 
@@ -4323,9 +4271,7 @@ String selectTargetFromScan(const char *title) {
         }
     } catch (...) {
         displayError("BLE scan error");
-        if (g_pBLEScan) {
-            g_pBLEScan->clearResults();
-        }
+        if (g_pBLEScan) { g_pBLEScan->clearResults(); }
         return "";
     }
 
@@ -4334,7 +4280,7 @@ String selectTargetFromScan(const char *title) {
         g_bleScanActive = false;
     }
 
-    DeviceSnapshot* snapshot = scannerData.getSnapshot();
+    DeviceSnapshot *snapshot = scannerData.getSnapshot();
     if (!snapshot || snapshot->count == 0) {
         tft.fillScreen(TFT_YELLOW);
         tft.drawRect(5, 5, tftWidth - 10, tftHeight - 10, TFT_BLACK);
@@ -4359,8 +4305,7 @@ String selectTargetFromScan(const char *title) {
         for (size_t j = i + 1; j < deviceCount; j++) {
             bool swapNeeded = false;
             if (snapshot->fastPair[j] && !snapshot->fastPair[i]) swapNeeded = true;
-            else if (snapshot->fastPair[j] == snapshot->fastPair[i] && 
-                     snapshot->rssi[j] > snapshot->rssi[i])
+            else if (snapshot->fastPair[j] == snapshot->fastPair[i] && snapshot->rssi[j] > snapshot->rssi[i])
                 swapNeeded = true;
 
             if (swapNeeded) {
@@ -4499,7 +4444,7 @@ String selectTargetFromScan(const char *title) {
 String selectMultipleTargetsFromScan(const char *title, std::vector<NimBLEAddress> &targets) {
     targets.clear();
 
-    DeviceSnapshot* snapshot = scannerData.getSnapshot();
+    DeviceSnapshot *snapshot = scannerData.getSnapshot();
     if (!snapshot || snapshot->count == 0) {
         showErrorMessage("No devices found. Run scan first.");
         return "";
@@ -4594,9 +4539,9 @@ String selectMultipleTargetsFromScan(const char *title, std::vector<NimBLEAddres
             delay(200);
             selected[currentIndex] = !selected[currentIndex];
             if (selected[currentIndex]) {
-                targets.push_back(NimBLEAddress(
-                    std::string(snapshot->addresses[currentIndex].c_str()), BLE_ADDR_PUBLIC
-                ));
+                targets.push_back(
+                    NimBLEAddress(std::string(snapshot->addresses[currentIndex].c_str()), BLE_ADDR_PUBLIC)
+                );
             } else {
                 for (auto it = targets.begin(); it != targets.end(); ++it) {
                     if (it->toString() == snapshot->addresses[currentIndex].c_str()) {
@@ -4622,9 +4567,7 @@ NimBLEAddress parseAddress(const String &addressInfo) {
     cleanAddr.trim();
     cleanAddr.toUpperCase();
 
-    if (cleanAddr.endsWith(":0")) {
-        cleanAddr = cleanAddr.substring(0, cleanAddr.length() - 2);
-    }
+    if (cleanAddr.endsWith(":0")) { cleanAddr = cleanAddr.substring(0, cleanAddr.length() - 2); }
 
     int start = -1;
     int colonCount = 0;
@@ -4649,9 +4592,7 @@ NimBLEAddress parseAddress(const String &addressInfo) {
                         }
                     }
                 }
-                if (valid) {
-                    return NimBLEAddress(std::string(possibleMac.c_str()), BLE_ADDR_PUBLIC);
-                }
+                if (valid) { return NimBLEAddress(std::string(possibleMac.c_str()), BLE_ADDR_PUBLIC); }
             }
         } else if (c == ':') {
             colonCount++;
@@ -4954,7 +4895,7 @@ void showWelcomeScreen() {
 void BleSuiteMenu() {
     // FIX: Init BLE stack ONCE when entering the suite
     BLEStateManager::initBLE("Bruce-BLESuite", ESP_PWR_LVL_P9);
-    
+
     // Clear data when entering the menu
     scannerData.clear();
     g_selectedDevice.address = "";
@@ -5039,7 +4980,7 @@ void BleSuiteMenu() {
             scannerData.clear();
             g_selectedDevice.address = "";
             g_selectedDevice.name = "";
-            
+
             // Deinit BLE stack when exiting the suite
             BLEStateManager::deinitBLE(true);
             return;
@@ -5092,7 +5033,7 @@ const char *getScanTitle(int attackIndex) {
 void executeAttackWithTargetScan(int attackIndex) {
     // FIX: Ensure BLE is initialized for the attack
     BLEStateManager::initBLE("Bruce-Attack", ESP_PWR_LVL_P9);
-    
+
     String targetInfo = selectTargetFromScan(getScanTitle(attackIndex));
     if (targetInfo.isEmpty()) return;
 

@@ -252,34 +252,18 @@ static bool bleKbNotifyRetry(BLECharacteristic *chr, const uint8_t *value, size_
 }
 
 void BleKeyboard::sendReport(KeyReport *keys) {
-#ifdef NIMBLE_V2_PLUS
-    if (this->isConnected() && this->getSubscribedCount() > 0)
-#else
-    if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0)
-#endif
-    {
+    if (this->isConnected() && this->getSubscribedCount() > 0) {
         this->inputKeyboard->setValue((uint8_t *)keys, sizeof(KeyReport));
         bleKbNotifyRetry(this->inputKeyboard, (uint8_t *)keys, sizeof(KeyReport));
-#if defined(USE_NIMBLE)
-        // vTaskDelay(delayTicks);
         this->delay_ms(_delay_ms);
-#endif // USE_NIMBLE
     }
 }
 
 void BleKeyboard::sendReport(MediaKeyReport *keys) {
-#ifdef NIMBLE_V2_PLUS
-    if (this->isConnected() && this->getSubscribedCount() > 0)
-#else
-    if (this->isConnected() && this->inputKeyboard->getSubscribedCount() > 0)
-#endif
-    {
+    if (this->isConnected() && this->getSubscribedCount() > 0) {
         this->inputMediaKeys->setValue((uint8_t *)keys, sizeof(MediaKeyReport));
         bleKbNotifyRetry(this->inputMediaKeys, (uint8_t *)keys, sizeof(MediaKeyReport));
-#if defined(USE_NIMBLE)
-        // vTaskDelay(delayTicks);
         this->delay_ms(_delay_ms);
-#endif // USE_NIMBLE
     }
 }
 
@@ -431,7 +415,6 @@ size_t BleKeyboard::write(const uint8_t *buffer, size_t size) {
     }
     return n;
 }
-#ifdef NIMBLE_V2_PLUS
 void BleKeyboard::ServerCallbacks::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) {
     parent->connected = true;
     Serial.println("BRUCE KEYBOARD: lib connected");
@@ -468,41 +451,6 @@ void BleKeyboard::CharacteristicCallbacks::onSubscribe(
         Serial.println("BRUCE KEYBOARD: Client subscribed to notifications.");
     }
 }
-
-#else
-void BleKeyboard::onConnect(BLEServer *pServer) {
-    // this->connected = true;
-    Serial.println("lib connected");
-}
-void BleKeyboard::onDisconnect(BLEServer *pServer) {
-    this->connected = false;
-    // NimBLEDevice::startAdvertising();
-    Serial.println("lib disconnected");
-}
-void BleKeyboard::onWrite(BLECharacteristic *me) {
-    uint8_t *value = (uint8_t *)(me->getValue().c_str());
-    (void)value;
-    ESP_LOGI(LOG_TAG, "special keys: %d", *value);
-}
-void BleKeyboard::onSubscribe(
-    NimBLECharacteristic *pCharacteristic, ble_gap_conn_desc *desc, uint16_t subValue
-) {
-    if (subValue == 0) {
-        Serial.println("Client unsubscribed from notifications/indications.");
-    } else {
-        Serial.println("Client subscribed to notifications.");
-    }
-}
-void BleKeyboard::onAuthenticationComplete(ble_gap_conn_desc *desc) {
-    if (desc->sec_state.encrypted) {
-        Serial.println("Paired successfully.");
-        this->connected = true;
-    } else {
-        Serial.println("Pairing failed");
-        this->connected = false;
-    }
-}
-#endif
 
 void BleKeyboard::delay_ms(uint64_t ms) {
     uint64_t m = esp_timer_get_time();

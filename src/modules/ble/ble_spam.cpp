@@ -35,9 +35,6 @@
 #include "core/sd_functions.h"
 #include "core/utils.h"
 #ifdef CONFIG_BT_NIMBLE_ENABLED
-#if __has_include(<NimBLEExtAdvertising.h>)
-#define NIMBLE_V2_PLUS 1
-#endif
 #include "esp_mac.h"
 #if __has_include("host/ble_hs.h")
 #include "host/ble_hs.h"
@@ -214,9 +211,6 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
     BLEAdvertisementData AdvData = BLEAdvertisementData();
     uint8_t *AdvData_Raw = nullptr;
     uint8_t i = 0;
-#ifndef NIMBLE_V2_PLUS
-    static std::vector<uint8_t> advDataVector;
-#endif
 
     switch (Type) {
         case Microsoft: {
@@ -243,19 +237,11 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
             AdvData_Raw[i++] = 0x80;
             memcpy(&AdvData_Raw[i], Name, name_len);
             i += name_len;
-#ifdef NIMBLE_V2_PLUS
             AdvData.addData(AdvData_Raw, 7 + name_len);
-#else
-            advDataVector.assign(AdvData_Raw, AdvData_Raw + 7 + name_len);
-            AdvData.addData(advDataVector);
-#endif
             break;
         }
         case Samsung: {
             BLEAdvertisementData AdvData = BLEAdvertisementData();
-#ifndef NIMBLE_V2_PLUS
-            static std::vector<uint8_t> advDataVector;
-#endif
             if (random(2) == 0) {
                 // Galaxy Watch packet
                 uint8_t model = watch_models[random(watch_models_count)].value;
@@ -276,12 +262,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
                     0x43,
                     (uint8_t)((model >> 0x00) & 0xFF)
                 };
-#ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Samsung_Data, 15);
-#else
-                advDataVector.assign(Samsung_Data, Samsung_Data + 15);
-                AdvData.addData(advDataVector);
-#endif
             } else {
                 // Galaxy Buds packet (MarlinSchuck)
                 uint32_t model = samsung_buds_models[random(samsung_buds_count)];
@@ -322,12 +303,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
                 Buds_Data[bi++] = 0x10;
                 Buds_Data[bi++] = 0xFF;
                 Buds_Data[bi++] = 0x75;
-#ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Buds_Data, bi);
-#else
-                advDataVector.assign(Buds_Data, Buds_Data + bi);
-                AdvData.addData(advDataVector);
-#endif
             }
             return AdvData;
         }
@@ -349,12 +325,7 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
                 0x0A,
                 (uint8_t)((rand() % 120) - 100)
             };
-#ifdef NIMBLE_V2_PLUS
             AdvData.addData(Google_Data, 14);
-#else
-            advDataVector.assign(Google_Data, Google_Data + 14);
-            AdvData.addData(advDataVector);
-#endif
             break;
         }
         default: {
@@ -373,16 +344,14 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type, const S
 void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId) {
     // CRITICAL: Clear any pending button presses before starting
     delay(50);
-    while (check(AnyKeyPress)) {
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
+    while (check(AnyKeyPress)) { vTaskDelay(10 / portTICK_PERIOD_MS); }
     // Reset all button states
     SelPress = false;
     EscPress = false;
     PrevPress = false;
     NextPress = false;
     AnyKeyPress = false;
-    
+
     uint8_t macAddr[6];
     generateRandomMac(macAddr);
     esp_iface_mac_addr_set(macAddr, ESP_MAC_BT);
@@ -417,7 +386,7 @@ void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId
     while (running) {
         pAdvertising->start();
         Serial.println("Advertising started...");
-        
+
         // Check for button press with debounce
         for (int i = 0; i < 20; i++) {
             vTaskDelay(1 / portTICK_PERIOD_MS);
@@ -426,11 +395,11 @@ void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId
                 break;
             }
         }
-        
+
         pAdvertising->stop();
         vTaskDelay(5 / portTICK_PERIOD_MS);
         Serial.println("Advertising stop");
-        
+
         esp_task_wdt_reset();
     }
 
@@ -1038,21 +1007,7 @@ buildAppleProximityPair(uint8_t prefix, uint16_t deviceId, BLEAdvertisementData 
     i += 16;
 
     advertisementData = BLEAdvertisementData();
-    // No setFlags() here: this manufacturer-data AD entry is already exactly
-    // 31 bytes (the legacy advertising PDU max). Adding a 3-byte Flags AD
-    // entry first pushes NimBLE's payload past BLE_HS_ADV_MAX_SZ, so the
-    // addData() call below silently fails and returns false — the device
-    // then broadcasts flags only, with no Apple payload at all (no popup,
-    // but MAC still rotates and "packets" still go out, which is exactly
-    // what looked broken). iOS's Continuity parser doesn't require a Flags
-    // AD entry to read manufacturer data, and the real Flipper Zero
-    // ble_spam app never sends one for this packet either.
-#ifdef NIMBLE_V2_PLUS
     advertisementData.addData(buf, i);
-#else
-    std::vector<uint8_t> dataVec(buf, buf + i);
-    advertisementData.addData(dataVec);
-#endif
     return true;
 }
 
@@ -1220,12 +1175,7 @@ static bool bleSpamBuildAppleContinuityAdvertisement(BLEAdvertisementData &adver
     if (len == 0) return false;
     advertisementData = BLEAdvertisementData();
     advertisementData.setFlags(0x06);
-#ifdef NIMBLE_V2_PLUS
     advertisementData.addData(buf, len);
-#else
-    std::vector<uint8_t> dataVec(buf, buf + len);
-    advertisementData.addData(dataVec);
-#endif
     return true;
 }
 
@@ -1290,9 +1240,6 @@ static bool bleSpamBuildAdvertisementData(
         case BLE_SPAM_ATTACK_SAMSUNG: {
             // Device list: 0=Galaxy Buds, 1=Galaxy Watch, 2=Generic Samsung, 3=Random/All
             BLEAdvertisementData AdvData = BLEAdvertisementData();
-#ifndef NIMBLE_V2_PLUS
-            static std::vector<uint8_t> samsungDataVec;
-#endif
             bool sendBuds;
             if (deviceIndex == BLE_SPAM_SAMSUNG_RANDOM_IDX || deviceIndex == 2) {
                 // Random/All or Generic — pick randomly each packet
@@ -1342,23 +1289,13 @@ static bool bleSpamBuildAdvertisementData(
                 Buds_Data[bi++] = 0x10;
                 Buds_Data[bi++] = 0xFF;
                 Buds_Data[bi++] = 0x75;
-#ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Buds_Data, bi);
-#else
-                samsungDataVec.assign(Buds_Data, Buds_Data + bi);
-                AdvData.addData(samsungDataVec);
-#endif
             } else {
                 uint8_t model = watch_models[random(watch_models_count)].value;
                 uint8_t Watch_Data[15] = {
                     0x0E, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0xFF, 0x00, 0x00, 0x43, model
                 };
-#ifdef NIMBLE_V2_PLUS
                 AdvData.addData(Watch_Data, 15);
-#else
-                samsungDataVec.assign(Watch_Data, Watch_Data + 15);
-                AdvData.addData(samsungDataVec);
-#endif
             }
             AdvData.setFlags(0x06);
             advertisementData = AdvData;
@@ -1414,12 +1351,7 @@ static bool bleSpamBuildAdvertisementData(
             memcpy(&packet[i], name.c_str(), nameLen);
             i += nameLen;
 
-#ifdef NIMBLE_V2_PLUS
             advertisementData.addData(packet, i);
-#else
-            std::vector<uint8_t> dataVec(packet, packet + i);
-            advertisementData.addData(dataVec);
-#endif
             return true;
         }
         default: return false;

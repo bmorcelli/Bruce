@@ -33,9 +33,6 @@ extern BLEService *pService;
 extern BLECharacteristic *pTxCharacteristic;
 extern BLECharacteristic *pRxCharacteristic;
 extern bool bleDataTransferEnabled;
-#if __has_include(<NimBLEExtAdvertising.h>)
-#define NIMBLE_V2_PLUS 1
-#endif
 PN532KillerTools::PN532KillerTools() { setup(); }
 
 PN532KillerTools::~PN532KillerTools() {
