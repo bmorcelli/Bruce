@@ -13,7 +13,7 @@
 #include <esp_random.h>
 #include <globals.h>
 
-#define ST25R_DEBUG 1
+// #define ST25R_DEBUG 1
 #if ST25R_DEBUG
 #define ST25R_LOG(fmt, ...) Serial.printf("[ST25R] " fmt "\n", ##__VA_ARGS__)
 #else

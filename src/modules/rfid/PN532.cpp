@@ -20,7 +20,7 @@
 #define GPIO_NUM_25 25
 #endif
 
-#define PN532_DEBUG
+// #define PN532_DEBUG
 #ifdef PN532_DEBUG
 #define PN532_DBG(...) Serial.printf(__VA_ARGS__)
 #else

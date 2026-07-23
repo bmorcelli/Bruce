@@ -17,7 +17,7 @@
 // classification). Intended for bring-up / hardware validation only — leave
 // at 0 for normal builds. Toggle here (or with -DRF_DEBUG=1) to enable.
 #ifndef RF_DEBUG
-#define RF_DEBUG 1
+#define RF_DEBUG 0
 #endif
 
 #if RF_DEBUG
