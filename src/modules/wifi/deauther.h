@@ -13,7 +13,7 @@ struct WiFiState {
     String ap_ssid = "";
 };
 
-void stationDeauth(Host host);
+void stationDeauth(Host host, const uint8_t *apBssid = nullptr);
 void deauthAll();
 void deauthTargetList(const std::vector<Host>& targets);
 

