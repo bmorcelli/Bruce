@@ -435,8 +435,11 @@ void saveHandshake(const wifi_promiscuous_pkt_t *packet, bool beacon, FS &Fs, co
     }
 }
 
+// Returns "" when the SSID is unknown, so buildHandshakePath() falls back to
+// a MAC-based (per-AP unique) filename instead of bucketing every AP with an
+// unresolved SSID into the same file.
 static String sanitizeSsid(const char *ssid) {
-    if (!ssid || ssid[0] == '\0') { return "UNKNOWN"; }
+    if (!ssid || ssid[0] == '\0') { return ""; }
     String sanitized = "";
     for (size_t i = 0; ssid[i] != '\0' && i < MAX_CAPTURE_SSID_LEN; ++i) {
         const char c = ssid[i];
@@ -447,7 +450,6 @@ static String sanitizeSsid(const char *ssid) {
             sanitized += '_';
         }
     }
-    if (sanitized.length() == 0) { sanitized = "UNKNOWN"; }
     return sanitized;
 }
 
@@ -984,8 +986,10 @@ void sniffer(void *buf, wifi_promiscuous_pkt_type_t type) {
     item.saveHandshake = saveHandshake;
     item.saveDeauth = saveDeauth;
     copyMac(item.bssid, frameInfo.apAddr);
-    String ssidLabel = frameInfo.ssid.length() == 0 ? "UNKNOWN" : frameInfo.ssid;
-    copySsidToBuffer(ssidLabel, item.ssid, sizeof(item.ssid));
+    // Leave empty when unresolved: saveHandshake()/buildHandshakePath() then
+    // fall back to a per-AP MAC-based filename instead of forcing "UNKNOWN",
+    // which would collide different APs into the same handshake pcap.
+    copySsidToBuffer(frameInfo.ssid, item.ssid, sizeof(item.ssid));
 
     BaseType_t taskWoken = pdFALSE;
     if (xQueueSendFromISR(snifferQueue, &item, &taskWoken) != pdTRUE) {
