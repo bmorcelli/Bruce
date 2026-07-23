@@ -620,7 +620,6 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel) 
             padprintln("SSID: " + tssid);
             padprintln("BSSID: " + mac);
             padprintln("Security: " + encryptionTypeStr);
-            padprintln("");
 
             if (phase == CAPTURED) {
                 tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
@@ -633,35 +632,48 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel) 
                 padprintln("Status: Waiting...");
             }
 
-            padprintln("");
-            tft.setTextColor(hsTracker.msg1 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
-            padprintln("        EAPOL MSG 1: " + String(hsTracker.msg1 ? "Captured" : "None"));
-            tft.setTextColor(hsTracker.msg2 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
-            padprintln("        EAPOL MSG 2: " + String(hsTracker.msg2 ? "Captured" : "None"));
-            tft.setTextColor(hsTracker.msg3 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
-            padprintln("        EAPOL MSG 3: " + String(hsTracker.msg3 ? "Captured" : "None"));
-            tft.setTextColor(hsTracker.msg4 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
-            padprintln("        EAPOL MSG 4: " + String(hsTracker.msg4 ? "Captured" : "None"));
-            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            if (tftHeight > 135) {
+                tft.setTextColor(hsTracker.msg1 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                padprintln("        EAPOL MSG 1: " + String(hsTracker.msg1 ? "Captured" : "None"));
+                tft.setTextColor(hsTracker.msg2 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                padprintln("        EAPOL MSG 2: " + String(hsTracker.msg2 ? "Captured" : "None"));
+                tft.setTextColor(hsTracker.msg3 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                padprintln("        EAPOL MSG 3: " + String(hsTracker.msg3 ? "Captured" : "None"));
+                tft.setTextColor(hsTracker.msg4 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                padprintln("        EAPOL MSG 4: " + String(hsTracker.msg4 ? "Captured" : "None"));
+                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            } else {
+                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+                padprint("EAPOL MSG:");
+                tft.setTextColor(hsTracker.msg1 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                tft.print(" 1");
+                tft.setTextColor(hsTracker.msg2 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                tft.print(" 2");
+                tft.setTextColor(hsTracker.msg3 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                tft.print(" 3");
+                tft.setTextColor(hsTracker.msg4 ? TFT_GREEN : TFT_RED, bruceConfig.bgColor);
+                tft.print(" 4");
+                if (hsTracker.msg1 && hsTracker.msg2 && hsTracker.msg3 && hsTracker.msg4) {
+                    tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
+                    tft.println(" > All Captured");
+                } else tft.println("");
+            }
 
-            padprintln("");
-            padprintln("Deauth sent: " + String(deauthCount));
+            padprint("Deauth sent: " + String(deauthCount));
             if (phase != CAPTURED) {
                 unsigned long remaining = deauthInterval() - (millis() - autoDeauthTimer);
                 if (remaining > deauthInterval()) remaining = 0;
-                padprintln("Next deauth in " + String(remaining / 1000) + "s  [OK]");
-            }
+                tft.println(", more in " + String(remaining / 1000) + "s  [OK]");
+            } else tft.println();
 
             if (phase != CAPTURED) {
-                tft.drawRightString(
-                    "Press " + String(BTN_ALIAS) + " to deauth", tftWidth - 10, tftHeight - 35, 1
-                );
+                padprintln("Press " + String(BTN_ALIAS) + " to deauth");
             } else {
                 tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
-                tft.drawRightString("Handshake saved!", tftWidth - 10, tftHeight - 35, 1);
+                padprintln("Handshake saved!        ");
                 tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
             }
-            tft.drawString("Press Back to exit", 10, tftHeight - 20);
+            tft.drawString("Press Esc to exit", 10, tftHeight - 20);
 
             needRedraw = false;
         }
