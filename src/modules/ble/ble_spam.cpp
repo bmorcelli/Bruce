@@ -399,8 +399,6 @@ void ibeacon(const char *DeviceName, const char *BEACON_UUID, int ManufacturerId
         pAdvertising->stop();
         vTaskDelay(5 / portTICK_PERIOD_MS);
         Serial.println("Advertising stop");
-
-        esp_task_wdt_reset();
     }
 
     // Deinit the BLE stack - self-contained module
@@ -1824,7 +1822,6 @@ static void bleSpamRunScreen(const BleSpamSelection &selection, BleSpamConfig &c
         while (running) {
             bleSpamSendTick(runState, config, selection);
             bleSpamUpdateStats(runState);
-            esp_task_wdt_reset(); // CHANGED: feed watchdog to prevent WDT crash at tight intervals
 
             uint32_t now = millis();
             if (now - lastStatsUpdate >= BLE_SPAM_STATS_UPDATE_MS) {

@@ -156,7 +156,7 @@ String listFiles(FS &fs, const String &folder) {
                 }
             }
         } else break;
-        esp_task_wdt_reset();
+        delay(1);
     }
     root.close();
     // log_i("ListFiles End");
