@@ -285,8 +285,14 @@ void extractAndPrintHash(uint8_t *pkt, uint32_t smbLength, uint8_t *ntlm) {
     Serial.println(F("------------------------------------"));
 
     // 8. Save sur SD
-    if (!SD.exists("/NTLM")) SD.mkdir("/NTLM");
-    File file = SD.open("/NTLM/ntlm_hashes.txt", FILE_APPEND);
+    FS *fs;
+    if (setupSdCard()) fs = &SD;
+    else {
+        fs = &LittleFS;
+        if (!checkLittleFsSize()) return;
+    }
+    if (!fs->exists("/BruceResponder")) fs->mkdir("/BruceResponder");
+    File file = fs->open("/BruceResponder/ntlm_hashes.txt", FILE_APPEND);
     if (file) {
         file.println(finalHash);
         file.close();
