@@ -38,10 +38,10 @@ void _setup_gpio() {
 
     pinMode(CC1101_SS_PIN, OUTPUT);
     pinMode(NRF24_SS_PIN, OUTPUT);
-    pinMode(SS, OUTPUT); /// NFC PIN
+    pinMode(ST25R_CS, OUTPUT); /// NFC PIN
     digitalWrite(CC1101_SS_PIN, HIGH);
     digitalWrite(NRF24_SS_PIN, HIGH);
-    digitalWrite(SS, HIGH);
+    digitalWrite(ST25R_CS, HIGH);
 
     // Starts SPI instance for CC1101 and NRF24 with CS pins blocking communication at start
 

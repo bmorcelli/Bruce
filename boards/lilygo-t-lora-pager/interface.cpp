@@ -218,7 +218,7 @@ void _setup_gpio() {
     encoder->begin(ENCODER_INB, ENCODER_INA, 4);
 
     // Haptic driver
-    if (!drv.begin(Wire, SDA, SCL)) {
+    if (!drv.begin(Wire, SYS_I2C_SDA, SYS_I2C_SCL)) {
         Serial.println("Failed to find DRV2605.");
     } else {
         Serial.println("Init DRV2605 Sensor success!");
