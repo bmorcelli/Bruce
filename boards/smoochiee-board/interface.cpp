@@ -2,14 +2,12 @@
 #include "core/powerSave.h"
 
 #define SEL_BTN 0
-
 #define BTN_ACT LOW
 #define DW_BTN 40
 #define L_BTN 39
 #define MINBRIGHT 1
 #define R_BTN 38
 #define UP_BTN 41
-#define XPOWERS_CHIP_BQ25896 1
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -18,11 +16,8 @@
 ***************************************************************************************/
 
 // Power handler for battery detection
-#ifdef XPOWERS_CHIP_BQ25896
-#include <Wire.h>
 #include <XPowersLib.h>
 XPowersPPM PPM;
-#endif
 
 void _setup_gpio() {
     bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
@@ -32,9 +27,9 @@ void _setup_gpio() {
     bruceConfigPins.irTx = 5;
     bruceConfigPins.irRx = 4;
     bruceConfigPins.rotation = 1;
-    bruceConfigPins.uart_bus = {(gpio_num_t)2, (gpio_num_t)1};    // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)2, (gpio_num_t)1};     // rx, tx
-    bruceConfigPins.badusb_bus = {(gpio_num_t)2, (gpio_num_t)1};  // rx, tx (shares SERIAL bus)
+    bruceConfigPins.uart_bus = {(gpio_num_t)2, (gpio_num_t)1};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)2, (gpio_num_t)1};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)2, (gpio_num_t)1}; // rx, tx (shares SERIAL bus)
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)12, (gpio_num_t)43};
     bruceConfigPins.PN532_bus = {(gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)12, (gpio_num_t)43};
@@ -46,7 +41,8 @@ void _setup_gpio() {
         (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)12, (gpio_num_t)14, (gpio_num_t)21
     }; // sck,miso,mosi,cs(ss),ce
     // SDCARD is on its own SPI bus (sck=18, miso=8, mosi=17)
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)3
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)3
     }; // sck,miso,mosi,cs
 
     pinMode(UP_BTN, INPUT); // Sets the power btn as an INPUT
@@ -68,9 +64,7 @@ void _setup_gpio() {
     // Wire.begin();
     bool pmu_ret = false;
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
-    pmu_ret = PPM.init(
-        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
-    );
+    pmu_ret = PPM.init(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS);
     if (pmu_ret) {
         PPM.setSysPowerDownVoltage(3300);
         PPM.setInputCurrentLimit(3250);
