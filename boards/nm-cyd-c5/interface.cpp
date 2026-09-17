@@ -8,6 +8,32 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)9, (gpio_num_t)8}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 8;
+    bruceConfigPins.rfRx = 9;
+    bruceConfigPins.irTx = 8;
+    bruceConfigPins.irRx = 9;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)12, (gpio_num_t)11}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)4, (gpio_num_t)5};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)4, (gpio_num_t)5}; // rx, tx
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9};
+    // CC1101/NRF24/SDCARD/W5500 share the main SPI bus (sck=6, miso=2, mosi=7)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9, (gpio_num_t)8, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9, (gpio_num_t)8
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9, (gpio_num_t)8, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
 
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
@@ -26,17 +52,19 @@ void _setup_gpio() {
     pinMode(SEL_BTN, INPUT_PULLUP);
     pinMode(DW_BTN, INPUT_PULLUP);
 #endif
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    pinMode(SDCARD_CS, OUTPUT);
-    pinMode(W5500_SS_PIN, OUTPUT);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
     pinMode(TFT_CS, OUTPUT);
 
-    digitalWrite(NRF24_SS_PIN, HIGH);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    digitalWrite(SDCARD_CS, HIGH);
-    digitalWrite(W5500_SS_PIN, HIGH);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
     digitalWrite(TFT_CS, HIGH);
+#if !defined(LITE_VERSION)
+    pinMode(bruceConfigPins.W5500_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.W5500_bus.cs, HIGH);
+#endif
 }
 /***************************************************************************************
 ** Function name: _post_setup_gpio()
@@ -49,8 +77,8 @@ void _post_setup_gpio() {
     uint16_t calData[5] = {225, 3413, 403, 3334, 1};
     tft.setTouch(calData);
 #endif
-    bruceConfigPins.gps_bus.rx = (gpio_num_t)GPS_SERIAL_RX;
-    bruceConfigPins.gps_bus.tx = (gpio_num_t)GPS_SERIAL_TX;
+    bruceConfigPins.gps_bus.rx = (gpio_num_t)4;
+    bruceConfigPins.gps_bus.tx = (gpio_num_t)5;
     bruceConfigPins.gpsBaudrate = 9600;
     bruceConfigPins.rfTx = 8;
     bruceConfigPins.rfRx = 9;
@@ -70,8 +98,8 @@ void _post_setup_gpio() {
     // Force set I2C bus pins for nm-cyd-c5.
     // brucePins.conf may have stale/wrong i2c_bus values, so override them
     // to ensure PN532 and other I2C devices use the correct GPIO9(SDA)/GPIO8(SCL).
-    bruceConfigPins.i2c_bus.sda = (gpio_num_t)GROVE_SDA;
-    bruceConfigPins.i2c_bus.scl = (gpio_num_t)GROVE_SCL;
+    bruceConfigPins.i2c_bus.sda = (gpio_num_t)9;
+    bruceConfigPins.i2c_bus.scl = (gpio_num_t)8;
 }
 
 /***************************************************************************************

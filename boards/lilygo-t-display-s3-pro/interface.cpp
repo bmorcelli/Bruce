@@ -31,6 +31,29 @@ void touchHomeKeyCallback(void *user_data) {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.sys_i2c = {(gpio_num_t)5, (gpio_num_t)6}; // sda, scl
+    bruceConfigPins.i2c_bus = {(gpio_num_t)5, (gpio_num_t)6}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 5;
+    bruceConfigPins.rfRx = 6;
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = 6;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)43, (gpio_num_t)44};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)6, (gpio_num_t)5}; // rx, tx (Grove)
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)14
+    }; // sck,miso,mosi,cs
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)43};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)43};
+    // CC1101/NRF24 share the main SPI bus (sck=18, miso=8, mosi=17)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)43, (gpio_num_t)44
+    }; // sck,miso,mosi,cs(ss),ce
+
     gpio_hold_dis((gpio_num_t)BOARD_TOUCH_RST); // PIN_TOUCH_RES
     pinMode(SEL_BTN, INPUT);
     pinMode(UP_BTN, INPUT);
@@ -48,19 +71,22 @@ void _setup_gpio() {
     digitalWrite(BOARD_TOUCH_RST, LOW); // PIN_TOUCH_RES
     delay(500);
     digitalWrite(BOARD_TOUCH_RST, HIGH);  // PIN_TOUCH_RES
-    setSysI2CBus(&Wire);                  // Touch + PMU both live on the default Wire object
-    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL); // SDA, SCL
+    setSysI2CBus(&Wire); // Touch + PMU both live on the default Wire object
+    Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl); // SDA, SCL
 
     // Initialize capacitive touch
     touch.setPins(BOARD_TOUCH_RST, BOARD_SENSOR_IRQ);
-    touch.begin(Wire, CST226SE_SLAVE_ADDRESS, SYS_I2C_SDA, SYS_I2C_SCL);
+    touch.begin(
+        Wire, CST226SE_SLAVE_ADDRESS, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl
+    );
     touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
     touch.setSwapXY(true);
     touch.setMirrorXY(false, false);
     // Set the screen to turn on or off after pressing the screen Home touch button
     touch.setHomeButtonCallback(touchHomeKeyCallback);
 
-    bool hasPMU = PMU.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, SY6970_SLAVE_ADDRESS);
+    bool hasPMU =
+        PMU.init(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, SY6970_SLAVE_ADDRESS);
     if (!hasPMU) {
         Serial.println("PMU is not online...");
     } else {

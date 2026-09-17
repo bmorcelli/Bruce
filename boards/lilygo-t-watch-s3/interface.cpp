@@ -19,6 +19,27 @@ SensorDRV2605 drv;
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)10, (gpio_num_t)11};  // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)10, (gpio_num_t)11};  // sda, scl
+    bruceConfigPins.rfTx = 10;
+    bruceConfigPins.rfRx = 11;
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.irRx = 11;
+    bruceConfigPins.rotation = 2;
+    bruceConfigPins.uart_bus = {(gpio_num_t)41, (gpio_num_t)42};    // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)41, (gpio_num_t)42};     // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)11, (gpio_num_t)10};  // rx, tx (CH9329)
+    // Disabled/not present on this board (module not populated) - kept explicit for documentation
+    bruceConfigPins.CC1101_bus = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
+    bruceConfigPins.NRF24_bus = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
+    bruceConfigPins.SDCARD_bus = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)3, (gpio_num_t)4, (gpio_num_t)1, (gpio_num_t)5, (gpio_num_t)8, (gpio_num_t)9
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     pinMode(16, INPUT); // Touch IRQ
     // NOTE: this board permanently reserves BOTH hardware I2C controllers for system peripherals
     // (sensors/PMU/RTC on Wire, touch on Wire1) — bus_HAL only tracks one "sys" bus, so

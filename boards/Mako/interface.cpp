@@ -21,6 +21,29 @@ void IRAM_ATTR expanderISR() { expanderInterrupt = true; }
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)4, (gpio_num_t)5}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 4;
+    bruceConfigPins.rfRx = 5;
+    bruceConfigPins.irTx = 26;
+    bruceConfigPins.irRx = 25;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)12, (gpio_num_t)11};  // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)11, (gpio_num_t)12};   // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)12, (gpio_num_t)11}; // rx, tx (CH9329)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)8};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)8};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)8, (gpio_num_t)9, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)1, (gpio_num_t)0
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
+    }; // sck,miso,mosi,cs
+    bruceConfigPins.ST25R_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)8, (gpio_num_t)9, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,irq,-
 
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
@@ -34,7 +57,7 @@ void _setup_gpio() {
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
 
-    Wire.begin(GROVE_SDA, GROVE_SCL);
+    Wire.begin(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
 
     // Configure buttons on expander as inputs
     ioExpander.button(IO_EXP_UP);
@@ -68,16 +91,14 @@ void _setup_gpio() {
         Serial.println("BQ25896 init failed!");
     }
 
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    pinMode(SDCARD_CS, OUTPUT);
-    // pinMode(W5500_SS_PIN, OUTPUT);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
     pinMode(TFT_CS, OUTPUT);
 
-    digitalWrite(NRF24_SS_PIN, HIGH);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    digitalWrite(SDCARD_CS, HIGH);
-    // digitalWrite(W5500_SS_PIN, HIGH);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
     digitalWrite(TFT_CS, HIGH);
 }
 

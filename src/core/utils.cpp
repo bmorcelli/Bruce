@@ -192,7 +192,7 @@ void showDeviceInfo() {
 
 #ifdef HAS_SCREEN
     area.addLine("[SCREEN]");
-    area.addLine("Rotation: " + String(ROTATION));
+    area.addLine("Rotation: " + String(bruceConfigPins.rotation));
     area.addLine("Width: " + String(tftWidth) + "px");
     area.addLine("Height: " + String(tftHeight) + "px");
     area.addLine("Brightness: " + String(bruceConfig.bright) + "%");
@@ -206,12 +206,27 @@ void showDeviceInfo() {
     area.addLine("SYS_I2C_SCL: " + String(bruceConfigPins.sys_i2c.scl));
     area.addLine("SERIAL TX: " + String(bruceConfigPins.uart_bus.tx));
     area.addLine("SERIAL RX: " + String(bruceConfigPins.uart_bus.rx));
-    area.addLine("SPI_SCK_PIN: " + String(SPI_SCK_PIN));
-    area.addLine("SPI_MOSI_PIN: " + String(SPI_MOSI_PIN));
-    area.addLine("SPI_MISO_PIN: " + String(SPI_MISO_PIN));
-    area.addLine("SPI_SS_PIN: " + String(SPI_SS_PIN));
-    area.addLine("IR TX: " + String(TXLED));
-    area.addLine("IR RX: " + String(RXLED));
+    area.addLine("IR TX: " + String(bruceConfigPins.irTx));
+    area.addLine("IR RX: " + String(bruceConfigPins.irRx));
+    area.addLine("");
+
+    auto addSpiBusLine = [&](const char *label, const BruceConfigPins::SPIPins &bus) {
+        area.addLine(
+            String(label) + ": " + String(bus.miso) + ", " + String(bus.mosi) + ", " +
+            String(bus.sck) + ", " + String(bus.cs) + ", " + String(bus.io0) + ", " + String(bus.io2)
+        );
+    };
+    area.addLine("SPI buses: MI, MO, SCK, CS, IO0, IO2");
+    addSpiBusLine("Default", bruceConfigPins.outer_bus);
+    addSpiBusLine("CC1101", bruceConfigPins.CC1101_bus);
+    addSpiBusLine("nRF24", bruceConfigPins.NRF24_bus);
+    addSpiBusLine("PN532", bruceConfigPins.PN532_bus);
+    addSpiBusLine("SDCard", bruceConfigPins.SDCARD_bus);
+#if !defined(LITE_VERSION)
+    addSpiBusLine("ST25R", bruceConfigPins.ST25R_bus);
+    addSpiBusLine("W5500", bruceConfigPins.W5500_bus);
+    addSpiBusLine("LoRa", bruceConfigPins.LoRa_bus);
+#endif
     area.addLine("");
 
     area.addLine("[BAT]");

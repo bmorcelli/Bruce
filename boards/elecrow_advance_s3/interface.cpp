@@ -26,12 +26,23 @@ struct TouchPointPro {
 ** Function name: _setup_gpio()
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.sys_i2c = {(gpio_num_t)15, (gpio_num_t)16}; // sda, scl
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)18, (gpio_num_t)17}; // rx, tx
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7
+    }; // sck,miso,mosi,cs
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7};
+
     bruceConfig.colorInverted = 0;
 
 #if defined(HAS_CAPACITIVE_TOUCH) && defined(TOUCH_GT911_I2C)
     // Bring up the I2C bus the GT911 lives on.
     setSysI2CBus(&Wire1);
-    Wire1.begin(SYS_I2C_SDA, SYS_I2C_SCL);
+    Wire1.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
 
     // GT911 power-on reset sequence. No RST line on this board, so hold INT low
     // briefly to keep address 0x5D, then release it as an input.
@@ -43,7 +54,9 @@ void _setup_gpio() {
 
     // No reset line available -> pass -1 for RST.
     touch.setPins(-1, BOARD_TOUCH_INT);
-    if (!touch.begin(Wire1, GT911_SLAVE_ADDRESS_L, SYS_I2C_SDA, SYS_I2C_SCL)) {
+    if (!touch.begin(
+            Wire1, GT911_SLAVE_ADDRESS_L, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl
+        )) {
         Serial.println("Failed to find GT911 touch - check wiring!");
     } else {
         Serial.println("GT911 touch started");

@@ -16,8 +16,37 @@ void pollEncoder(void) { encoder->poll(); }
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)33, (gpio_num_t)22}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 33;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = 22;
+    bruceConfigPins.uart_bus = {(gpio_num_t)13, (gpio_num_t)4};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)13, (gpio_num_t)4};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)13, (gpio_num_t)4}; // rx, tx
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)1};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)1};
+    // CC1101/NRF24/SDCARD share the main SPI bus (sck=18, miso=19, mosi=23)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs(ss),ce
+    // SDCARD CS differs by hardware revision: Marauder-V4-V6=12, Marauder-v61=14
+    // (SDCARD_CS_V61 only defined by the Marauder-v61 env, see marauder-touch.ini)
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23,
+#ifdef SDCARD_CS_V61
+        (gpio_num_t)SDCARD_CS_V61
+#else
+        (gpio_num_t)12
+#endif
+    }; // sck,miso,mosi,cs
+
     bruceConfig.colorInverted = 0;
-    bruceConfigPins.rotation = 0; // portrait mode for Phantom
+    bruceConfigPins.rotation = 0; // intentional: overrides -DROTATION regardless of value (portrait)
     pinMode(TFT_BL, OUTPUT);
 #ifdef WAVESENTRY
     pinMode(ENCODER_KEY, INPUT);

@@ -87,6 +87,32 @@ static bool ft6336_read_touch(int16_t &x, int16_t &y) {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.sys_i2c = {(gpio_num_t)16, (gpio_num_t)15}; // sda, scl
+    bruceConfigPins.i2c_bus = {(gpio_num_t)16, (gpio_num_t)15}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 16;
+    bruceConfigPins.rfRx = 15;
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.irRx = 3;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)15, (gpio_num_t)16}; // rx, tx (CH9329)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)21};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)21};
+    // CC1101/NRF24/W5500 share the same expansion-pin SPI bus (sck=14, miso=2, mosi=3)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)21, (gpio_num_t)2, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)21, (gpio_num_t)3
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)3, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+
 #ifdef USE_SD_MMC
     // ---- SD Card (SDIO mode, 1-bit) ----
     SD.setPins(PIN_SD_CLK, PIN_SD_CMD, PIN_SD_D0);
@@ -115,8 +141,6 @@ void _setup_gpio() {
     // ---- Start with default module configs ----
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = PN532_I2C_MODULE;
-    bruceConfigPins.irRx = RXLED;
-    bruceConfigPins.irTx = TXLED;
 
     Serial.begin(115200);
 }

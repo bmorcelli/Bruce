@@ -174,6 +174,10 @@ static void tab5KbPoll() {
 }
 
 void _setup_gpio() {
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)43, (gpio_num_t)39, (gpio_num_t)44, (gpio_num_t)42
+    }; // sck,miso,mosi,cs
+
     M5.begin();
     M5.Power.setExtOutput(true);
     WiFi.setPins(SDIO2_CLK, SDIO2_CMD, SDIO2_D0, SDIO2_D1, SDIO2_D2, SDIO2_D3, SDIO2_RST);

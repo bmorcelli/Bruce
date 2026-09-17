@@ -644,112 +644,49 @@ void setEvilGatewayIp() {
 void setRFModuleMenu() {
     int result = 0;
     int idx = 0;
-    uint8_t pins_setup = 0;
+    int presetIdx = -1; // -1 = plain "CC1101" (board's default CC1101_bus wiring, set in _setup_gpio())
     if (bruceConfigPins.rfModule == M5_RF_MODULE) idx = 0;
     else if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
         idx = 1;
-#if defined(ARDUINO_M5STICK_C_PLUS) || defined(ARDUINO_M5STICK_C_PLUS2)
-        if (bruceConfigPins.CC1101_bus.mosi == GPIO_NUM_26) idx = 2;
-#endif
-#ifdef CAP_CC1101_SS_PIN
-        if (bruceConfigPins.CC1101_bus.cs == (gpio_num_t)CAP_CC1101_SS_PIN) idx = 2;
-#endif
+        for (size_t i = 0; i < bruceConfigPins.CC1101_presets.size(); i++) {
+            const BruceConfigPins::SPIPins &p = bruceConfigPins.CC1101_presets[i].pins;
+            if (bruceConfigPins.CC1101_bus.sck == p.sck && bruceConfigPins.CC1101_bus.mosi == p.mosi &&
+                bruceConfigPins.CC1101_bus.cs == p.cs) {
+                idx = 2 + (int)i;
+                break;
+            }
+        }
     }
 
     options = {
-        {"M5 RF433T/R",         [&]() { result = M5_RF_MODULE; }   },
-#if defined(ARDUINO_M5STICK_C_PLUS) || defined(ARDUINO_M5STICK_C_PLUS2)
-        {"CC1101 (legacy)",     [&pins_setup]() { pins_setup = 1; }},
-        {"CC1101 (Shared SPI)", [&pins_setup]() { pins_setup = 2; }},
-#else
-        {"CC1101", [&]() { result = CC1101_SPI_MODULE; }},
-#endif
-#ifdef CAP_CC1101_SS_PIN
-        {"CC1101 M5 Cap", [&pins_setup]() { pins_setup = 3; }},
-#endif
-        /* WIP:
-         * #ifdef USE_CC1101_VIA_PCA9554
-         * {"CC1101+PCA9554",  [&]() { result = 2; }},
-         * #endif
-         */
+        {"M5 RF433T/R", [&]() { result = M5_RF_MODULE; }    },
+        {"CC1101",      [&]() { result = CC1101_SPI_MODULE; }},
     };
+    for (size_t i = 0; i < bruceConfigPins.CC1101_presets.size(); i++) {
+        options.push_back(
+            {bruceConfigPins.CC1101_presets[i].label,
+             [&, i]() {
+                 result = CC1101_SPI_MODULE;
+                 presetIdx = (int)i;
+             }}
+        );
+    }
     loopOptions(options, idx);
-    if (result == CC1101_SPI_MODULE || pins_setup > 0) {
-        // This setting is meant to StickCPlus and StickCPlus2 to setup the ports from RF Menu
-        if (pins_setup == 1) {
-            result = CC1101_SPI_MODULE;
-            bruceConfigPins.setCC1101Pins(
-                {(gpio_num_t)CC1101_SCK_PIN,
-                 (gpio_num_t)CC1101_MISO_PIN,
-                 (gpio_num_t)CC1101_MOSI_PIN,
-                 (gpio_num_t)CC1101_SS_PIN,
-                 (gpio_num_t)CC1101_GDO0_PIN,
-                 GPIO_NUM_NC}
-            );
-            bruceConfigPins.setNrf24Pins(
-                {(gpio_num_t)CC1101_SCK_PIN,
-                 (gpio_num_t)CC1101_MISO_PIN,
-                 (gpio_num_t)CC1101_MOSI_PIN,
-                 (gpio_num_t)CC1101_SS_PIN,
-                 (gpio_num_t)CC1101_GDO0_PIN,
-                 GPIO_NUM_NC}
-            );
-        } else if (pins_setup == 2) {
-#if CONFIG_SOC_GPIO_OUT_RANGE_MAX > 30
-            result = CC1101_SPI_MODULE;
-            bruceConfigPins.setCC1101Pins(
-                {(gpio_num_t)SDCARD_SCK,
-                 (gpio_num_t)SDCARD_MISO,
-                 (gpio_num_t)SDCARD_MOSI,
-                 GPIO_NUM_33,
-                 GPIO_NUM_32,
-                 GPIO_NUM_NC}
-            );
-            bruceConfigPins.setNrf24Pins(
-                {(gpio_num_t)SDCARD_SCK,
-                 (gpio_num_t)SDCARD_MISO,
-                 (gpio_num_t)SDCARD_MOSI,
-                 GPIO_NUM_33,
-                 GPIO_NUM_32,
-                 GPIO_NUM_NC}
-            );
-#endif
+    if (result == CC1101_SPI_MODULE) {
+        if (presetIdx >= 0) {
+            const BruceConfigPins::SPIPinPreset &preset = bruceConfigPins.CC1101_presets[presetIdx];
+            bruceConfigPins.setCC1101Pins(preset.pins);
+            bruceConfigPins.setNrf24Pins(preset.pins);
         }
-#ifdef CAP_CC1101_SS_PIN
-        else if (pins_setup == 3) {
-            // M5Stack Cap CC1101: shares the default SPI port with the SD card and the cap's
-            // own ST25R3916. https://docs.m5stack.com/en/cap/Cap_CC1101
-            result = CC1101_SPI_MODULE;
-            bruceConfigPins.setCC1101Pins(
-                {(gpio_num_t)SPI_SCK_PIN,
-                 (gpio_num_t)SPI_MISO_PIN,
-                 (gpio_num_t)SPI_MOSI_PIN,
-                 (gpio_num_t)CAP_CC1101_SS_PIN,
-                 (gpio_num_t)CAP_CC1101_GDO0_PIN,
-                 GPIO_NUM_NC}
-            );
-        }
-#endif
-        // initRfModule() dispatches on rfModule, so the pin presets have to already say CC1101 or
-        // it takes the single-pin path and reports success without ever probing the chip - which
-        // is the whole point of the "not found" + wiring QR below. Left alone for the plain
-        // "CC1101" entry, which is still selectable blind so the pins can be set afterwards.
-        // Not saved yet: the error path below falls back to M5_RF_MODULE and saves that instead.
-        if (pins_setup > 0) bruceConfigPins.rfModule = CC1101_SPI_MODULE;
         if (initRfModule()) {
             bruceConfigPins.setRfModule(CC1101_SPI_MODULE);
             deinitRfModule();
-            if (pins_setup == 1) AUX_SPI.end();
             return;
         }
         // else display an error
         displayError("CC1101 not found", true);
-        if (pins_setup == 1)
-            qrcode_display("https://github.com/pr3y/Bruce/blob/main/media/connections/cc1101_stick.jpg");
-        if (pins_setup == 2)
-            qrcode_display(
-                "https://github.com/pr3y/Bruce/blob/main/media/connections/cc1101_stick_SDCard.jpg"
-            );
+        if (presetIdx >= 0 && bruceConfigPins.CC1101_presets[presetIdx].wiringQrUrl)
+            qrcode_display(bruceConfigPins.CC1101_presets[presetIdx].wiringQrUrl);
         while (!check(AnyKeyPress)) vTaskDelay(50 / portTICK_PERIOD_MS);
     }
     // fallback to "M5 RF433T/R" on errors
@@ -817,9 +754,9 @@ void setRFIDModuleMenu() {
         {"CC1101 M5 Cap",
          [=]() {
              bruceConfigPins.setSR25RPins(
-                 {(gpio_num_t)SPI_SCK_PIN,
-                  (gpio_num_t)SPI_MISO_PIN,
-                  (gpio_num_t)SPI_MOSI_PIN,
+                 {(gpio_num_t)CAP_NFC_SCK_PIN,
+                  (gpio_num_t)CAP_NFC_MISO_PIN,
+                  (gpio_num_t)CAP_NFC_MOSI_PIN,
                   (gpio_num_t)CAP_NFC_SS_PIN,
                   (gpio_num_t)CAP_NFC_IRQ_PIN,
                   GPIO_NUM_NC}
@@ -1123,7 +1060,7 @@ void runClockLoop(bool showMenuHint) {
 int gsetIrTxPin(bool set) {
     int result = bruceConfigPins.irTx;
 
-    if (result > 50) bruceConfigPins.setIrTxPin(TXLED);
+    if (result < 0) bruceConfigPins.setIrTxPin(TXLED);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1136,7 +1073,8 @@ int gsetIrTxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != SDCARD_CS && i != SDCARD_MOSI && i != SDCARD_MISO)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
+                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1184,7 +1122,7 @@ void setIrTxRepeats() {
 int gsetIrRxPin(bool set) {
     int result = bruceConfigPins.irRx;
 
-    if (result > 45) bruceConfigPins.setIrRxPin(GROVE_SCL);
+    if (result < 0) bruceConfigPins.setIrRxPin(GROVE_SCL);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1197,7 +1135,8 @@ int gsetIrRxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != SDCARD_CS && i != SDCARD_MOSI && i != SDCARD_MISO)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
+                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1220,7 +1159,7 @@ int gsetIrRxPin(bool set) {
 int gsetRfTxPin(bool set) {
     int result = bruceConfigPins.rfTx;
 
-    if (result > 45) bruceConfigPins.setRfTxPin(GROVE_SDA);
+    if (result < 0) bruceConfigPins.setRfTxPin(GROVE_SDA);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1233,7 +1172,8 @@ int gsetRfTxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != SDCARD_CS && i != SDCARD_MOSI && i != SDCARD_MISO)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
+                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1257,7 +1197,7 @@ int gsetRfTxPin(bool set) {
 int gsetRfRxPin(bool set) {
     int result = bruceConfigPins.rfRx;
 
-    if (result > 36) bruceConfigPins.setRfRxPin(GROVE_SCL);
+    if (result < 0) bruceConfigPins.setRfRxPin(GROVE_SCL);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1270,7 +1210,8 @@ int gsetRfRxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != SDCARD_CS && i != SDCARD_MOSI && i != SDCARD_MISO)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
+                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1640,10 +1581,15 @@ RELOAD:
 **  Main Menu to manually set SPI Pins
 **********************************************************************/
 void setI2CPinsMenu(BruceConfigPins::I2CPins &value) {
-#if defined(SOC_HP_I2C_NUM) && SOC_HP_I2C_NUM < 2 && SYS_I2C_SDA >= 0 && SYS_I2C_SCL >= 0
-    displayError("I2C Pins cannot be changed on this board", true);
-    return;
-#else
+#if defined(SOC_HP_I2C_NUM) && SOC_HP_I2C_NUM < 2
+    // On SoCs with a single HP I2C peripheral, Grove I2C shares hardware with the system I2C bus
+    // (touch/RTC/PMIC), so its pins can't be changed independently when the board has a real,
+    // distinct system I2C bus.
+    if (bruceConfigPins.sys_i2c.sda >= 0 && bruceConfigPins.sys_i2c.scl >= 0) {
+        displayError("I2C Pins cannot be changed on this board", true);
+        return;
+    }
+#endif
     uint8_t opt = 0;
     bool changed = false;
     BruceConfigPins::I2CPins points = value;
@@ -1680,7 +1626,6 @@ RELOAD:
         changed = true;
         goto RELOAD;
     }
-#endif
 }
 
 /*********************************************************************

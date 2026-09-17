@@ -12,9 +12,35 @@
 ***************************************************************************************/
 SPIClass touchSPI;
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)21, (gpio_num_t)22}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 21;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.irTx = 22;
+    bruceConfigPins.irRx = 22;
+    bruceConfigPins.uart_bus = {(gpio_num_t)1, (gpio_num_t)3};      // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)1, (gpio_num_t)3};       // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)22, (gpio_num_t)21};  // rx, tx (Grove SCL/SDA)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)35};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)35};
+    // CC1101/NRF24/SDCARD/W5500 share the main SPI bus (sck=18, miso=19, mosi=23)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)21, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)21, (gpio_num_t)22
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)5
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)21, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+
     pinMode(XPT2046_CS, OUTPUT);
     digitalWrite(XPT2046_CS, HIGH);
-    bruceConfigPins.rotation = 0;  // portrait mode for Phantom
+    bruceConfigPins.rotation = 0;  // intentional: overrides -DROTATION regardless of value (portrait)
     bruceConfig.colorInverted = 0; // color invert for Phantom
     tft.setRotation(bruceConfigPins.rotation);
     uint16_t calData[5] = {275, 3500, 280, 3590, 3}; // 0011 = 3

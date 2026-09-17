@@ -8,6 +8,50 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)32, (gpio_num_t)33};  // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)21, (gpio_num_t)22};  // sda, scl
+    bruceConfigPins.rfTx = 32;
+    bruceConfigPins.rfRx = 33;
+    bruceConfigPins.irTx = 19;
+    bruceConfigPins.irRx = 33;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.badusb_bus = {(gpio_num_t)33, (gpio_num_t)32}; // rx, tx (Grove)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26};
+    // No dedicated PN532 pins on this board; reuse the shared/outer SPI slot (same convention
+    // used for RC522-SPI on other boards).
+    bruceConfigPins.PN532_bus = {(gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26};
+    // CC1101/NRF24/W5500/SDCARD share the same physical SPI bus (sck=0, miso=33, mosi=32),
+    // switching between SD/RF via shared CS logic below.
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26, (gpio_num_t)25, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26, (gpio_num_t)25
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)0, (gpio_num_t)25, (gpio_num_t)26, (gpio_num_t)14
+    }; // sck,miso,mosi,cs
+    // Alt wiring: CC1101/NRF24 dongle sharing the SD card's SPI bus instead of the Grove module
+    bruceConfigPins.CC1101_presets = {
+        {"Shared SPI",
+         {bruceConfigPins.SDCARD_bus.sck, bruceConfigPins.SDCARD_bus.miso, bruceConfigPins.SDCARD_bus.mosi,
+          GPIO_NUM_33, GPIO_NUM_32, GPIO_NUM_NC},
+         "https://github.com/pr3y/Bruce/blob/main/media/connections/cc1101_stick_SDCard.jpg"}
+    };
+    bruceConfigPins.NRF24_presets = {
+        {"Shared SPI",
+         {bruceConfigPins.SDCARD_bus.sck, bruceConfigPins.SDCARD_bus.miso, bruceConfigPins.SDCARD_bus.mosi,
+          GPIO_NUM_33, GPIO_NUM_32, GPIO_NUM_NC}}
+    };
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26, (gpio_num_t)25, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)0, (gpio_num_t)33, (gpio_num_t)32, (gpio_num_t)26, (gpio_num_t)-1, (gpio_num_t)25
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     setSysI2CBus(&Wire1); // BM8563 RTC lives on Wire1
 #if defined(HAS_RTC)
     _rtc.setWire(getSysI2CBus());

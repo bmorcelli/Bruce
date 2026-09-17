@@ -39,6 +39,51 @@ CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
 ***************************************************************************************/
 SPIClass touchSPI;
 void _setup_gpio() {
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27};
+    bruceConfigPins.i2c_bus = {(gpio_num_t)27, (gpio_num_t)22};   // sda, scl
+    bruceConfigPins.badusb_bus = {(gpio_num_t)22, (gpio_num_t)27}; // rx, tx (CH9329)
+    bruceConfigPins.irTx = 22;
+    bruceConfigPins.irRx = 27;
+    bruceConfigPins.rfTx = 27;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)5
+    }; // sck,miso,mosi,cs
+#if defined(ST7796_DRIVER)
+    // CYD35_base variant (CYD-3248S035x)
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)3, (gpio_num_t)1}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)3, (gpio_num_t)1};  // rx, tx
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)35, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)35, (gpio_num_t)22
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)35, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+#else
+    // CYD_base variant (CYD-2432Sxxx)
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)1, (gpio_num_t)3}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)1, (gpio_num_t)3};  // rx, tx
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27, (gpio_num_t)22
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27, (gpio_num_t)22, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+#endif
+
 #ifndef HAS_CAPACITIVE_TOUCH // Capacitive Touchscreen uses I2C to communicate
     pinMode(XPT2046_CS, OUTPUT);
     digitalWrite(XPT2046_CS, HIGH);
@@ -85,7 +130,7 @@ void _post_setup_gpio() {
     File caldata = LittleFS.open("/calData", "r");
 
     if (!caldata) {
-        tft.setRotation(ROTATION);
+        tft.setRotation(bruceConfigPins.rotation);
         tft.calibrateTouch(calData, TFT_WHITE, TFT_BLACK, 10);
 
         caldata = LittleFS.open("/calData", "w");
@@ -124,8 +169,6 @@ void _post_setup_gpio() {
     tft.invertDisplay(1);
 #endif
 
-    bruceConfigPins.gps_bus.rx = (gpio_num_t)GPS_SERIAL_RX;
-    bruceConfigPins.gps_bus.tx = (gpio_num_t)GPS_SERIAL_TX;
     bruceConfigPins.gpsBaudrate = 9600;
 
     bool pinsChanged = false;

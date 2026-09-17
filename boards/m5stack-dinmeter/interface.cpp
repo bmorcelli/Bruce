@@ -14,6 +14,38 @@ void pollEncoder(void) { encoder->poll(); }
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)1, (gpio_num_t)2};   // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)11, (gpio_num_t)12}; // sda, scl
+    bruceConfigPins.rfTx = 1;
+    bruceConfigPins.rfRx = 2;
+    bruceConfigPins.irTx = 1;
+    bruceConfigPins.irRx = 2;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)15, (gpio_num_t)13};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)15, (gpio_num_t)13};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)2, (gpio_num_t)1};   // rx, tx (CH9329, via GROVE fallback)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, (gpio_num_t)13};
+    // No dedicated PN532 pins on this board -> PN532_bus reuses outer_bus (shared SPI slot)
+    bruceConfigPins.PN532_bus = {(gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, (gpio_num_t)13};
+    // CC1101/NRF24/SDCARD/LoRa/W5500 share the same SPI bus (sck=15, miso=2, mosi=1)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, GPIO_NUM_NC, (gpio_num_t)13, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, (gpio_num_t)13, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, (gpio_num_t)13
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)15, (gpio_num_t)2, (gpio_num_t)1, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     M5.begin();
     setSysI2CBus(M5.In_I2C.getPort() == I2C_NUM_1 ? &Wire1 : &Wire);
     bruceConfig.colorInverted = 0;

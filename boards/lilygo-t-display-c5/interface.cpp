@@ -11,6 +11,34 @@
 ** Function name: _setup_gpio()
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)2, (gpio_num_t)3}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 2;
+    bruceConfigPins.rfRx = 3;
+    bruceConfigPins.irTx = 1;
+    bruceConfigPins.irRx = 1;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)12, (gpio_num_t)11}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)4, (gpio_num_t)5};    // rx, tx (shares radio pins 4/5)
+    bruceConfigPins.badusb_bus = {(gpio_num_t)2, (gpio_num_t)3}; // rx, tx
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1
+    }; // sck,miso,mosi,cs (no microSD on this board)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)7, (gpio_num_t)6, (gpio_num_t)9, (gpio_num_t)4};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)7, (gpio_num_t)6, (gpio_num_t)9, (gpio_num_t)4};
+    // CC1101/NRF24/W5500 share the radio SPI bus (sck=7, miso=6, mosi=9, cs=4, control=5)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)7, (gpio_num_t)6, (gpio_num_t)9, (gpio_num_t)4, (gpio_num_t)5, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)7, (gpio_num_t)6, (gpio_num_t)9, (gpio_num_t)4, (gpio_num_t)5
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)7, (gpio_num_t)6, (gpio_num_t)9, (gpio_num_t)4, (gpio_num_t)5, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
     pinMode(TFT_MOSI, OUTPUT);
@@ -29,16 +57,18 @@ void _setup_gpio() {
 #endif
 
     // All external SPI radios share CS=4 / control=5 on this board.
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    pinMode(W5500_SS_PIN, OUTPUT);
-    digitalWrite(NRF24_SS_PIN, HIGH);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    digitalWrite(W5500_SS_PIN, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+#if !defined(LITE_VERSION)
+    pinMode(bruceConfigPins.W5500_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.W5500_bus.cs, HIGH);
+#endif
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
 
-    if (SDCARD_CS >= 0) { // no microSD on the T-Display-C5 (SDCARD_CS = -1)
-        pinMode(SDCARD_CS, OUTPUT);
-        digitalWrite(SDCARD_CS, HIGH);
+    if (bruceConfigPins.SDCARD_bus.cs >= 0) { // no microSD on the T-Display-C5
+        pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+        digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
     }
 
     pinMode(TFT_CS, OUTPUT);

@@ -309,6 +309,7 @@ void ConfigMenu::pinsMenu() {
             {"I2C Pins",       [this]() { setI2CPinsMenu(bruceConfigPins.i2c_bus); }   },
             {"UART Pins",      [this]() { setUARTPinsMenu(bruceConfigPins.uart_bus); } },
             {"GPS Pins",       [this]() { setUARTPinsMenu(bruceConfigPins.gps_bus); }  },
+            {"BadUSB Pins",    [this]() { setUARTPinsMenu(bruceConfigPins.badusb_bus); }},
             //{"Serial use USB",  [this]() { switchToUSBSerial(); }                       },
             //{"Serial use UART", [this]() { switchToUARTSerial(); }                      },
             {"Back",           []() {}                                                 },

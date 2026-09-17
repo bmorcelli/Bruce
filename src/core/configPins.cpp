@@ -212,10 +212,13 @@ void BruceConfigPins::fromJson(JsonObject obj) {
     //     log_e("Fail");
     // }
     if (!root["i2c_bus"].isNull()) {
-#if defined(SOC_HP_I2C_NUM) && SOC_HP_I2C_NUM < 2 && SYS_I2C_SDA >= 0 && SYS_I2C_SCL >= 0 &&                 \
-    !defined(BRUCE_BOARD_HAS_SOFTWARE_I2C)
-        log_e("I2C Pins cannot be changed on this board, using default values");
-        i2c_bus = sys_i2c;
+#if defined(SOC_HP_I2C_NUM) && SOC_HP_I2C_NUM < 2 && !defined(BRUCE_BOARD_HAS_SOFTWARE_I2C)
+        if (sys_i2c.sda >= 0 && sys_i2c.scl >= 0) {
+            log_e("I2C Pins cannot be changed on this board, using default values");
+            i2c_bus = sys_i2c;
+        } else {
+            i2c_bus.fromJson(root["i2c_bus"].as<JsonObject>());
+        }
 #else
         i2c_bus.fromJson(root["i2c_bus"].as<JsonObject>());
 #endif
@@ -231,6 +234,12 @@ void BruceConfigPins::fromJson(JsonObject obj) {
     }
     if (!root["GPS_bus"].isNull()) {
         gps_bus.fromJson(root["GPS_bus"].as<JsonObject>());
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!root["badusb_bus"].isNull()) {
+        badusb_bus.fromJson(root["badusb_bus"].as<JsonObject>());
     } else {
         count++;
         log_e("Fail");
@@ -287,6 +296,8 @@ void BruceConfigPins::toJson(JsonObject obj) const {
     uart_bus.toJson(_uart);
     JsonObject _gps = root["GPS_bus"].to<JsonObject>();
     gps_bus.toJson(_gps);
+    JsonObject _badusb = root["badusb_bus"].to<JsonObject>();
+    badusb_bus.toJson(_badusb);
 }
 
 void BruceConfigPins::loadFile(JsonDocument &jsonDoc, bool checkFS) {
@@ -402,6 +413,7 @@ void BruceConfigPins::validateConfig() {
     validateI2CPins(i2c_bus);
     validateUARTPins(uart_bus);
     validateUARTPins(gps_bus);
+    validateUARTPins(badusb_bus);
 }
 #if !defined(LITE_VERSION)
 void BruceConfigPins::setLoRaPins(SPIPins value) {

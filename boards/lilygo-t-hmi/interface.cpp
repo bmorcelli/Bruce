@@ -14,6 +14,32 @@ CYD28_TouchR touch(320, 240);
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)17, (gpio_num_t)18};    // sda, scl (Grove)
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)43, (gpio_num_t)44};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)18, (gpio_num_t)17}; // rx, tx (CH9329)
+    bruceConfigPins.irTx = 17;
+    bruceConfigPins.irRx = 18;
+    bruceConfigPins.rotation = 3;
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15};
+    // No dedicated PN532 pins on this board; RC522-SPI/PN532-SPI share the same SPI slot
+    bruceConfigPins.PN532_bus = {(gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15};
+    // CC1101/NRF24/W5500 share the same SPI bus (sck=1, miso=4, mosi=3)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15, (gpio_num_t)16, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15, (gpio_num_t)16
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)-1
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15, (gpio_num_t)16, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
     pinMode(PWR_ON_PIN, OUTPUT);

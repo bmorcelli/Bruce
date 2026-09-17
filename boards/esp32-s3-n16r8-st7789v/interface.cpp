@@ -8,6 +8,16 @@
 CYD28_TouchR touch(320, 240);
 
 void _setup_gpio() {
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = -1;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.badusb_bus = {(gpio_num_t)-1, (gpio_num_t)-1}; // rx, tx (none available)
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)-1
+    }; // sck,miso,mosi,cs
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)15};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)15};
+
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
     pinMode(TFT_BL, OUTPUT);

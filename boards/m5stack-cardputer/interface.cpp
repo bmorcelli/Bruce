@@ -82,6 +82,46 @@ inline void mapRawKeyToPhysical(uint8_t keyvalue, uint8_t &row, uint8_t &col) {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)2, (gpio_num_t)1};   // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)-1, (gpio_num_t)-1}; // -1 unless ADV variant detected
+    bruceConfigPins.rfTx = 2;
+    bruceConfigPins.rfRx = 1;
+    bruceConfigPins.irTx = 44;
+    bruceConfigPins.irRx = 1;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.badusb_bus = {(gpio_num_t)1, (gpio_num_t)2}; // rx, tx (CH9329)
+    // Board's default/generic SPI bus, shared with SDCARD (used by drivers without their own bus,
+    // e.g. the RC522-SPI RFID2 driver)
+    bruceConfigPins.outer_bus = {(gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1};
+    // Connections use a microSD sniffer module sharing SPI with SDCARD (CS=GROVE_SCL)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)5, (gpio_num_t)3, (gpio_num_t)4
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)12
+    }; // sck,miso,mosi,cs
+    // RFID2 (RC522-SPI driver) shares the default SPI port; same cs as CC1101/NRF24
+    bruceConfigPins.PN532_bus = {(gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1};
+    // Alt wiring: M5Stack Cap CC1101, shares the default SPI port with the SD card and the cap's
+    // own ST25R3916. https://docs.m5stack.com/en/cap/Cap_CC1101
+#ifdef CAP_CC1101_SS_PIN
+    bruceConfigPins.CC1101_presets = {
+        {"M5 Cap",
+         {bruceConfigPins.outer_bus.sck, bruceConfigPins.outer_bus.miso, bruceConfigPins.outer_bus.mosi,
+          (gpio_num_t)CAP_CC1101_SS_PIN, (gpio_num_t)CAP_CC1101_GDO0_PIN, GPIO_NUM_NC}}
+    };
+#endif
+
     //    Keyboard.begin();
     pinMode(0, INPUT);
     pinMode(5, OUTPUT);

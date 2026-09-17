@@ -10,6 +10,22 @@ CYD28_TouchR touch(320, 240);
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)22, (gpio_num_t)21}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 22;
+    bruceConfigPins.rfRx = 21;
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = 21;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)3, (gpio_num_t)1}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)3, (gpio_num_t)1};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)21, (gpio_num_t)22}; // rx, tx (Grove)
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1
+    }; // sck,miso,mosi,cs (no SD card slot)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)25, (gpio_num_t)39, (gpio_num_t)32, (gpio_num_t)33};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)25, (gpio_num_t)39, (gpio_num_t)32, (gpio_num_t)33};
+
     bruceConfig.colorInverted = 0;
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);

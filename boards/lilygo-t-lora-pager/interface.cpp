@@ -152,34 +152,72 @@ void initPeripherals() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)3, (gpio_num_t)2}; // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)3, (gpio_num_t)2}; // sda, scl
+    bruceConfigPins.rfTx = 3;
+    bruceConfigPins.rfRx = 2;
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = -1;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)4, (gpio_num_t)12};   // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)2, (gpio_num_t)3}; // rx, tx (inherited from Grove I2C)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)21};
+    // No dedicated PN532 on this board (NFC is ST25R3916) - RC522-SPI shares the SD card SPI slot
+    bruceConfigPins.PN532_bus = {(gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)21};
+    // CC1101/NRF24 live over the GPIO expansion header, sharing sck/miso/mosi with the main bus
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)44, (gpio_num_t)43, (gpio_num_t)9
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)44, (gpio_num_t)43
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)21
+    }; // sck,miso,mosi,cs
+    bruceConfigPins.ST25R_bus = {
+        (gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)39, (gpio_num_t)5, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,irq,-
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)44, (gpio_num_t)43, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)35, (gpio_num_t)33, (gpio_num_t)34, (gpio_num_t)36, (gpio_num_t)47, (gpio_num_t)14
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
 
     pinMode(SEL_BTN, INPUT);
     pinMode(BK_BTN, INPUT);
-    pinMode(ST25R_IRQ, INPUT);
+    pinMode(bruceConfigPins.ST25R_bus.io0, INPUT);
 
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
 
-    pinMode(SDCARD_CS, OUTPUT);
-    digitalWrite(SDCARD_CS, HIGH);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
 
     pinMode(NFC_CS, OUTPUT);
     digitalWrite(NFC_CS, HIGH);
 
-    pinMode(LORA_CS, OUTPUT);
-    digitalWrite(LORA_CS, HIGH);
+#if !defined(LITE_VERSION)
+    pinMode(bruceConfigPins.LoRa_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.LoRa_bus.cs, HIGH);
 
-    pinMode(LORA_RST, OUTPUT);
-    digitalWrite(LORA_RST, HIGH);
+    pinMode(bruceConfigPins.LoRa_bus.io0, OUTPUT);
+    digitalWrite(bruceConfigPins.LoRa_bus.io0, HIGH);
+#endif
     setSysI2CBus(&Wire); // PMU/keyboard/RTC/codec all live on the default Wire object
 #if defined(HAS_RTC)
     _rtc.setWire(getSysI2CBus());
 #endif
-    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
+    Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
 
     // Power management
     bool pmu_ret = false;
-    pmu_ret = PPM.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, BQ25896_SLAVE_ADDRESS);
+    pmu_ret = PPM.init(
+        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
+    );
     if (pmu_ret) {
         // https://github.com/Xinyuan-LilyGO/LilyGoLib/blob/a64fc6ca94757baa5401ad71b39fb7f92cd1a7e9/src/LilyGo_LoRa_Pager.cpp#L442-L452
         PPM.resetDefault();
@@ -218,7 +256,7 @@ void _setup_gpio() {
     encoder->begin(ENCODER_INB, ENCODER_INA, 4);
 
     // Haptic driver
-    if (!drv.begin(Wire, SYS_I2C_SDA, SYS_I2C_SCL)) {
+    if (!drv.begin(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl)) {
         Serial.println("Failed to find DRV2605.");
     } else {
         Serial.println("Init DRV2605 Sensor success!");

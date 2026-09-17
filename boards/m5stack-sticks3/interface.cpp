@@ -56,6 +56,37 @@ void IRAM_ATTR isr_dw_btn() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)9, (gpio_num_t)10};  // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
+    bruceConfigPins.rfTx = 9;
+    bruceConfigPins.rfRx = 10;
+    bruceConfigPins.irTx = 46;
+    bruceConfigPins.irRx = 42;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)10, (gpio_num_t)9};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)10, (gpio_num_t)9}; // rx, tx (Grove SCL/SDA fallback)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)43};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)43};
+    // CC1101/NRF24/SDCARD/W5500/LoRa share the main SPI bus (sck=5, miso=4, mosi=6)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)3, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)8, (gpio_num_t)1
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     M5.begin();
     Wire1.begin(47, 48);
     setSysI2CBus(&Wire1);

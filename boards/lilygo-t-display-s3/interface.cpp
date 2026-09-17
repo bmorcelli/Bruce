@@ -41,6 +41,87 @@ Button *btn2;
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // GROVE_SDA/SCL, TXLED/RXLED, SERIAL_TX/RX and the shared SPI buses used to vary per
+    // env via -D overrides (see lilygo-t-display-s3.ini history) depending on the
+    // HAS_TOUCH / USE_SD_MMC pin-mux combination for this board; mirror those 4
+    // combinations here now that the macros are gone.
+#if defined(HAS_TOUCH) && defined(USE_SD_MMC)
+    bruceConfigPins.i2c_bus = {(gpio_num_t)18, (gpio_num_t)17}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 18;
+    bruceConfigPins.rfRx = 17;
+    bruceConfigPins.irTx = 10;
+    bruceConfigPins.irRx = 44;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)16};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)16};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)17, (gpio_num_t)18}; // rx, tx
+#elif defined(HAS_TOUCH)
+    bruceConfigPins.i2c_bus = {(gpio_num_t)18, (gpio_num_t)17}; // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)18, (gpio_num_t)17}; // sda, scl
+    bruceConfigPins.rfTx = 18;
+    bruceConfigPins.rfRx = 17;
+    bruceConfigPins.irTx = 3;
+    bruceConfigPins.irRx = 21;
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)17, (gpio_num_t)18};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)17, (gpio_num_t)18}; // rx, tx
+#elif defined(USE_SD_MMC)
+    bruceConfigPins.i2c_bus = {(gpio_num_t)16, (gpio_num_t)21}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 16;
+    bruceConfigPins.rfRx = 21;
+    bruceConfigPins.irTx = 10;
+    bruceConfigPins.irRx = 44;
+    bruceConfigPins.uart_bus = {(gpio_num_t)16, (gpio_num_t)21}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)21, (gpio_num_t)16};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)21, (gpio_num_t)16}; // rx, tx
+#else
+    bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 44;
+    bruceConfigPins.rfRx = 43;
+    bruceConfigPins.irTx = 17;
+    bruceConfigPins.irRx = 18;
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)43, (gpio_num_t)44};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
+#endif
+    bruceConfigPins.rotation = 3;
+
+#if defined(USE_SD_MMC)
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)43, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)1, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+#if defined(HAS_TOUCH)
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)43, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)16, (gpio_num_t)44
+    }; // sck,miso,mosi,cs(ss),ce
+#else
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)43, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)18, (gpio_num_t)17
+    }; // sck,miso,mosi,cs(ss),ce
+#endif
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)43, (gpio_num_t)2, (gpio_num_t)3, (gpio_num_t)-1, (gpio_num_t)-1, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+#else
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)1
+    }; // sck,miso,mosi,cs
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)2, (gpio_num_t)21, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)3
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)-1, (gpio_num_t)-1, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+#endif
+#endif
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
 
 #ifdef USE_SD_MMC
     SD.setPins(PIN_SD_CLK, PIN_SD_CMD, PIN_SD_D0);
@@ -102,9 +183,6 @@ void _setup_gpio() {
     // Start with default IR, RF and RFID Configs, replace old
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = PN532_I2C_MODULE;
-
-    bruceConfigPins.irRx = RXLED;
-    bruceConfigPins.irTx = TXLED;
 
     Serial.begin(115200);
 }

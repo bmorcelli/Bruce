@@ -15,6 +15,28 @@ XPowersPPM PPM;
 #endif
 
 void _setup_gpio() {
+    bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
+    bruceConfigPins.i2c_bus = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 47;
+    bruceConfigPins.rfRx = 48;
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.irRx = 1;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx (shares SERIAL bus)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)17, (gpio_num_t)8, (gpio_num_t)18, (gpio_num_t)5};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)17, (gpio_num_t)8, (gpio_num_t)18, (gpio_num_t)5};
+    // CC1101/NRF24/SDCARD share the main SPI bus (sck=17, miso=8, mosi=18)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)17, (gpio_num_t)8, (gpio_num_t)18, (gpio_num_t)46, (gpio_num_t)9, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)17, (gpio_num_t)8, (gpio_num_t)18, (gpio_num_t)12, (gpio_num_t)13
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)17, (gpio_num_t)8, (gpio_num_t)18, (gpio_num_t)3
+    }; // sck,miso,mosi,cs
 
     pinMode(UP_BTN, INPUT); // Sets the power btn as an INPUT
     pinMode(SEL_BTN, INPUT);
@@ -22,24 +44,25 @@ void _setup_gpio() {
     pinMode(R_BTN, INPUT);
     pinMode(L_BTN, INPUT);
 
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    digitalWrite(NRF24_SS_PIN, HIGH);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
 
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
-    pinMode(SDCARD_CS, OUTPUT);
-    digitalWrite(SDCARD_CS, HIGH);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
 
     // Starts SPI instance for CC1101 and NRF24 with CS pins blocking communication at start
 
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
-    bruceConfigPins.irRx = RXLED;
     setSysI2CBus(&Wire); // PMU lives on the default Wire object
     bool pmu_ret = false;
-    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
-    pmu_ret = PPM.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, BQ25896_SLAVE_ADDRESS);
+    Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
+    pmu_ret = PPM.init(
+        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
+    );
     if (pmu_ret) {
         PPM.setSysPowerDownVoltage(3300);
         PPM.setInputCurrentLimit(3250);

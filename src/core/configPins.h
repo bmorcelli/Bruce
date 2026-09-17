@@ -5,9 +5,7 @@
 #include <ArduinoJson.h>
 #include <precompiler_flags.h>
 #include <set>
-#ifndef CC1101_GDO2_PIN
-#define CC1101_GDO2_PIN -1
-#endif
+#include <vector>
 
 enum RFIDModules {
     M5_RFID2_MODULE = 0,
@@ -29,8 +27,6 @@ public:
     struct UARTPins {
         gpio_num_t rx = GPIO_NUM_NC;
         gpio_num_t tx = GPIO_NUM_NC;
-
-        UARTPins() : rx(GPIO_NUM_NC), tx(GPIO_NUM_NC) {}
 
         UARTPins(gpio_num_t rx = GPIO_NUM_NC, gpio_num_t tx = GPIO_NUM_NC) : rx(rx), tx(tx) {}
 
@@ -54,8 +50,6 @@ public:
     struct I2CPins {
         gpio_num_t sda = GPIO_NUM_NC;
         gpio_num_t scl = GPIO_NUM_NC;
-
-        I2CPins() : sda(GPIO_NUM_NC), scl(GPIO_NUM_NC) {}
 
         I2CPins(gpio_num_t sda = GPIO_NUM_NC, gpio_num_t scl = GPIO_NUM_NC) : sda(sda), scl(scl) {}
 
@@ -119,99 +113,50 @@ public:
         }
     };
 
+    // An alternate wiring a board can offer for CC1101_bus/NRF24_bus (e.g. a legacy Grove module
+    // vs. sharing the SD card's SPI bus, or an M5Stack Cap module). Populated per-board in
+    // _setup_gpio(); the generic menus in settings.cpp/NRF24.cpp just list whatever is here, so a
+    // new board declares its own alt wiring without editing shared code.
+    struct SPIPinPreset {
+        const char *label;
+        SPIPins pins;
+        // Optional wiring-diagram URL shown as a QR code if the module isn't found with this preset.
+        const char *wiringQrUrl = nullptr;
+    };
+
     const char *filepath = "/brucePins.conf";
 
     // SPI Buses
 
-#ifdef CC1101_SCK_PIN
-    SPIPins CC1101_bus = {
-        (gpio_num_t)CC1101_SCK_PIN,
-        (gpio_num_t)CC1101_MISO_PIN,
-        (gpio_num_t)CC1101_MOSI_PIN,
-        (gpio_num_t)CC1101_SS_PIN,
-        (gpio_num_t)CC1101_GDO0_PIN,
-        (gpio_num_t)CC1101_GDO2_PIN
-    };
-#else
+    // No fallback macro — every board sets these explicitly in _setup_gpio().
     SPIPins CC1101_bus;
-#endif
-
-#ifdef NRF24_SCK_PIN
-    SPIPins NRF24_bus = {
-        (gpio_num_t)NRF24_SCK_PIN,
-        (gpio_num_t)NRF24_MISO_PIN,
-        (gpio_num_t)NRF24_MOSI_PIN,
-        (gpio_num_t)NRF24_SS_PIN,
-        (gpio_num_t)NRF24_CE_PIN
-    };
-#else
     SPIPins NRF24_bus;
-#endif
-
-#ifdef PN532_SCK_PIN
-    SPIPins PN532_bus = {
-        (gpio_num_t)PN532_SCK_PIN,
-        (gpio_num_t)PN532_MISO_PIN,
-        (gpio_num_t)PN532_MOSI_PIN,
-        (gpio_num_t)PN532_SS_PIN,
-        (gpio_num_t)PN532_CE_PIN
-    };
-#else
+    // Alternate wirings for CC1101_bus/NRF24_bus; empty unless the board pushes presets into it.
+    std::vector<SPIPinPreset> CC1101_presets;
+    std::vector<SPIPinPreset> NRF24_presets;
     SPIPins PN532_bus;
-#endif
-
-#ifdef ST25R_SCLK
-    SPIPins ST25R_bus = {
-        (gpio_num_t)ST25R_SCLK,
-        (gpio_num_t)ST25R_MISO,
-        (gpio_num_t)ST25R_MOSI,
-        (gpio_num_t)ST25R_CS,
-        (gpio_num_t)ST25R_IRQ,
-        GPIO_NUM_NC
-    };
-#else
     SPIPins ST25R_bus;
-#endif
-
-#ifdef SDCARD_SCK
     SPIPins SDCARD_bus = {
         (gpio_num_t)SDCARD_SCK, (gpio_num_t)SDCARD_MISO, (gpio_num_t)SDCARD_MOSI, (gpio_num_t)SDCARD_CS
     };
-#else
-    SPIPins SDCARD_bus;
-#endif
 
 #if !defined(LITE_VERSION)
-#if defined(W5500_SCK_PIN)
-    SPIPins W5500_bus = {
-        (gpio_num_t)W5500_SCK_PIN,
-        (gpio_num_t)W5500_MISO_PIN,
-        (gpio_num_t)W5500_MOSI_PIN,
-        (gpio_num_t)W5500_SS_PIN,
-        (gpio_num_t)W5500_INT_PIN,
-        (gpio_num_t)W5500_RST_PIN,
-    };
-#else
     SPIPins W5500_bus;
-#endif
-
-#ifdef LORA_SCK
-    SPIPins LoRa_bus = {
-        (gpio_num_t)LORA_SCK,
-        (gpio_num_t)LORA_MISO,
-        (gpio_num_t)LORA_MOSI,
-        (gpio_num_t)LORA_CS,
-        (gpio_num_t)LORA_RST,
-        (gpio_num_t)LORA_DIO0
-    };
-#else
     SPIPins LoRa_bus;
 #endif
-#endif
-    I2CPins sys_i2c = {(gpio_num_t)SYS_I2C_SDA, (gpio_num_t)SYS_I2C_SCL};
+    // Board's default/generic SPI bus (used directly by drivers that don't have their own
+    // dedicated bus, e.g. the RC522-SPI RFID2 driver and some M5Stack Cap presets). Set per-board
+    // in _setup_gpio(); no fallback macro (was SPI_SCK_PIN/SPI_MISO_PIN/SPI_MOSI_PIN/SPI_SS_PIN,
+    // removed from boards/**/*.ini).
+    SPIPins outer_bus;
+    // sys_i2c has no fallback macro (SYS_I2C_SDA/SCL are only ever board-local -D's now, e.g.
+    // CYD-2432S028's GT911 variant) — every board sets it explicitly in _setup_gpio().
+    I2CPins sys_i2c;
     I2CPins i2c_bus = {(gpio_num_t)GROVE_SDA, (gpio_num_t)GROVE_SCL};
-    UARTPins uart_bus = {(gpio_num_t)SERIAL_RX, (gpio_num_t)SERIAL_TX};
-    UARTPins gps_bus = {(gpio_num_t)GPS_SERIAL_RX, (gpio_num_t)GPS_SERIAL_TX};
+    UARTPins uart_bus;
+    UARTPins gps_bus;
+    // BadUSB CH9329 UART (used on devices without native USB-OTG)
+    UARTPins badusb_bus;
 
     // Screen Rotation
     int rotation = ROTATION > 1 ? 3 : 1;
@@ -222,7 +167,7 @@ public:
     // IR
     int irTx = TXLED;
     uint8_t irTxRepeats = 0;
-    int irRx = RXLED;
+    int irRx = -1;
 
     // RF
     int rfTx = GROVE_SDA;

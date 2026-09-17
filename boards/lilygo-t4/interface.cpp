@@ -28,6 +28,30 @@ Button *btnSel;
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.i2c_bus = {(gpio_num_t)21, (gpio_num_t)22}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 21;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.irTx = 26; // TXLED
+    bruceConfigPins.irRx = 25; // RXLED
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)22, (gpio_num_t)21};    // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)22, (gpio_num_t)21};     // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)22, (gpio_num_t)21};  // rx, tx (CH9329)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI).
+    // No dedicated PN532 module on this board, so PN532_bus shares the same slot.
+    bruceConfigPins.outer_bus = {(gpio_num_t)25, (gpio_num_t)33, (gpio_num_t)26, (gpio_num_t)17};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)25, (gpio_num_t)33, (gpio_num_t)26, (gpio_num_t)17};
+    // No RF module fitted on the T4; these are sane defaults on free GPIOs so CC1101/NRF24
+    // modules can be wired manually (ALLOW_ALL_GPIO_FOR_IR_RF lets the user re-map at runtime).
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)25, (gpio_num_t)33, (gpio_num_t)26, (gpio_num_t)17, (gpio_num_t)34, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)25, (gpio_num_t)33, (gpio_num_t)26, (gpio_num_t)17, (gpio_num_t)35
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)14, (gpio_num_t)2, (gpio_num_t)15, (gpio_num_t)13
+    }; // sck,miso,mosi,cs
+
     // The three front buttons are on ESP32 input-only GPIOs (37/38/39), which
     // cannot use the internal pull-ups - the T4 board provides external ones,
     // so they are configured as plain INPUT and read as active LOW.
@@ -76,10 +100,6 @@ void _setup_gpio() {
     btnSel->attachSingleClickEventCb(&onSelSingleClickCb, NULL);
     btnSel->attachDoubleClickEventCb(&onSelDoubleClickCb, NULL);
     btnSel->attachLongPressStartEventCb(&onSelHoldCb, NULL);
-
-    // Start with default IR and RF configs; the T4 has no on-board modules.
-    bruceConfigPins.irRx = RXLED;
-    bruceConfigPins.irTx = TXLED;
 
     Serial.begin(115200);
 }

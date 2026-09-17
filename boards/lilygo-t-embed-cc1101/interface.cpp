@@ -38,6 +38,66 @@ BQ27220 bq;
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+#ifdef USE_BQ27220_VIA_I2C
+    // lilygo-t-embed-cc1101 env (real discriminator: T_EMBED_1101/T_EMBED are never actually
+    // defined by any -D flag in this codebase -- pre-existing dead macros, not touched here --
+    // so USE_BQ27220_VIA_I2C, which IS exclusive to this env's .ini, is used instead)
+    bruceConfigPins.i2c_bus = {(gpio_num_t)8, (gpio_num_t)18};    // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)8, (gpio_num_t)18};    // sda, scl
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)18, (gpio_num_t)8}; // rx, tx (CH9329; BAD_RX/BAD_TX
+                                                                   // fell back to GROVE_SCL/GROVE_SDA)
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.irRx = 1;
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)8};
+    // No dedicated PN532 SPI bus on this env (NFC is PN532_I2C_MODULE) -- RC522-SPI shares the
+    // generic SPI bus like on boards without a dedicated NFC slot.
+    bruceConfigPins.PN532_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)8};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)12, (gpio_num_t)3, (gpio_num_t)38
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)44, (gpio_num_t)43
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)13
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)44, (gpio_num_t)43, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst (no W5500_RST_PIN on this env -> falls back to -1)
+#endif
+#else
+    // lilygo-t-embed env (non-CC1101)
+    bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43}; // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {GPIO_NUM_NC, GPIO_NUM_NC};       // not defined on this variant
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx (BAD_RX/BAD_TX fell
+                                                                    // back to GROVE_SCL/GROVE_SDA)
+    bruceConfigPins.irTx = 44;
+    bruceConfigPins.irRx = 43;
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)16};
+    // No dedicated PN532 SPI bus defined on this env -- RC522-SPI shares the generic SPI bus.
+    bruceConfigPins.PN532_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)16};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2 (no dedicated gdo2 pin on this env)
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst (no W5500_RST_PIN on this env -> falls back to -1)
+#endif
+#endif
+    bruceConfigPins.rotation = 3;
+
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH);
     pinMode(SEL_BTN, INPUT);
@@ -48,25 +108,27 @@ void _setup_gpio() {
     pinMode(CC1101_SW0_PIN, OUTPUT);
 
     // Chip Select CC1101, SD and TFT to HIGH State to fix SD initialization
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    digitalWrite(CC1101_SS_PIN, HIGH);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH);
-    pinMode(SDCARD_CS, OUTPUT);
-    digitalWrite(SDCARD_CS, HIGH);
-    pinMode(NRF24_SS_PIN, OUTPUT); // NRF24 on Plus
-    digitalWrite(NRF24_SS_PIN, HIGH);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT); // NRF24 on Plus
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
 
-    pinMode(NRF24_CE_PIN, OUTPUT); // put nRF24 in standby
-    digitalWrite(NRF24_CE_PIN, LOW);
+    pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT); // put nRF24 in standby (io0 slot holds CE)
+    digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
 
     // Power chip pin
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH); // Power on CC1101 and LED
     bool pmu_ret = false;
     setSysI2CBus(&Wire); // PPM/bq27220 live on the default Wire object (GROVE == sys_i2c on this variant)
-    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
-    pmu_ret = PPM.init(Wire, SYS_I2C_SDA, SYS_I2C_SCL, BQ25896_SLAVE_ADDRESS);
+    Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
+    pmu_ret = PPM.init(
+        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
+    );
     if (pmu_ret) {
         // https://github.com/Xinyuan-LilyGO/T-Embed-CC1101/blob/3e6df69af51befdbd5c96761aca28b9a784413eb/examples/factory_test/factory_test.ino#L399-L425
 
@@ -81,7 +143,7 @@ void _setup_gpio() {
     bruceConfigPins.irRx = 1;
     bruceConfigPins.irTx = 2;
 #else
-    Wire.begin(SYS_I2C_SDA, SYS_I2C_SCL);
+    Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
     Wire.beginTransmission(0x40);
     if (Wire.endTransmission() == 0) {
         Serial.println("ES7210 Online, No CC1101 version");
@@ -213,7 +275,7 @@ void powerOff() {
 void powerDownNFC() {
     Adafruit_PN532 nfc = Adafruit_PN532(17, 45);
     bool i2c_check = check_i2c_address(PN532_I2C_ADDRESS);
-    nfc.setInterface(SYS_I2C_SDA, SYS_I2C_SCL);
+    nfc.setInterface(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
     nfc.begin();
     uint32_t versiondata = nfc.getFirmwareVersion();
     if (i2c_check || versiondata) {

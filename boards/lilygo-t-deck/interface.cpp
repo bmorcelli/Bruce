@@ -63,9 +63,41 @@ void ISR_rst() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.sys_i2c = {(gpio_num_t)18, (gpio_num_t)8}; // sda, scl
+    bruceConfigPins.i2c_bus = {(gpio_num_t)43, (gpio_num_t)44}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 43;
+    bruceConfigPins.rfRx = 44;
+    bruceConfigPins.irTx = -1;
+    bruceConfigPins.irRx = 44;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx (Grove)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)-1};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)-1};
+    // CC1101/NRF24/SDCARD/W5500/LoRa share the main SPI bus (sck=40, miso=38, mosi=41)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)9, (gpio_num_t)17, (gpio_num_t)45
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     delay(500);           // time to ESP32C3 start and enable the keyboard
     setSysI2CBus(&Wire1); // Keyboard + GT911 touch both live on the default Wire object
-    if (!Wire1.begin(SYS_I2C_SDA, SYS_I2C_SCL)) Serial.println("Fail starting ESP32-C3 keyboard");
+    if (!Wire1.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl))
+        Serial.println("Fail starting ESP32-C3 keyboard");
 
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH);
