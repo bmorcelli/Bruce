@@ -13,6 +13,27 @@ CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.irTx = 40;
+    bruceConfigPins.i2c_bus = {(gpio_num_t)8, (gpio_num_t)9}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 8;
+    bruceConfigPins.rfRx = 9;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)9, (gpio_num_t)8};   // rx, tx (Grove, shares I2C pins)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
+    // No dedicated PN532 pins on this board; PN532_bus shares the same slot as outer_bus
+    bruceConfigPins.PN532_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9
+    }; // sck,miso,mosi,cs,gdo0
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)14, (gpio_num_t)16
+    }; // sck,miso,mosi,cs(ss),ce
+    // No SD card by default on this variant
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1};
+
     // Keep XPT2046 CS high until needed
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
@@ -32,7 +53,7 @@ void _post_setup_gpio() {
     } else {
         Serial.println("[TOUCH] XPT2046 started OK");
     }
-    touch.setRotation(ROTATION);
+    touch.setRotation(bruceConfigPins.rotation);
 
     // Backlight on
     pinMode(TFT_BL, OUTPUT);

@@ -19,6 +19,27 @@ static void __attribute__((constructor)) _early_spi_deselect() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.i2c_bus = {(gpio_num_t)21, (gpio_num_t)22}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 21;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.uart_bus = {(gpio_num_t)3, (gpio_num_t)1};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)3, (gpio_num_t)1};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)3, (gpio_num_t)1}; // rx, tx
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15};
+    // No dedicated PN532 pins on this board; PN532_bus shares the same slot as outer_bus
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15, (gpio_num_t)2
+    }; // sck,miso,mosi,cs,gdo0
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15, (gpio_num_t)4
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1, (gpio_num_t)-1
+    }; // no SD card on this board
+
     // 5-way tactile switch — GPIO 34/35 are input-only (no pull-up on chip)
     // Ensure external pull-up resistors are present on these pins
     pinMode(UP_BTN, INPUT);
@@ -28,12 +49,12 @@ void _setup_gpio() {
     pinMode(SEL_BTN, INPUT);
 
     // Deselect CC1101 and NRF24 on shared SPI bus so they don't interfere with TFT
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    digitalWrite(NRF24_SS_PIN, HIGH);
-    pinMode(NRF24_CE_PIN, OUTPUT);
-    digitalWrite(NRF24_CE_PIN, LOW);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
 }
 
 /***************************************************************************************
