@@ -5,6 +5,16 @@
 #include <globals.h>
 #include <interface.h>
 
+#define SEL_BTN 5
+
+#define BTN_ACT LOW
+#define DW_BTN 41
+#define ESC_BTN 6
+#define L_BTN 39
+#define MINBRIGHT 1
+#define R_BTN 40
+#define UP_BTN 38
+
 // Keep this app "unconfirmed" so it can be launched as a temporary/guest app
 // from the Lilka keira launcher (on reboot the device rolls back to keira).
 // Harmless for plain USB flashing (rollback isn't armed there).

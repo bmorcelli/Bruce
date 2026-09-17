@@ -3,6 +3,10 @@
 #include "core/utils.h"
 #include <interface.h>
 
+#define BTN_ACT LOW
+#define BTN_PIN 0
+#define HAS_BTN 1
+
 #define CYD28_DISPLAY_HOR_RES_MAX 320
 #define CYD28_DISPLAY_VER_RES_MAX 240
 CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);

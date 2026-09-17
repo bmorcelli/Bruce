@@ -20,6 +20,10 @@
 #include <globals.h>
 #include <interface.h>
 
+#define ES8311_ADDR 0x18
+#define ES8311_CODEC 1
+#define MINBRIGHT 1
+
 // =============================================
 // SD Card SDIO pins (defined locally for USE_SD_MMC)
 // =============================================

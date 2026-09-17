@@ -2,6 +2,15 @@
 #include <driver/gpio.h>
 #include <interface.h>
 
+#define SEL_BTN 35
+
+#define BTN_ACT LOW
+#define DW_BTN 26
+#define L_BTN 33
+#define MINBRIGHT 160
+#define R_BTN 27
+#define UP_BTN 34
+
 // Deselect NRF24/CC1101 before any Arduino/TFT init runs (runs before setup())
 static void __attribute__((constructor)) _early_spi_deselect() {
     gpio_reset_pin(GPIO_NUM_15); // CC1101_SS / NRF24_SS

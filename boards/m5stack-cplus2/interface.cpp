@@ -2,6 +2,12 @@
 #include "core/powerSave.h"
 #include <interface.h>
 
+#define SEL_BTN 37
+
+#define DW_BTN 39
+#define MINBRIGHT 160
+#define UP_BTN 35
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp

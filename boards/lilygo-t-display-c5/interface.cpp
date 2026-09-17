@@ -2,6 +2,11 @@
 #include "core/utils.h"
 #include <interface.h>
 
+#define BTN_A 0
+#define BTN_ACT LOW
+#define BTN_B 28
+#define HAS_2_BUTTONS 1
+
 /***************************************************************************************
 ** LILYGO T-Display-C5 — Bruce board interface
 ** ST7789 170x320 (no touch), two physical buttons (IO0 + BOOT).

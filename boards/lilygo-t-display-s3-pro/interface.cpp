@@ -5,6 +5,13 @@
 #include <Wire.h>
 #include <XPowersLib.h>
 #include <interface.h>
+
+#define SEL_BTN 0
+
+#define DW_BTN 16
+#define TFT_BRIGHT_Bits 8
+#define TFT_BRIGHT_FREQ 10000
+#define UP_BTN 12
 static PowersSY6970 PMU;
 #define TOUCH_MODULES_CST_SELF
 #include <TouchDrvCSTXXX.hpp>

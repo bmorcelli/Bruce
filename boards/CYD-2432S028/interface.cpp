@@ -4,6 +4,12 @@
 #include <Arduino.h>
 #include <interface.h>
 
+#define BOARD_TOUCH_INT 25
+#define GT911_SLAVE_ADDRESS_L 0x5D
+#define HAS_CAPACITIVE_TOUCH 1
+#define TFT_BRIGHT_Bits 8
+#define TFT_BRIGHT_FREQ 5000
+
 #if defined(HAS_CAPACITIVE_TOUCH)
 #if defined(TOUCH_GT911_I2C)
 #include "TouchDrvGT911.hpp"

@@ -6,6 +6,9 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <interface.h>
 
+#define PWR_EN_PIN 10
+#define PWR_ON_PIN 14
+
 CYD28_TouchR touch(320, 240);
 
 /***************************************************************************************
@@ -62,7 +65,6 @@ void _post_setup_gpio() {
         ))) {
         Serial.println("Touchscreen initialization failed!");
     }
-#define TFT_BRIGHT_CHANNEL 0
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
     // Brightness control must be initialized after tft in this case @Pirata

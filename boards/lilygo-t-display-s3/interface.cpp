@@ -4,6 +4,13 @@
 #include <globals.h>
 #include <interface.h>
 
+#define SEL_BTN 16
+
+#define BTN_ACT LOW
+#define DW_BTN 14
+#define MINBRIGHT 1
+#define UP_BTN 0
+
 #ifdef USE_SD_MMC
 #define PIN_SD_CMD 13
 #define PIN_SD_CLK 11

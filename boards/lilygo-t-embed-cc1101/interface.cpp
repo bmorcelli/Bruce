@@ -6,6 +6,23 @@
 
 // Rotary encoder
 #include <rotary_decoder.h>
+
+// Encoder pins differ between the two envs built from this directory; USE_BQ27220_VIA_I2C is
+// the real discriminator (T_EMBED_1101/T_EMBED are never defined by any -D, see _setup_gpio).
+#ifdef USE_BQ27220_VIA_I2C // lilygo-t-embed-cc1101 env
+#define ENCODER_INA 4
+#define ENCODER_INB 5
+#else // lilygo-t-embed env
+#define ENCODER_INA 2
+#define ENCODER_INB 1
+#endif
+#define ENCODER_KEY 0
+
+#define SEL_BTN ENCODER_KEY
+
+#define BK_BTN 6
+#define BTN_ACT LOW
+#define MINBRIGHT 1
 extern RotaryDecoder *encoder;
 RotaryDecoder *encoder = nullptr;
 void pollEncoder(void) { encoder->poll(); }

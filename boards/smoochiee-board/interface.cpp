@@ -1,6 +1,16 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 
+#define SEL_BTN 0
+
+#define BTN_ACT LOW
+#define DW_BTN 40
+#define L_BTN 39
+#define MINBRIGHT 1
+#define R_BTN 38
+#define UP_BTN 41
+#define XPOWERS_CHIP_BQ25896 1
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp

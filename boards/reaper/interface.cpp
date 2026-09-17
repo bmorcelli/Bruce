@@ -9,6 +9,16 @@
 #include "core/i2c_finder.h"
 #include <Wire.h>
 #include <XPowersLib.h>
+
+#define SEL_BTN 0
+
+#define BTN_ACT LOW
+#define DW_BTN 40
+#define ESC_BTN 21
+#define L_BTN 39
+#define MINBRIGHT 1
+#define R_BTN 38
+#define UP_BTN 41
 // Charger chip
 
 XPowersPPM PPM;

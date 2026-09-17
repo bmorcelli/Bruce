@@ -4,6 +4,8 @@
 #include <M5Unified.h>
 #include <interface.h>
 
+#define TFT_SCK 20
+
 constexpr uint32_t kBtnBDoublePressWindowMs = 270;
 constexpr uint32_t kBtnBLongPressMs = 500;
 

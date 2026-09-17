@@ -5,6 +5,12 @@
 #include <Wire.h>
 #include <interface.h>
 
+#define CAP_CC1101_GDO0_PIN 15
+#define MINBRIGHT 160
+#define TCA8418_I2C_ADDR 0x34
+#define TCA8418_SCL_PIN 9
+#define TCA8418_SDA_PIN 8
+
 // Cardputer and 1.1 keyboard
 Keyboard_Class Keyboard;
 // TCA8418 keyboard controller for ADV variant

@@ -8,6 +8,35 @@
 
 // Rotary encoder
 #include <rotary_decoder.h>
+
+#define ENCODER_INA 40
+#define ENCODER_INB 41
+#define ENCODER_KEY 7
+
+#define SEL_BTN ENCODER_KEY
+
+#define AUDIO_I2S_MCLK 10
+#define AUDIO_I2S_SCK 11
+#define AUDIO_I2S_SDIN 17
+#define AUDIO_I2S_SDOUT 45
+#define AUDIO_I2S_WS 18
+#define BK_BTN 0
+#define BTN_ACT LOW
+#define CAPS_LOCK 0x00
+#define EXPANDS_AMP_EN 1
+#define EXPANDS_DRV_EN 0
+#define EXPANDS_GPIO_EN 11
+#define EXPANDS_GPS_RST 7
+#define EXPANDS_KB_EN 10
+#define EXPANDS_KB_PWR 8
+#define EXPANDS_KB_RST 2
+#define EXPANDS_LORA_EN 3
+#define EXPANDS_SD_DET 12
+#define EXPANDS_SD_EN 14
+#define KB_I2C_ADDRESS 0x34
+#define KEYBOARD_BL 46
+#define KEY_SHIFT 0x1c
+#define MINBRIGHT 1
 extern RotaryDecoder *encoder;
 RotaryDecoder *encoder = nullptr;
 void pollEncoder(void) { encoder->poll(); }

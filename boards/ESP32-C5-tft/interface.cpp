@@ -2,6 +2,8 @@
 #include "core/utils.h"
 #include <interface.h>
 
+#define MINBRIGHT 1
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp

@@ -5,6 +5,10 @@
 
 // Rotary encoder
 #include <rotary_decoder.h>
+
+#define ENCODER_INA 41
+#define ENCODER_INB 40
+#define ENCODER_KEY 42
 RotaryDecoder *encoder = nullptr;
 void pollEncoder(void) { encoder->poll(); }
 

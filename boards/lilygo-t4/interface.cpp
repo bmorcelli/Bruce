@@ -5,6 +5,13 @@
 #include <globals.h>
 #include <interface.h>
 
+#define SEL_BTN 37
+
+#define BTN_ACT LOW
+#define DW_BTN 39
+#define MINBRIGHT 1
+#define UP_BTN 38
+
 volatile bool nxtPress = false;
 volatile bool prvPress = false;
 volatile bool ecPress = false;

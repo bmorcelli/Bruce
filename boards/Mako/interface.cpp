@@ -4,6 +4,10 @@
 #include <globals.h>
 #include <interface.h>
 
+#define EXPANDER_INT_PIN 28
+#define MINBRIGHT 1
+#define XPOWERS_CHIP_BQ25896 1
+
 #ifdef XPOWERS_CHIP_BQ25896
 #include <Wire.h>
 #include <XPowersLib.h>

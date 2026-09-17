@@ -2,6 +2,10 @@
 #include "core/powerSave.h"
 #include <AXP192.h>
 #include <interface.h>
+
+#define SEL_BTN 37
+
+#define DW_BTN 39
 AXP192 axp192;
 
 /***************************************************************************************

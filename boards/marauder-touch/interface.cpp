@@ -2,6 +2,12 @@
 #include "core/utils.h"
 #include <CYD28_TouchscreenR.h>
 #include <interface.h>
+
+#define ENCODER_INA 2
+#define ENCODER_INB 14
+#define ENCODER_KEY 0
+
+#define BTN_ACT LOW
 CYD28_TouchR touch(320, 240);
 
 #ifdef WAVESENTRY

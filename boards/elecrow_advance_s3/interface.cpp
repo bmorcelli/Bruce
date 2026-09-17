@@ -5,6 +5,12 @@
 #include <Wire.h>
 #include <interface.h>
 
+#define BOARD_TOUCH_INT 47
+#define GT911_SLAVE_ADDRESS_L 0x5D
+#define HAS_CAPACITIVE_TOUCH 1
+#define TFT_BRIGHT_Bits 8
+#define TFT_BRIGHT_FREQ 5000
+
 // =============================================================================
 //  CrowPanel Advance 3.5" (ESP32-S3) interface
 //  - Display: ILI9488 over SPI (handled by TFT_eSPI)

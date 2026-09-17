@@ -4,6 +4,10 @@
 #include "core/utils.h"
 #include <Wire.h>
 #include <interface.h>
+
+#define BTN_ACT LOW
+#define NORMAL_T_DECK 1
+#define T_DECK_PLUS 1
 TouchDrvGT911 touch;
 
 struct TouchPointPro {
@@ -139,7 +143,6 @@ void _setup_gpio() {
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
-#define TFT_BRIGHT_CHANNEL 0
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
     // Brightness control must be initialized after tft in this case @Pirata

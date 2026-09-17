@@ -3,6 +3,9 @@
 #include <interface.h>
 
 #include <CYD28_TouchscreenR.h>
+
+#define TFT_BRIGHT_Bits 8
+#define TFT_BRIGHT_FREQ 5000
 CYD28_TouchR touch(TFT_HEIGHT, TFT_WIDTH);
 
 /***************************************************************************************

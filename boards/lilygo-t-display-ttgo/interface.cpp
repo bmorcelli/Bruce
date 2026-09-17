@@ -4,6 +4,12 @@
 
 #include <globals.h>
 #include <interface.h>
+
+#define ADC_EN 14
+#define BTN_ACT LOW
+#define DW_BTN 35
+#define MINBRIGHT 1
+#define UP_BTN 0
 volatile bool nxtPress = false;
 volatile bool prvPress = false;
 volatile bool ecPress = false;

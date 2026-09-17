@@ -2,6 +2,14 @@
 #include "core/utils.h"
 #include <interface.h>
 
+#define SEL_BTN 28
+
+#define DW_BTN 1
+#define L_BTN 14
+#define MINBRIGHT 4
+#define R_BTN 13
+#define UP_BTN 0
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp

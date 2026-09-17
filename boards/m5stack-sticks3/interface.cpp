@@ -4,7 +4,11 @@
 #include <M5Unified.h>
 #include <interface.h>
 
-#define TFT_BRIGHT_CHANNEL 0
+#define SEL_BTN 11
+
+#define BTN_ACT LOW
+#define DW_BTN 12
+
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
 

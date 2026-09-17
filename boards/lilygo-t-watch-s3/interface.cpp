@@ -5,6 +5,10 @@
 #include <XPowersLib.h>
 #include <interface.h>
 
+#define BACKLIGHT -1
+#define TFT_BRIGHT_Bits 8
+#define TFT_BRIGHT_FREQ 1000
+
 XPowersAXP2101 axp192;
 #include <TouchDrvFT6X36.hpp>
 TouchDrvFT6X36 touch;
