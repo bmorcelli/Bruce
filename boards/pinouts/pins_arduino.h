@@ -70,4 +70,12 @@
 #include "../freenove-fnk0103/pins_arduino.h"
 #elif CONFIG_IDF_TARGET_ESP32P4
 #include "../m5stack-tab5/pins_arduino.h"
+#elif ESP32S3_ILI9341
+#include "../esp32s3-ili9341/pins_arduino.h"
+#elif ESP32S3_ST7789
+#include "../esp32s3-st7789/pins_arduino.h"
+#elif ESP_WROOM32_ILI9341
+#include "../esp-wroom32-ili9341/pins_arduino.h"
+#elif ESP_WROOM32_ST7789
+#include "../esp-wroom32-st7789/pins_arduino.h"
 #endif
