@@ -18,9 +18,9 @@ void _setup_gpio() {
     bruceConfigPins.i2c_bus = {(gpio_num_t)8, (gpio_num_t)9}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 8;
     bruceConfigPins.rfRx = 9;
-    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
-    bruceConfigPins.badusb_bus = {(gpio_num_t)9, (gpio_num_t)8};   // rx, tx (Grove, shares I2C pins)
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)9, (gpio_num_t)8}; // rx, tx (Grove, shares I2C pins)
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
     // No dedicated PN532 pins on this board; PN532_bus shares the same slot as outer_bus
@@ -31,7 +31,8 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)14, (gpio_num_t)16
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)4
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)4
     }; // sck,miso,mosi,cs (shares HSPI bus with TFT/touch)
 
     // Keep XPT2046 CS high until needed

@@ -12,7 +12,8 @@ void _setup_gpio() {
     bruceConfigPins.irRx = -1;
     bruceConfigPins.rotation = 1;
     bruceConfigPins.badusb_bus = {(gpio_num_t)-1, (gpio_num_t)-1}; // rx, tx (none available)
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)-1
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)-1
     }; // sck,miso,mosi,cs
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)21, (gpio_num_t)38, (gpio_num_t)18, (gpio_num_t)15};
