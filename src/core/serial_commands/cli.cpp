@@ -52,7 +52,7 @@ void SerialCli::setup() {
 #ifndef LITE_VERSION
     createInterpreterCommands(&_cli);
 #endif
-#ifdef HAS_SCREEN
+#ifndef USE_DUMMY_TFT
     createScreenCommands(&_cli);
 #endif
 #ifdef HAS_RGB_LED

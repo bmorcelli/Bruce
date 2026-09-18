@@ -24,6 +24,7 @@ static const uint8_t RX = 5;
 // I2C (CN1 connector)
 static const uint8_t SDA = 9;
 static const uint8_t SCL = 8;
+#define WIRE1_PIN_DEFINED
 static const uint8_t SDA1 = 9;
 static const uint8_t SCL1 = 8;
 // SPI2 (FSPI) - shared by Display (ST7789), Touch (XPT2046) and SD card

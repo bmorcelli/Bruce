@@ -38,18 +38,11 @@ extern RTC_DateTypeDef _date;
 #endif
 
 // Declaração dos objetos TFT
-#if defined(HAS_SCREEN)
-#include <display/tft.h>
+#include <DisplayDrivers.h>
 #include <tftLogger.h>
 extern tft_logger tft;
 extern tft_sprite sprite;
 extern tft_sprite draw;
-#else
-#include <tftLogger.h>
-extern tft_logger tft;
-extern SerialDisplayClass &sprite;
-extern SerialDisplayClass &draw;
-#endif
 
 #ifdef USE_BQ27220_VIA_I2C
 #include <bq27220.h>

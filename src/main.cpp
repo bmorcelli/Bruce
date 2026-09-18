@@ -150,24 +150,15 @@ bool clock_set = false;
 
 std::vector<Option> options;
 // Protected global variables
-#if defined(HAS_SCREEN)
 tft_logger tft = tft_logger(); // Invoke custom library
 tft_sprite sprite = tft_sprite(&tft);
 tft_sprite draw = tft_sprite(&tft);
 volatile int tftWidth = TFT_HEIGHT;
 #ifdef HAS_TOUCH
-volatile int tftHeight =
-    TFT_WIDTH - TOUCH_FOOTER_HEIGHT; // reserved to draw the TouchFooter(), were the btns are being read in
-                                      // touch devices.
+volatile int tftHeight = TFT_WIDTH - TOUCH_FOOTER_HEIGHT; // reserved to draw the TouchFooter(), were the btns
+                                                          // are being read in touch devices.
 #else
 volatile int tftHeight = TFT_WIDTH;
-#endif
-#else
-tft_logger tft;
-SerialDisplayClass &sprite = tft;
-SerialDisplayClass &draw = tft;
-volatile int tftWidth = VECTOR_DISPLAY_DEFAULT_HEIGHT;
-volatile int tftHeight = VECTOR_DISPLAY_DEFAULT_WIDTH;
 #endif
 
 #include "core/bus_HAL.h"
@@ -488,7 +479,7 @@ void setup() {
     bruceConfig.bright = 100; // theres is no value yet
     bruceConfigPins.rotation = ROTATION;
     setup_gpio();
-#if defined(HAS_SCREEN)
+
     tft.init();
     tft.setRotation(bruceConfigPins.rotation);
     tft.fillScreen(TFT_BLACK);
@@ -496,9 +487,7 @@ void setup() {
     tft.setTextColor(TFT_PURPLE, TFT_BLACK);
     tft.drawCentreString("Booting", tft.width() / 2, tft.height() / 2, 1);
     RAM_LOG("first-display-elem"); // first element drawn on screen
-#else
-    tft.begin();
-#endif
+
     _pre_storage_gpio();
     begin_storage();
     RAM_LOG("after-storage"); // bruceConfig/bruceConfigPins loaded from FS
@@ -557,7 +546,7 @@ void setup() {
 #endif
     // #endif
     _late_setup_gpio();
-#if defined(HAS_SCREEN)
+#if !defined(USE_DUMMY_TFT)
     bruceConfig.openThemeFile(bruceConfig.themeFS(), bruceConfig.themePath, false);
     if (!bruceConfig.instantBoot) {
         boot_screen_anim();
@@ -590,7 +579,7 @@ void setup() {
  **  Function: loop
  **  Main loop
  **********************************************************************/
-#if defined(HAS_SCREEN)
+#if !defined(USE_DUMMY_TFT)
 void loop() {
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
     if (interpreter_state > 0) {

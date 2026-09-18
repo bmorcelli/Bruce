@@ -190,7 +190,7 @@ void showDeviceInfo() {
     area.addLine("SD Card free: " + formatBytes(SD.totalBytes() - SD.usedBytes()));
     area.addLine("");
 
-#ifdef HAS_SCREEN
+#ifndef USE_DUMMY_TFT
     area.addLine("[SCREEN]");
     area.addLine("Rotation: " + String(bruceConfigPins.rotation));
     area.addLine("Width: " + String(tftWidth) + "px");
@@ -212,8 +212,8 @@ void showDeviceInfo() {
 
     auto addSpiBusLine = [&](const char *label, const BruceConfigPins::SPIPins &bus) {
         area.addLine(
-            String(label) + ": " + String(bus.miso) + ", " + String(bus.mosi) + ", " +
-            String(bus.sck) + ", " + String(bus.cs) + ", " + String(bus.io0) + ", " + String(bus.io2)
+            String(label) + ": " + String(bus.miso) + ", " + String(bus.mosi) + ", " + String(bus.sck) +
+            ", " + String(bus.cs) + ", " + String(bus.io0) + ", " + String(bus.io2)
         );
     };
     area.addLine("SPI buses: MI, MO, SCK, CS, IO0, IO2");
