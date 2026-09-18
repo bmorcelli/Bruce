@@ -48,13 +48,19 @@ void _setup_gpio() {
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27};
     bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27};
-    bruceConfigPins.i2c_bus = {(gpio_num_t)27, (gpio_num_t)22};   // sda, scl
+    bruceConfigPins.i2c_bus = {(gpio_num_t)27, (gpio_num_t)22}; // sda, scl
+
+#if defined(SYS_I2C_SDA) && defined(SYS_I2C_SCL)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)SYS_I2C_SDA, (gpio_num_t)SYS_I2C_SCL}; // sda, scl
+#endif
+
     bruceConfigPins.badusb_bus = {(gpio_num_t)22, (gpio_num_t)27}; // rx, tx (CH9329)
     bruceConfigPins.irTx = 22;
     bruceConfigPins.irRx = 27;
     bruceConfigPins.rfTx = 27;
     bruceConfigPins.rfRx = 22;
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)5
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)5
     }; // sck,miso,mosi,cs
 #if defined(ST7796_DRIVER)
     // CYD35_base variant (CYD-3248S035x)

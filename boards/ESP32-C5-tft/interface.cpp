@@ -4,6 +4,12 @@
 
 #define MINBRIGHT 1
 
+#ifdef HAS_3_BUTTONS
+#define UP_BTN 0
+#define SEL_BTN 28
+#define DW_BTN 1
+#endif
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp
@@ -16,9 +22,9 @@ void _setup_gpio() {
     bruceConfigPins.irTx = 3;
     bruceConfigPins.irRx = 26;
     bruceConfigPins.rotation = 1;
-    bruceConfigPins.uart_bus = {(gpio_num_t)12, (gpio_num_t)11};  // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)4, (gpio_num_t)5};     // rx, tx
-    bruceConfigPins.badusb_bus = {(gpio_num_t)4, (gpio_num_t)5};  // rx, tx (CH9329)
+    bruceConfigPins.uart_bus = {(gpio_num_t)12, (gpio_num_t)11}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)4, (gpio_num_t)5};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)4, (gpio_num_t)5}; // rx, tx (CH9329)
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9};
     bruceConfigPins.PN532_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9};
@@ -29,7 +35,8 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9, (gpio_num_t)8
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
     }; // sck,miso,mosi,cs
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {

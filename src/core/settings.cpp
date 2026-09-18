@@ -659,17 +659,14 @@ void setRFModuleMenu() {
     }
 
     options = {
-        {"M5 RF433T/R", [&]() { result = M5_RF_MODULE; }    },
+        {"M5 RF433T/R", [&]() { result = M5_RF_MODULE; }     },
         {"CC1101",      [&]() { result = CC1101_SPI_MODULE; }},
     };
     for (size_t i = 0; i < bruceConfigPins.CC1101_presets.size(); i++) {
-        options.push_back(
-            {bruceConfigPins.CC1101_presets[i].label,
-             [&, i]() {
-                 result = CC1101_SPI_MODULE;
-                 presetIdx = (int)i;
-             }}
-        );
+        options.push_back({bruceConfigPins.CC1101_presets[i].label, [&, i]() {
+                               result = CC1101_SPI_MODULE;
+                               presetIdx = (int)i;
+                           }});
     }
     loopOptions(options, idx);
     if (result == CC1101_SPI_MODULE) {
@@ -722,14 +719,14 @@ void setRFIDModuleMenu() {
     options = {
         {"M5 RFID2",
          [=]() { bruceConfigPins.setRfidModule(M5_RFID2_MODULE); },
-         bruceConfigPins.rfidModule == M5_RFID2_MODULE     },
+         bruceConfigPins.rfidModule == M5_RFID2_MODULE                            },
 #ifdef M5STICK
         {"PN532 I2C G33",
          [=]() { bruceConfigPins.setRfidModule(PN532_I2C_MODULE); },
-         bruceConfigPins.rfidModule == PN532_I2C_MODULE    },
+         bruceConfigPins.rfidModule == PN532_I2C_MODULE                           },
         {"PN532 I2C G36",
          [=]() { bruceConfigPins.setRfidModule(PN532_I2C_SPI_MODULE); },
-         bruceConfigPins.rfidModule == PN532_I2C_SPI_MODULE},
+         bruceConfigPins.rfidModule == PN532_I2C_SPI_MODULE                       },
 #else
         {"PN532 on I2C",
          [=]() { bruceConfigPins.setRfidModule(PN532_I2C_MODULE); },
@@ -737,17 +734,17 @@ void setRFIDModuleMenu() {
 #endif
         {"PN532 on SPI",
          [=]() { bruceConfigPins.setRfidModule(PN532_SPI_MODULE); },
-         bruceConfigPins.rfidModule == PN532_SPI_MODULE    },
+         bruceConfigPins.rfidModule == PN532_SPI_MODULE                           },
         {"RC522 on SPI",
          [=]() { bruceConfigPins.setRfidModule(RC522_SPI_MODULE); },
-         bruceConfigPins.rfidModule == RC522_SPI_MODULE    },
+         bruceConfigPins.rfidModule == RC522_SPI_MODULE                           },
 #if !defined(LITE_VERSION)
         {"ST25R3916 SPI",
          [=]() { bruceConfigPins.setRfidModule(ST25R3916_SPI_MODULE); },
-         bruceConfigPins.rfidModule == ST25R3916_SPI_MODULE},
+         bruceConfigPins.rfidModule == ST25R3916_SPI_MODULE                       },
         {"ST25R3916 I2C",
          [=]() { bruceConfigPins.setRfidModule(ST25R3916_I2C_MODULE); },
-         bruceConfigPins.rfidModule == ST25R3916_I2C_MODULE},
+         bruceConfigPins.rfidModule == ST25R3916_I2C_MODULE                       },
 #ifdef CAP_NFC_SS_PIN
         // M5Stack Cap CC1101: its NFC half is an ST25R3916 on the default SPI port.
         // https://docs.m5stack.com/en/cap/Cap_CC1101
@@ -762,8 +759,7 @@ void setRFIDModuleMenu() {
                   GPIO_NUM_NC}
              );
              bruceConfigPins.setRfidModule(ST25R3916_SPI_MODULE);
-         },
-         bruceConfigPins.rfidModule == ST25R3916_SPI_MODULE &&
+         },                                                              bruceConfigPins.rfidModule == ST25R3916_SPI_MODULE &&
              bruceConfigPins.ST25R_bus.cs == (gpio_num_t)CAP_NFC_SS_PIN},
 #endif
 #endif
@@ -1073,8 +1069,8 @@ int gsetIrTxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
-                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs && i != bruceConfigPins.SDCARD_bus.mosi &&
+                i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1135,8 +1131,8 @@ int gsetIrRxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
-                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs && i != bruceConfigPins.SDCARD_bus.mosi &&
+                i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1159,7 +1155,7 @@ int gsetIrRxPin(bool set) {
 int gsetRfTxPin(bool set) {
     int result = bruceConfigPins.rfTx;
 
-    if (result < 0) bruceConfigPins.setRfTxPin(GROVE_SDA);
+    if (result < 0) bruceConfigPins.setRfTxPin(bruceConfigPins.i2c_bus.sda);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1172,8 +1168,8 @@ int gsetRfTxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
-                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs && i != bruceConfigPins.SDCARD_bus.mosi &&
+                i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
@@ -1210,8 +1206,8 @@ int gsetRfRxPin(bool set) {
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
             int i = pin.second;
             if (i != TFT_CS && i != TFT_RST && i != TFT_SCLK && i != TFT_MOSI && i != TFT_BL &&
-                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs &&
-                i != bruceConfigPins.SDCARD_bus.mosi && i != bruceConfigPins.SDCARD_bus.miso)
+                i != TOUCH_CS && i != bruceConfigPins.SDCARD_bus.cs && i != bruceConfigPins.SDCARD_bus.mosi &&
+                i != bruceConfigPins.SDCARD_bus.miso)
 #endif
                 options.push_back(
                     {pin.first,
