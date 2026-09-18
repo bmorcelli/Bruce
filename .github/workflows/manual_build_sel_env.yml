@@ -114,6 +114,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.target_branch }}
+          submodules: recursive
 
       - name: Setup Python
         uses: actions/setup-python@v5

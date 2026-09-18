@@ -79,6 +79,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.inputs.pr_number }}/merge
+          submodules: recursive
 
       - id: build
         name: Setup Python
