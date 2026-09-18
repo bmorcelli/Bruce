@@ -38,9 +38,21 @@
 #ifndef SAFE_STACK_BUFFER_SIZE
   #define SAFE_STACK_BUFFER_SIZE 1024
 #endif
-
 #endif
 
+#ifdef HAS_6_BUTTONS
+  #define HAS_5_BUTTONS 1 // Uses the same 5 buttons logic on Keyboard
+#endif
+
+#ifdef HAS_2_BUTTONS
+  #define HAS_1_BUTTON 1 // Uses the same 1 button logic on keyboard
+  #define HAS_3_BUTTONS 1
+  #warning "Remove HAS_3_BUTTONS after implement keyboard logic for 1 button"
+#endif
+
+#ifdef HAS_4_BUTTONS
+  #define HAS_3_BUTTONS // Uses the same 3 button logic on keyboard
+#endif
 
 #ifndef GROVE_SDA           // Pin to be used in I2C communications
   #define GROVE_SDA -1

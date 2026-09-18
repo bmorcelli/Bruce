@@ -5,7 +5,6 @@
 #define BTN_A 0
 #define BTN_ACT LOW
 #define BTN_B 28
-#define HAS_2_BUTTONS 1
 
 /***************************************************************************************
 ** LILYGO T-Display-C5 — Bruce board interface
