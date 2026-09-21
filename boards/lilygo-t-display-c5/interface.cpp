@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <interface.h>
@@ -56,8 +58,7 @@ void _setup_gpio() {
     digitalWrite(TFT_DC, HIGH);
 
 #ifdef HAS_2_BUTTONS
-    pinMode(BTN_A, INPUT_PULLUP);
-    pinMode(BTN_B, INPUT_PULLUP);
+    hal_buttons_init_2(DeviceButtons{BTN_B, BTN_A}, 600);
 #endif
 
     // All external SPI radios share CS=4 / control=5 on this board.
@@ -116,50 +117,11 @@ void _setBrightness(uint8_t brightval) {
 }
 
 /*********************************************************************
-** Function: InputHandler   (two-button scheme)
-**   BTN_A short = Next      BTN_A long = Prev
-**   BTN_B short = Select    BTN_B long = Back/Esc
-** Sets PrevPress / NextPress / SelPress / EscPress / AnyKeyPress.
+** Function: InputHandler
+** BTN_B (28) -> Next (click) / Sel (double click or hold)
+** BTN_A (0)  -> Prev (click) / Esc (double click or hold)
 **********************************************************************/
-void InputHandler(void) {
-    static bool aWasDown = false, bWasDown = false;
-    static unsigned long aDownAt = 0, bDownAt = 0;
-    static unsigned long lastAction = 0;
-    const unsigned long LONG_MS = 400;    // hold beyond this = long press
-    const unsigned long LOCKOUT_MS = 150; // debounce between registered actions
-
-    bool aDown = (digitalRead(BTN_A) == LOW); // BTN_ACT == LOW
-    bool bDown = (digitalRead(BTN_B) == LOW);
-
-    AnyKeyPress = (aDown || bDown);
-
-    // Wake from power-save on any press; swallow that press.
-    if (AnyKeyPress && wakeUpScreen()) {
-        aWasDown = aDown;
-        bWasDown = bDown;
-        return;
-    }
-
-    if (millis() - lastAction >= LOCKOUT_MS) {
-        // Button A: release decides short (Next) vs long (Prev)
-        if (aDown && !aWasDown) aDownAt = millis();
-        if (!aDown && aWasDown) {
-            if (millis() - aDownAt >= LONG_MS) PrevPress = true;
-            else NextPress = true;
-            lastAction = millis();
-        }
-        // Button B: release decides short (Select) vs long (Esc)
-        if (bDown && !bWasDown) bDownAt = millis();
-        if (!bDown && bWasDown) {
-            if (millis() - bDownAt >= LONG_MS) EscPress = true;
-            else SelPress = true;
-            lastAction = millis();
-        }
-    }
-
-    aWasDown = aDown;
-    bWasDown = bDown;
-}
+void InputHandler(void) { hal_buttons_poll_2(); }
 
 /*********************************************************************
 ** Function: powerOff

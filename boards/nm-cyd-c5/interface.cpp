@@ -1,8 +1,14 @@
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include <interface.h>
 
 #define MINBRIGHT 1
+
+#ifdef HAS_3_BUTTONS
+static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN}; }
+#endif
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -29,7 +35,8 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)9, (gpio_num_t)8
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)6, (gpio_num_t)2, (gpio_num_t)7, (gpio_num_t)10
     }; // sck,miso,mosi,cs
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {
@@ -50,9 +57,7 @@ void _setup_gpio() {
     digitalWrite(TFT_DC, HIGH);
 
 #ifdef HAS_3_BUTTONS
-    pinMode(UP_BTN, INPUT_PULLUP); // Sets the power btn as an INPUT
-    pinMode(SEL_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
+    hal_buttons_init(buttonsCfg(), 3);
 #endif
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
@@ -185,19 +190,7 @@ void InputHandler(void) {
 
 #endif
 #ifdef HAS_3_BUTTONS
-    bool upPressed = (digitalRead(UP_BTN) == LOW);
-    bool selPressed = (digitalRead(SEL_BTN) == LOW);
-    bool dwPressed = (digitalRead(DW_BTN) == LOW);
-
-    bool anyPressed = upPressed || selPressed || dwPressed;
-    if (anyPressed) tm = millis();
-    if (anyPressed && wakeUpScreen()) return;
-
-    AnyKeyPress = anyPressed;
-    PrevPress = upPressed;
-    EscPress = upPressed && dwPressed;
-    NextPress = dwPressed;
-    SelPress = selPressed;
+    hal_buttons_poll_3(buttonsCfg());
 #endif
 }
 

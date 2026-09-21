@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <Arduino.h>
@@ -14,6 +16,8 @@
 #define MINBRIGHT 1
 #define R_BTN 40
 #define UP_BTN 38
+
+static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN, ESC_BTN}; }
 
 // Keep this app "unconfirmed" so it can be launched as a temporary/guest app
 // from the Lilka keira launcher (on reboot the device rolls back to keira).
@@ -53,12 +57,7 @@ void _setup_gpio() {
 
     // Buttons — Lilka has NO external pull-ups (verified on schematic + working ESPHome),
     // so use INPUT_PULLUP. All buttons are active LOW (wired straight to GND).
-    pinMode(UP_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
-    pinMode(L_BTN, INPUT_PULLUP);
-    pinMode(R_BTN, INPUT_PULLUP);
-    pinMode(SEL_BTN, INPUT_PULLUP); // A
-    pinMode(ESC_BTN, INPUT_PULLUP); // B
+    hal_buttons_init(buttonsCfg(), 6);
 
     // Keep radio module chip-selects idle (HIGH) at boot so they don't talk on the bus.
     // CC1101 and NRF24 share SS = 47 on Lilka.
@@ -122,36 +121,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Sets PrevPress / NextPress / UpPress / DownPress / SelPress / EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-
-    bool _u = digitalRead(UP_BTN);
-    bool _d = digitalRead(DW_BTN);
-    bool _l = digitalRead(L_BTN);
-    bool _r = digitalRead(R_BTN);
-    bool _s = digitalRead(SEL_BTN); // A
-    bool _e = digitalRead(ESC_BTN); // B
-
-    if (!_u || !_d || !_l || !_r || !_s || !_e) {
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-
-    if (!_l) { PrevPress = true; }
-    if (!_r) { NextPress = true; }
-    if (!_u) {
-        UpPress = true;
-        PrevPagePress = true;
-    }
-    if (!_d) {
-        DownPress = true;
-        NextPagePress = true;
-    }
-    if (!_s) { SelPress = true; }
-    if (!_e) { EscPress = true; }
-}
+void InputHandler(void) { hal_buttons_poll_6(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff  — deep sleep, wake on Select (GPIO0)

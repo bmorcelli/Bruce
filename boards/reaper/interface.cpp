@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include <bq27220.h>
@@ -19,6 +21,8 @@
 #define MINBRIGHT 1
 #define R_BTN 38
 #define UP_BTN 41
+
+static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN, ESC_BTN}; }
 // Charger chip
 
 XPowersPPM PPM;
@@ -70,12 +74,7 @@ void _setup_gpio() {
     Wire.setPins(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
 
-    pinMode(UP_BTN, INPUT); // Sets the power btn as an INPUT
-    pinMode(SEL_BTN, INPUT);
-    pinMode(DW_BTN, INPUT);
-    pinMode(R_BTN, INPUT);
-    pinMode(L_BTN, INPUT);
-    pinMode(ESC_BTN, INPUT);
+    hal_buttons_init(buttonsCfg(), 6);
 
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
@@ -164,39 +163,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-    bool _u = digitalRead(UP_BTN);
-    bool _d = digitalRead(DW_BTN);
-    bool _l = digitalRead(L_BTN);
-    bool _r = digitalRead(R_BTN);
-    bool _s = digitalRead(SEL_BTN);
-    bool _e = digitalRead(ESC_BTN);
-
-    if (!_s || !_u || !_d || !_r || !_l || !_e) {
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-    if (!_l) { PrevPress = true; }
-    if (!_r) { NextPress = true; }
-    if (!_u) {
-        UpPress = true;
-        PrevPagePress = true;
-    }
-    if (!_d) {
-        DownPress = true;
-        NextPagePress = true;
-    }
-    if (!_s) { SelPress = true; }
-
-    if (!_e) {
-        EscPress = true;
-        // NextPress = false;
-        // PrevPress = false;
-    }
-}
+void InputHandler(void) { hal_buttons_poll_6(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff

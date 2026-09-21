@@ -1,6 +1,8 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include <globals.h>
 #include <interface.h>
 
@@ -22,22 +24,6 @@
 #include <Wire.h>
 TouchLib touch(Wire, 18, 17, CTS820_SLAVE_ADDRESS, 21);
 #endif
-
-#include <Button.h>
-volatile bool nxtPress = false;
-volatile bool prvPress = false;
-volatile bool ecPress = false;
-volatile bool slPress = false;
-static void onButtonSingleClickCb1(void *button_handle, void *usr_data) { nxtPress = true; }
-static void onButtonDoubleClickCb1(void *button_handle, void *usr_data) { slPress = true; }
-static void onButtonHoldCb1(void *button_handle, void *usr_data) { slPress = true; }
-
-static void onButtonSingleClickCb2(void *button_handle, void *usr_data) { prvPress = true; }
-static void onButtonDoubleClickCb2(void *button_handle, void *usr_data) { ecPress = true; }
-static void onButtonHoldCb2(void *button_handle, void *usr_data) { ecPress = true; }
-
-Button *btn1;
-Button *btn2;
 
 #if defined(T_DISPLAY_S3)
 
@@ -68,8 +54,8 @@ void _setup_gpio() {
     bruceConfigPins.rfRx = 17;
     bruceConfigPins.irTx = 3;
     bruceConfigPins.irRx = 21;
-    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)17, (gpio_num_t)18};  // rx, tx
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)17, (gpio_num_t)18};    // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)17, (gpio_num_t)18}; // rx, tx
 #elif defined(USE_SD_MMC)
     bruceConfigPins.i2c_bus = {(gpio_num_t)16, (gpio_num_t)21}; // sda, scl (Grove)
@@ -77,8 +63,8 @@ void _setup_gpio() {
     bruceConfigPins.rfRx = 21;
     bruceConfigPins.irTx = 10;
     bruceConfigPins.irRx = 44;
-    bruceConfigPins.uart_bus = {(gpio_num_t)16, (gpio_num_t)21}; // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)21, (gpio_num_t)16};  // rx, tx
+    bruceConfigPins.uart_bus = {(gpio_num_t)16, (gpio_num_t)21};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)21, (gpio_num_t)16};    // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)21, (gpio_num_t)16}; // rx, tx
 #else
     bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43}; // sda, scl (Grove)
@@ -86,8 +72,8 @@ void _setup_gpio() {
     bruceConfigPins.rfRx = 43;
     bruceConfigPins.irTx = 17;
     bruceConfigPins.irRx = 18;
-    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)43, (gpio_num_t)44};  // rx, tx
+    bruceConfigPins.uart_bus = {(gpio_num_t)43, (gpio_num_t)44};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)43, (gpio_num_t)44};    // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx
 #endif
     bruceConfigPins.rotation = 3;
@@ -112,7 +98,8 @@ void _setup_gpio() {
     }; // sck,miso,mosi,cs,int,rst
 #endif
 #else
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)1
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)1
     }; // sck,miso,mosi,cs
     bruceConfigPins.CC1101_bus = {
         (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)2, (gpio_num_t)21, GPIO_NUM_NC
@@ -149,39 +136,10 @@ void _setup_gpio() {
     touch.setRotation(1);
 #endif
     // setup buttons
-    button_config_t bt1 = {
-        .type = BUTTON_TYPE_GPIO,
-        .long_press_time = 600,
-        .short_press_time = 120,
-        .gpio_button_config = {
-                               .gpio_num = DW_BTN,
-                               .active_level = 0,
-                               },
-    };
-    button_config_t bt2 = {
-        .type = BUTTON_TYPE_GPIO,
-        .long_press_time = 600,
-        .short_press_time = 120,
-        .gpio_button_config = {
-                               .gpio_num = UP_BTN,
-                               .active_level = 0,
-                               },
-    };
     pinMode(SEL_BTN, INPUT_PULLUP);
-
-    btn1 = new Button(bt1);
-
-    // btn->attachPressDownEventCb(&onButtonPressDownCb, NULL);
-    btn1->attachSingleClickEventCb(&onButtonSingleClickCb1, NULL);
-    btn1->attachDoubleClickEventCb(&onButtonDoubleClickCb1, NULL);
-    btn1->attachLongPressStartEventCb(&onButtonHoldCb1, NULL);
-
-    btn2 = new Button(bt2);
-
-    // btn->attachPressDownEventCb(&onButtonPressDownCb, NULL);
-    btn2->attachSingleClickEventCb(&onButtonSingleClickCb2, NULL);
-    btn2->attachDoubleClickEventCb(&onButtonDoubleClickCb2, NULL);
-    btn2->attachLongPressStartEventCb(&onButtonHoldCb2, NULL);
+    // DW_BTN -> Next (click) / Sel (double click or hold)
+    // UP_BTN -> Prev (click) / Esc (double click or hold)
+    hal_buttons_init_2(DeviceButtons{DW_BTN, UP_BTN}, 600);
 
     // setup POWER pin required by the vendor
     pinMode(PIN_POWER_ON, OUTPUT);
@@ -213,66 +171,52 @@ void _setBrightness(uint8_t brightval) {
 **********************************************************************/
 
 void InputHandler(void) {
-    static long tm = 0;
-    static bool btn_pressed = false;
-    bool selPressed = false;
-    if (nxtPress || prvPress || ecPress || slPress || selPressed) btn_pressed = true;
+    hal_buttons_poll_2();
 
-    if (millis() - tm > 200 || LongPress) {
+    static unsigned long tm = 0;
+    if (millis() - tm <= 200 && !LongPress) return;
 #ifdef HAS_TOUCH
-        if (touch.read()) {
-            auto t = touch.getPoint(0);
-            tm = millis();
-            if (bruceConfigPins.rotation == 1) {
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-                // t.x = tftWidth-t.x;
-            }
-            if (bruceConfigPins.rotation == 3) {
-                // t.y = (tftHeight+20)-t.y;
-                t.x = tftWidth - t.x;
-            }
-            // Need to test the other orientations
-
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x;
-                t.x = tftWidth - t.y;
-                t.y = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x;
-                t.x = t.y;
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
-            }
-
-            // Serial.printf("\nPressed x=%d , y=%d, rot: %d",t.x, t.y, bruceConfigPins.rotation);
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else return;
-
-            // Touch point global variable
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
+    if (touch.read()) {
+        auto t = touch.getPoint(0);
+        tm = millis();
+        if (bruceConfigPins.rotation == 1) {
+            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
+            // t.x = tftWidth-t.x;
         }
+        if (bruceConfigPins.rotation == 3) {
+            // t.y = (tftHeight+20)-t.y;
+            t.x = tftWidth - t.x;
+        }
+        // Need to test the other orientations
+
+        if (bruceConfigPins.rotation == 0) {
+            int tmp = t.x;
+            t.x = tftWidth - t.y;
+            t.y = tmp;
+        }
+        if (bruceConfigPins.rotation == 2) {
+            int tmp = t.x;
+            t.x = t.y;
+            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
+        }
+
+        // Serial.printf("\nPressed x=%d , y=%d, rot: %d",t.x, t.y, bruceConfigPins.rotation);
+
+        if (!wakeUpScreen()) AnyKeyPress = true;
+        else return;
+
+        // Touch point global variable
+        touchPoint.x = t.x;
+        touchPoint.y = t.y;
+        touchPoint.pressed = true;
+        touchHeatMap(touchPoint);
+    }
 #endif
-        if (digitalRead(SEL_BTN) == BTN_ACT) {
-            selPressed = true;
-            btn_pressed = true;
-        }
-        if (btn_pressed) {
-            btn_pressed = false;
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else return;
-            SelPress = slPress + selPressed;
-            EscPress = ecPress;
-            NextPress = nxtPress;
-            PrevPress = prvPress;
-
-            nxtPress = false;
-            prvPress = false;
-            ecPress = false;
-            slPress = false;
+    if (digitalRead(SEL_BTN) == BTN_ACT) {
+        tm = millis();
+        if (!wakeUpScreen()) {
+            AnyKeyPress = true;
+            SelPress = true;
         }
     }
 }

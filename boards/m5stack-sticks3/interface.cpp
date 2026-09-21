@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
@@ -12,48 +14,6 @@
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
 
-constexpr uint32_t kDwDoublePressWindowMs = 250;
-constexpr uint32_t kDwLongPressMs = 600;
-constexpr uint32_t kDwDebounceMs = 8;
-
-static volatile uint32_t dw_last_isr_ms = 0;
-static volatile uint32_t dw_press_ms = 0;
-static volatile uint32_t dw_first_release_ms = 0;
-static volatile bool dw_is_down = false;
-static volatile bool dw_waiting = false;
-static volatile bool dw_double_ready = false;
-static volatile bool dw_long_seen = false;
-
-void IRAM_ATTR isr_dw_btn() {
-    uint32_t now = millis();
-    if (now - dw_last_isr_ms < kDwDebounceMs) return;
-    dw_last_isr_ms = now;
-    bool pressed = (digitalRead(DW_BTN) == BTN_ACT);
-    if (pressed) {
-        dw_is_down = true;
-        dw_press_ms = now;
-        return;
-    }
-
-    dw_is_down = false;
-    if (dw_long_seen) {
-        dw_long_seen = false;
-        dw_waiting = false;
-        return;
-    }
-
-    if ((now - dw_press_ms) < kDwLongPressMs) {
-        if (dw_waiting && (now - dw_first_release_ms) <= kDwDoublePressWindowMs) {
-            dw_double_ready = true;
-            dw_waiting = false;
-        } else {
-            dw_waiting = true;
-            dw_first_release_ms = now;
-        }
-    } else {
-        dw_waiting = false;
-    }
-}
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp
@@ -95,8 +55,9 @@ void _setup_gpio() {
     Wire1.begin(47, 48);
     setSysI2CBus(&Wire1);
 
-    pinMode(SEL_BTN, INPUT);
-    pinMode(DW_BTN, INPUT);
+    // SEL_BTN -> Next (click) / Sel (double click or hold)
+    // DW_BTN  -> Prev (click) / Esc (double click or hold)
+    hal_buttons_init_2(DeviceButtons{SEL_BTN, DW_BTN}, 600);
 
     M5.Power.setExtOutput(false); // It buzzes it ext power is turned on
 
@@ -123,7 +84,6 @@ void _setup_gpio() {
     pinMode(46, OUTPUT);
     digitalWrite(46, LOW); // Infrared LED Off
 
-    attachInterrupt(DW_BTN, isr_dw_btn, CHANGE);
     pinMode(TFT_BL, OUTPUT);
     bruceConfig.colorInverted = 0;
 }
@@ -177,54 +137,7 @@ int getBattery() {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    static bool dwLongFired = false;
-    unsigned long now = millis();
-    if (now - tm < 200 && !LongPress) return;
-
-    bool selPressed = (digitalRead(SEL_BTN) == BTN_ACT);
-    bool dwPressed = dw_is_down;
-    bool dwWaiting = dw_waiting;
-    bool dwDoubleReady = dw_double_ready;
-    unsigned long dwPressStart = dw_press_ms;
-    unsigned long dwFirstRelease = dw_first_release_ms;
-
-    bool dwNextReady = dwWaiting && !dwPressed && (now - dwFirstRelease) > kDwDoublePressWindowMs;
-
-    if (!(selPressed || dwPressed || dwDoubleReady || dwNextReady)) return;
-
-    if (!wakeUpScreen()) AnyKeyPress = true;
-    else return;
-
-    if (selPressed) {
-        SelPress = true;
-        tm = now;
-    }
-    if (dwPressed) {
-        if (!dwLongFired && (now - dwPressStart) > kDwLongPressMs) {
-            EscPress = true;
-            dwLongFired = true;
-            dw_waiting = false;
-            dw_double_ready = false;
-            dw_long_seen = true;
-            tm = now;
-        }
-    } else if (dwLongFired) {
-        dwLongFired = false;
-    }
-
-    if (dwDoubleReady) {
-        PrevPress = true;
-        dw_double_ready = false;
-        dw_waiting = false;
-        tm = now;
-    } else if (dwNextReady) {
-        NextPress = true;
-        dw_waiting = false;
-        tm = now;
-    }
-}
+void InputHandler(void) { hal_buttons_poll_2(); }
 
 /*********************************************************************
 ** Function: powerOff

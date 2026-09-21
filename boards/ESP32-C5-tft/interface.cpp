@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <interface.h>
@@ -8,6 +10,10 @@
 #define UP_BTN 0
 #define SEL_BTN 28
 #define DW_BTN 1
+#endif
+
+#ifdef HAS_3_BUTTONS
+static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN}; }
 #endif
 
 /***************************************************************************************
@@ -57,9 +63,7 @@ void _setup_gpio() {
     digitalWrite(TFT_DC, HIGH);
 
 #ifdef HAS_3_BUTTONS
-    pinMode(UP_BTN, INPUT_PULLUP); // Sets the power btn as an INPUT
-    pinMode(SEL_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
+    hal_buttons_init(buttonsCfg(), 3);
 #endif
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
@@ -195,23 +199,7 @@ void InputHandler(void) {
 
 #endif
 #ifdef HAS_3_BUTTONS
-    bool upPressed = (digitalRead(UP_BTN) == LOW);
-    bool selPressed = (digitalRead(SEL_BTN) == LOW);
-    bool dwPressed = (digitalRead(DW_BTN) == LOW);
-
-    bool anyPressed = upPressed || selPressed || dwPressed;
-    if (anyPressed) tm = millis();
-    if (anyPressed && wakeUpScreen()) return;
-
-    AnyKeyPress = anyPressed;
-    if (upPressed && dwPressed) {
-        EscPress = true;
-        return;
-    }
-    PrevPress = upPressed;
-
-    NextPress = dwPressed;
-    SelPress = selPressed;
+    hal_buttons_poll_3(buttonsCfg());
 #endif
 }
 

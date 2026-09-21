@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <interface.h>
@@ -9,6 +11,8 @@
 #define MINBRIGHT 4
 #define R_BTN 13
 #define UP_BTN 0
+
+static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN}; }
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -56,11 +60,7 @@ void _setup_gpio() {
     digitalWrite(TFT_DC, HIGH);
 
 #ifdef HAS_5_BUTTONS
-    pinMode(UP_BTN, INPUT_PULLUP); // Sets the power btn as an INPUT
-    pinMode(SEL_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
-    pinMode(R_BTN, INPUT_PULLUP);
-    pinMode(L_BTN, INPUT_PULLUP);
+    hal_buttons_init(buttonsCfg(), 5);
 #endif
 
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
@@ -115,37 +115,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-    bool _u = digitalRead(UP_BTN);
-    bool _d = digitalRead(DW_BTN);
-    bool _l = digitalRead(L_BTN);
-    bool _r = digitalRead(R_BTN);
-    bool _s = digitalRead(SEL_BTN);
-
-    if (!_s || !_u || !_d || !_r || !_l) {
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-    if (!_l) { PrevPress = true; }
-    if (!_r) { NextPress = true; }
-    if (!_u) {
-        UpPress = true;
-        PrevPagePress = true;
-    }
-    if (!_d) {
-        DownPress = true;
-        NextPagePress = true;
-    }
-    if (!_s) { SelPress = true; }
-    if (!_l && !_r) {
-        EscPress = true;
-        NextPress = false;
-        PrevPress = false;
-    }
-}
+void InputHandler(void) { hal_buttons_poll_5(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff

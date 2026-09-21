@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include <interface.h>
@@ -7,6 +9,12 @@
 #define DW_BTN 39
 #define MINBRIGHT 160
 #define UP_BTN 35
+
+static DeviceButtons buttonsCfg() {
+    DeviceButtons cfg{UP_BTN, DW_BTN, SEL_BTN};
+    cfg.pullup = false; // no internal/external pull-ups on these pins
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -62,9 +70,7 @@ void _setup_gpio() {
 #if defined(HAS_RTC)
     _rtc.setWire(getSysI2CBus());
 #endif
-    pinMode(UP_BTN, INPUT); // Sets the power btn as an INPUT
-    pinMode(SEL_BTN, INPUT);
-    pinMode(DW_BTN, INPUT);
+    hal_buttons_init(buttonsCfg(), 3);
     pinMode(4, OUTPUT);    // Keeps the Stick alive after take off the USB cable
     digitalWrite(4, HIGH); // Keeps the Stick alive after take off the USB cable
     gpio_pulldown_dis(GPIO_NUM_36);
@@ -110,27 +116,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-
-    bool upPressed = (digitalRead(UP_BTN) == LOW);
-    bool selPressed = (digitalRead(SEL_BTN) == LOW);
-    bool dwPressed = (digitalRead(DW_BTN) == LOW);
-
-    bool anyPressed = upPressed || selPressed || dwPressed;
-    if (anyPressed) tm = millis();
-    if (anyPressed && wakeUpScreen()) return;
-
-    AnyKeyPress = anyPressed;
-    if (upPressed && dwPressed) {
-        EscPress = true;
-        return;
-    }
-    PrevPress = upPressed;
-    NextPress = dwPressed;
-    SelPress = selPressed;
-}
+void InputHandler(void) { hal_buttons_poll_3(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff
