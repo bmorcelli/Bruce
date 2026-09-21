@@ -7,7 +7,8 @@
 #include <interface.h>
 
 // Rotary encoder
-#include <rotary_decoder.h>
+#include "hal/device.h"
+#include "hal/inputs/encoder.h"
 
 #define ENCODER_INA 40
 #define ENCODER_INB 41
@@ -37,9 +38,17 @@
 #define KEYBOARD_BL 46
 #define KEY_SHIFT 0x1c
 #define MINBRIGHT 1
-extern RotaryDecoder *encoder;
-RotaryDecoder *encoder = nullptr;
-void pollEncoder(void) { encoder->poll(); }
+static DeviceEncoder encoderCfg() {
+    DeviceEncoder cfg;
+    // A/B swapped on purpose: this board's wiring reports rotation opposite to
+    // the other encoder boards for the Next/Prev mapping hal_encoder_poll()
+    // assumes (hal_encoder_poll() has no invert flag).
+    cfg.pin_a = ENCODER_INB;
+    cfg.pin_b = ENCODER_INA;
+    cfg.pin_sel = SEL_BTN;
+    cfg.pin_esc = BK_BTN;
+    return cfg;
+}
 
 // Charger chip
 #define XPOWERS_CHIP_BQ25896
@@ -278,11 +287,7 @@ void _setup_gpio() {
     bruceConfigPins.gpsBaudrate = 38400;
 
     // Encoder
-    pinMode(ENCODER_KEY, INPUT);
-    pinMode(ENCODER_INA, INPUT_PULLUP);
-    pinMode(ENCODER_INB, INPUT_PULLUP);
-    encoder = new RotaryDecoder();
-    encoder->begin(ENCODER_INB, ENCODER_INA, 4);
+    hal_encoder_init(encoderCfg(), EncoderLatchMode::FOUR3);
 
     // Haptic driver
     if (!drv.begin(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl)) {
@@ -361,35 +366,8 @@ void _setBrightness(uint8_t brightval) {
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
 void InputHandler(void) {
-    static unsigned long tm = millis();
-    static unsigned long lastEncoderMoveMs = 0;
-    static int posDifference = 0;
-    static int lastPos = 0;
-    bool sel = !BTN_ACT;
-    bool esc = !BTN_ACT;
-
     uint8_t keyValue = 0;
     uint8_t keyVal = '\0';
-
-    if (millis() - tm < 500) return;
-
-    int newPos = encoder->getPosition();
-    if (newPos != lastPos) {
-        posDifference += (newPos - lastPos);
-        // Independent running total for consumers that want to apply the
-        // full pending backlog in one pass instead of one step at a time
-        // (see drainRotarySteps() in globals.h). Never cleared by the
-        // stale-drop below -- it's drained exactly, not time-limited.
-        RotaryNetSteps += (newPos - lastPos);
-        lastPos = newPos;
-        lastEncoderMoveMs = millis();
-    } else if (posDifference != 0 && millis() - lastEncoderMoveMs > 30) {
-        // Drop any stale queued steps once the encoder has stopped moving.
-        posDifference = 0;
-    }
-
-    sel = digitalRead(SEL_BTN);
-    esc = digitalRead(BK_BTN);
 
     if (keyboard->available() > 0) {
         keyStroke pendingKey;
@@ -439,30 +417,23 @@ void InputHandler(void) {
         }
     } else KeyStroke.Clear();
 
-    if (posDifference != 0 || sel == BTN_ACT || esc == BTN_ACT || KeyStroke.enter) {
+    if (KeyStroke.enter) {
         if (!wakeUpScreen()) {
             AnyKeyPress = true;
-
-            // Haptic feedback
-            drv.setWaveform(0, 1);
+            drv.setWaveform(0, 1); // Haptic feedback
             drv.setWaveform(1, 0);
             drv.run();
-
-            if (posDifference > 0) {
-                PrevPress = true;
-                posDifference--;
-            }
-            if (posDifference < 0) {
-                NextPress = true;
-                posDifference++;
-            }
-            if (sel == BTN_ACT) SelPress = true;
-            if (esc == BTN_ACT) EscPress = true;
-        } else goto END;
+        }
     }
 
-END:
-    if (sel == BTN_ACT || esc == BTN_ACT) tm = millis();
+    // Encoder rotation, Select (encoder key) and Esc (back key)
+    bool hadPress = NextPress || PrevPress || SelPress || EscPress;
+    hal_encoder_poll(encoderCfg());
+    if (!hadPress && (NextPress || PrevPress || SelPress || EscPress)) {
+        drv.setWaveform(0, 1); // Haptic feedback
+        drv.setWaveform(1, 0);
+        drv.run();
+    }
 }
 
 void powerOff() { PPM.shutdown(); }

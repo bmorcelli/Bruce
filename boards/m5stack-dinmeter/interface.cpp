@@ -4,13 +4,20 @@
 #include <interface.h>
 
 // Rotary encoder
-#include <rotary_decoder.h>
+#include "hal/device.h"
+#include "hal/inputs/encoder.h"
 
 #define ENCODER_INA 41
 #define ENCODER_INB 40
 #define ENCODER_KEY 42
-RotaryDecoder *encoder = nullptr;
-void pollEncoder(void) { encoder->poll(); }
+
+static DeviceEncoder encoderCfg() {
+    DeviceEncoder cfg;
+    cfg.pin_a = ENCODER_INA;
+    cfg.pin_b = ENCODER_INB;
+    cfg.pin_sel = ENCODER_KEY;
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -53,11 +60,7 @@ void _setup_gpio() {
     M5.begin();
     setSysI2CBus(M5.In_I2C.getPort() == I2C_NUM_1 ? &Wire1 : &Wire);
     bruceConfig.colorInverted = 0;
-    pinMode(ENCODER_KEY, INPUT);
-    pinMode(ENCODER_INA, INPUT_PULLUP);
-    pinMode(ENCODER_INB, INPUT_PULLUP);
-    encoder = new RotaryDecoder();
-    encoder->begin(ENCODER_INA, ENCODER_INB, 2);
+    hal_encoder_init(encoderCfg());
 }
 /*********************************************************************
 ** Function: setBrightness
@@ -81,50 +84,9 @@ int getBattery() {
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
 void InputHandler(void) {
-    static unsigned long tm = millis(); // debauce for buttons
-    static unsigned long lastEncoderMoveMs = 0;
-    static int posDifference = 0;
-    static int lastPos = 0;
-    bool sel = !LOW;
+    hal_encoder_poll(encoderCfg());
 
-    int newPos = encoder->getPosition();
-    if (newPos != lastPos) {
-        posDifference += (newPos - lastPos);
-        // Independent running total for consumers that want to apply the
-        // full pending backlog in one pass instead of one step at a time
-        // (see drainRotarySteps() in globals.h). Never cleared by the
-        // stale-drop below -- it's drained exactly, not time-limited.
-        RotaryNetSteps += (newPos - lastPos);
-        lastPos = newPos;
-        lastEncoderMoveMs = millis();
-    } else if (posDifference != 0 && millis() - lastEncoderMoveMs > 30) {
-        // Drop any stale queued steps once the encoder has stopped moving.
-        posDifference = 0;
-    }
-
-    if (millis() - tm < 200 && !LongPress) return;
-
-    sel = digitalRead(ENCODER_KEY);
-
-    if (posDifference != 0 || sel == LOW) {
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-    if (posDifference > 0) {
-        PrevPress = true;
-        posDifference--;
-    }
-    if (posDifference < 0) {
-        NextPress = true;
-        posDifference++;
-    }
-
-    if (sel == LOW) {
-        posDifference = 0;
-        SelPress = true;
-        tm = millis();
-    }
-
+    // Prev + Select together -> Esc
     if (PrevPress && SelPress) {
         EscPress = true;
         SelPress = false;

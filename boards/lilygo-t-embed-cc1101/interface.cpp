@@ -5,7 +5,8 @@
 #include <interface.h>
 
 // Rotary encoder
-#include <rotary_decoder.h>
+#include "hal/device.h"
+#include "hal/inputs/encoder.h"
 
 // Encoder pins differ between the two envs built from this directory; USE_BQ27220_VIA_I2C is
 // the real discriminator (T_EMBED_1101/T_EMBED are never defined by any -D, see _setup_gpio).
@@ -23,9 +24,16 @@
 #define BK_BTN 6
 #define BTN_ACT LOW
 #define MINBRIGHT 1
-extern RotaryDecoder *encoder;
-RotaryDecoder *encoder = nullptr;
-void pollEncoder(void) { encoder->poll(); }
+static DeviceEncoder encoderCfg() {
+    DeviceEncoder cfg;
+    cfg.pin_a = ENCODER_INA;
+    cfg.pin_b = ENCODER_INB;
+    cfg.pin_sel = SEL_BTN;
+#ifdef T_EMBED_1101
+    cfg.pin_esc = BK_BTN;
+#endif
+    return cfg;
+}
 
 // Battery libs
 #if defined(T_EMBED_1101)
@@ -179,14 +187,7 @@ void _setup_gpio() {
 
 #endif
 
-#ifdef T_EMBED_1101
-    pinMode(BK_BTN, INPUT);
-#endif
-    pinMode(ENCODER_KEY, INPUT);
-    pinMode(ENCODER_INA, INPUT_PULLUP);
-    pinMode(ENCODER_INB, INPUT_PULLUP);
-    encoder = new RotaryDecoder();
-    encoder->begin(ENCODER_INA, ENCODER_INB, 2);
+    hal_encoder_init(encoderCfg());
 }
 
 /***************************************************************************************
@@ -219,69 +220,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = millis();  // debounce for buttons
-    static unsigned long tm2 = millis(); // delay between Select and encoder (avoid missclick)
-    static unsigned long lastEncoderMoveMs = 0;
-    static int posDifference = 0;
-    static int lastPos = 0;
-    bool sel = !BTN_ACT;
-    bool esc = !BTN_ACT;
-
-    int newPos = encoder->getPosition();
-    if (newPos != lastPos) {
-        posDifference += (newPos - lastPos);
-        // Independent running total for consumers that want to apply the
-        // full pending backlog in one pass instead of one step at a time
-        // (see drainRotarySteps() in globals.h). Never cleared by the
-        // stale-drop below -- it's drained exactly, not time-limited.
-        RotaryNetSteps += (newPos - lastPos);
-        lastPos = newPos;
-        lastEncoderMoveMs = millis();
-    } else if (posDifference != 0 && millis() - lastEncoderMoveMs > 30) {
-        // Drop any stale queued steps once the encoder has stopped moving.
-        posDifference = 0;
-    }
-
-    if (millis() - tm > 200 || LongPress) {
-        sel = digitalRead(SEL_BTN);
-#ifdef T_EMBED_1101
-        esc = digitalRead(BK_BTN);
-#endif
-    }
-    if (posDifference != 0 || sel == BTN_ACT || esc == BTN_ACT) {
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-    if (posDifference > 0) {
-        PrevPress = true;
-        posDifference--;
-#ifdef HAS_ENCODER_LED
-        EncoderLedChange = -1;
-#endif
-        tm2 = millis();
-    }
-    if (posDifference < 0) {
-        NextPress = true;
-        posDifference++;
-#ifdef HAS_ENCODER_LED
-        EncoderLedChange = 1;
-#endif
-        tm2 = millis();
-    }
-
-    if (sel == BTN_ACT && millis() - tm2 > 200) {
-        posDifference = 0;
-        SelPress = true;
-        tm = millis();
-    }
-    if (esc == BTN_ACT) {
-        AnyKeyPress = true;
-        EscPress = true;
-        // Serial.println("EscPressed");
-        tm = millis();
-    }
-}
+void InputHandler(void) { hal_encoder_poll(encoderCfg()); }
 
 void powerOff() {
 #ifdef T_EMBED_1101

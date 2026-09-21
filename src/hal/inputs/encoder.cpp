@@ -38,13 +38,23 @@ void hal_encoder_init(const DeviceEncoder &cfg, EncoderLatchMode mode) {
 
 void hal_encoder_poll(const DeviceEncoder &cfg) {
     static unsigned long tm = 0;
+    static unsigned long tm2 = 0; // delay between an encoder step and Select (avoid missclick)
+    static unsigned long lastMoveMs = 0;
     static int posDifference = 0;
     static long lastPos = 0;
 
     long newPos = halEncoder->getPosition();
     if (newPos != lastPos) {
         posDifference += (newPos - lastPos);
+        // Independent running total for consumers that apply the whole
+        // backlog in one pass (see drainRotarySteps() in globals.h). Never
+        // cleared by the stale-drop below -- it's drained exactly.
+        RotaryNetSteps += (newPos - lastPos);
         lastPos = newPos;
+        lastMoveMs = millis();
+    } else if (posDifference != 0 && millis() - lastMoveMs > 30) {
+        // Drop any stale queued steps once the encoder has stopped moving.
+        posDifference = 0;
     }
 
     if (millis() - tm < 200 && !LongPress) return;
@@ -59,13 +69,21 @@ void hal_encoder_poll(const DeviceEncoder &cfg) {
     if (posDifference > 0) {
         PrevPress = true;
         posDifference--;
+#ifdef HAS_ENCODER_LED
+        EncoderLedChange = -1;
+#endif
+        tm2 = millis();
     }
     if (posDifference < 0) {
         NextPress = true;
         posDifference++;
+#ifdef HAS_ENCODER_LED
+        EncoderLedChange = 1;
+#endif
+        tm2 = millis();
     }
 
-    if (sel) {
+    if (sel && millis() - tm2 > 200) {
         posDifference = 0;
         SelPress = true;
         tm = millis();
