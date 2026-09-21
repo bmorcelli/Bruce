@@ -205,7 +205,7 @@ bool hal_touch_init(const DeviceTouch &cfg, uint8_t i2c_addr, bool xpt_shared_sp
 #endif
 }
 
-bool hal_touch_read(const DeviceTouch &cfg, TouchPoint &out) {
+bool hal_touch_read(const DeviceTouch &cfg, BruceTouchPoint &out) {
 #if defined(TOUCH_CTRL_XPT2046) || defined(TOUCH_CTRL_GT911) || defined(TOUCH_CTRL_CST8XX) ||                \
     defined(TOUCH_CTRL_FT6X36) || defined(TOUCH_CTRL_GT9895) || defined(TOUCH_CTRL_HI8561)
     uint8_t r = rotation & 0x03;
@@ -270,7 +270,7 @@ bool hal_touch_read(const DeviceTouch &cfg, TouchPoint &out) {
 #endif
 }
 
-bool hal_touch_read_raw(TouchPoint &out) {
+bool hal_touch_read_raw(BruceTouchPoint &out) {
 #if defined(TOUCH_CTRL_XPT2046)
     if (!touch.touched()) return false;
     auto p = touch.getPointScaled();
@@ -306,7 +306,7 @@ bool hal_touch_get_resolution(uint16_t &width, uint16_t &height) {
 #endif
 }
 
-bool hal_touch_apply(const TouchPoint &t, bool wakeUp) {
+bool hal_touch_apply(const BruceTouchPoint &t, bool wakeUp) {
     if (wakeUp) {
         if (!wakeUpScreen()) AnyKeyPress = true;
         else return false;

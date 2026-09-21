@@ -7,13 +7,15 @@
 
 static XPowersPPM ppm;
 
-static void applyOperatingPoint(uint16_t input_current_limit_ma) {
+static void applyOperatingPoint(
+    uint16_t input_current_limit_ma, uint16_t charge_target_mv, uint16_t charge_current_ma
+) {
     ppm.setSysPowerDownVoltage(3300);
     ppm.setInputCurrentLimit(input_current_limit_ma);
     ppm.disableCurrentLimitPin();
-    ppm.setChargeTargetVoltage(4208);
+    ppm.setChargeTargetVoltage(charge_target_mv);
     ppm.setPrechargeCurr(64);
-    ppm.setChargerConstantCurr(832);
+    ppm.setChargerConstantCurr(charge_current_ma);
     ppm.enableMeasure();
     ppm.disableOTG();
     ppm.enableCharge();
@@ -22,8 +24,10 @@ static void applyOperatingPoint(uint16_t input_current_limit_ma) {
 
 bool hal_pmic_init(const DevicePmic &cfg, uint16_t input_current_limit_ma) {
 #if defined(PMIC_BQ25896)
-    if (!ppm.init(Wire, cfg.pin_sda, cfg.pin_scl, cfg.address)) return false;
-    applyOperatingPoint(input_current_limit_ma);
+    bool ok = (cfg.pin_sda < 0 && cfg.pin_scl < 0) ? ppm.init()
+                                                    : ppm.init(Wire, cfg.pin_sda, cfg.pin_scl, cfg.address);
+    if (!ok) return false;
+    applyOperatingPoint(input_current_limit_ma, cfg.charge_target_mv, cfg.charge_current_ma);
     return true;
 #else
     (void)cfg;
@@ -37,7 +41,7 @@ bool hal_pmic_init_via_callbacks(
 ) {
 #if defined(PMIC_BQ25896)
     if (!ppm.begin(address, readReg, writeReg)) return false;
-    applyOperatingPoint(input_current_limit_ma);
+    applyOperatingPoint(input_current_limit_ma, 4208, 832);
     return true;
 #else
     (void)address;
@@ -83,5 +87,47 @@ int hal_pmic_get_ntc_percent() {
     return (int)ppm.getNTCPercentage();
 #else
     return -1;
+#endif
+}
+
+void hal_pmic_enable_otg() {
+#if defined(PMIC_BQ25896)
+    ppm.enableOTG();
+#endif
+}
+
+void hal_pmic_disable_otg() {
+#if defined(PMIC_BQ25896)
+    ppm.disableOTG();
+#endif
+}
+
+bool hal_pmic_is_charging() {
+#if defined(PMIC_BQ25896)
+    return ppm.isCharging();
+#else
+    return false;
+#endif
+}
+
+bool hal_pmic_is_charge_done() {
+#if defined(PMIC_BQ25896)
+    return ppm.isChargeDone();
+#else
+    return false;
+#endif
+}
+
+int hal_pmic_get_batt_voltage_mv() {
+#if defined(PMIC_BQ25896)
+    return (int)ppm.getBattVoltage();
+#else
+    return -1;
+#endif
+}
+
+void hal_pmic_disable_bat_load() {
+#if defined(PMIC_BQ25896)
+    ppm.disableBatLoad();
 #endif
 }

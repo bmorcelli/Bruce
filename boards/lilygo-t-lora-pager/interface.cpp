@@ -2,7 +2,6 @@
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <Wire.h>
-#include <bq27220.h>
 #include <globals.h>
 #include <interface.h>
 
@@ -50,17 +49,11 @@ static DeviceEncoder encoderCfg() {
     return cfg;
 }
 
-// Charger chip
-#define XPOWERS_CHIP_BQ25896
-#include <XPowersLib.h>
 #include <esp32-hal-dac.h>
-XPowersPPM PPM;
 
 // Battery libs
-#ifdef USE_BQ27220_VIA_I2C
+#ifdef GAUGE_BQ27220
 #define BATTERY_DESIGN_CAPACITY 1500
-#include <bq27220.h>
-BQ27220 bq;
 #endif
 
 #include "core/i2c_finder.h"
@@ -71,8 +64,8 @@ BQ27220 bq;
 Adafruit_TCA8418 *keyboard;
 
 // Haptic
-#include "SensorDRV2605.hpp"
-SensorDRV2605 drv;
+#include "HapticDrivers.hpp"
+HapticDriver_DRV2605 drv;
 void hapticTest(uint8_t effect);
 uint8_t effect = 1;
 
@@ -252,21 +245,18 @@ void _setup_gpio() {
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
 
     // Power management
-    bool pmu_ret = false;
-    pmu_ret = PPM.init(
-        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
-    );
-    if (pmu_ret) {
-        // https://github.com/Xinyuan-LilyGO/LilyGoLib/blob/a64fc6ca94757baa5401ad71b39fb7f92cd1a7e9/src/LilyGo_LoRa_Pager.cpp#L442-L452
-        PPM.resetDefault();
-
-        PPM.setChargeTargetVoltage(4288);
-        PPM.setChargerConstantCurr(704);
-        PPM.enableMeasure(PowersBQ25896::CONTINUOUS);
-    }
+    DevicePmic pmicCfg;
+    pmicCfg.pin_sda = bruceConfigPins.sys_i2c.sda;
+    pmicCfg.pin_scl = bruceConfigPins.sys_i2c.scl;
+    pmicCfg.address = 0x6B; // BQ25896
+    pmicCfg.charge_target_mv = 4288;
+    pmicCfg.charge_current_ma = 704;
+    hal_pmic_init(pmicCfg);
 
     // Battery gauge
-    if (bq.getDesignCap() != BATTERY_DESIGN_CAPACITY) { bq.setDesignCap(BATTERY_DESIGN_CAPACITY); }
+    DeviceGauge gaugeCfg;
+    gaugeCfg.design_capacity_mah = BATTERY_DESIGN_CAPACITY;
+    hal_gauge_init(gaugeCfg);
     initPeripherals();
 
     // Initialise keyboard
@@ -295,8 +285,8 @@ void _setup_gpio() {
     } else {
         Serial.println("Init DRV2605 Sensor success!");
         drv.selectLibrary(1);
-        drv.setMode(SensorDRV2605::MODE_INTTRIG);
-        drv.useERM();
+        drv.setMode(HapticMode::INTERNAL_TRIGGER);
+        drv.setActuatorType(HapticActuatorType::ERM);
 
         // Startup buzz
         drv.setWaveform(0, 70);
@@ -333,7 +323,7 @@ int getBattery() {
     static float smoothed = -1;
     constexpr float alpha = 0.2f;
 
-    int pct = bq.getChargePcnt();
+    int pct = hal_gauge_get_percent();
 
     if (pct >= 0 && pct <= 100) {
         if (smoothed < 0) {
@@ -436,14 +426,14 @@ void InputHandler(void) {
     }
 }
 
-void powerOff() { PPM.shutdown(); }
+void powerOff() { hal_pmic_shutdown(); }
 
 /***************************************************************************************
 ** Function name: isCharging()
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
-#ifdef USE_BQ27220_VIA_I2C
-bool isCharging() { return bq.getIsCharging(); }
+#ifdef GAUGE_BQ27220
+bool isCharging() { return hal_gauge_is_charging(); }
 #else
 bool isCharging() { return false; }
 #endif

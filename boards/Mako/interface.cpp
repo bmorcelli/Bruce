@@ -6,12 +6,10 @@
 
 #define EXPANDER_INT_PIN 28
 #define MINBRIGHT 1
-#define XPOWERS_CHIP_BQ25896 1
 
-#ifdef XPOWERS_CHIP_BQ25896
+
+#if 1
 #include <Wire.h>
-#include <XPowersLib.h>
-XPowersPPM PPM;
 #endif
 
 // Interrupt flag from expander
@@ -79,21 +77,9 @@ void _setup_gpio() {
     attachInterrupt(digitalPinToInterrupt(EXPANDER_INT_PIN), expanderISR, FALLING);
 
     // === PMU (BQ25896) Setup ===
-    bool pmu_ret = PPM.init(); // Modern XPowersLib prefers this
-    if (pmu_ret) {
-        PPM.setSysPowerDownVoltage(3300);
-        PPM.setInputCurrentLimit(3250);
-        Serial.printf("getInputCurrentLimit: %d mA\n", PPM.getInputCurrentLimit());
-        PPM.disableCurrentLimitPin();
-        PPM.setChargeTargetVoltage(4208);
-        PPM.setPrechargeCurr(64);
-        PPM.setChargerConstantCurr(320);
-        PPM.enableMeasure(PowersBQ25896::CONTINUOUS);
-        PPM.disableOTG();
-        PPM.enableCharge();
-    } else {
-        Serial.println("BQ25896 init failed!");
-    }
+    DevicePmic pmicCfg; // no pins: the driver's default I2C init
+    pmicCfg.charge_current_ma = 320;
+    hal_pmic_init(pmicCfg);
 
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
@@ -118,7 +104,7 @@ void _post_setup_gpio() {
 ** Description:   Delivers the battery value from 1-100
 ***************************************************************************************/
 int getBattery() {
-    uint16_t voltage = PPM.getBattVoltage();
+    uint16_t voltage = hal_pmic_get_batt_voltage_mv();
 
     if (voltage < 3300) return 0;
     if (voltage >= 4200) return 100;
@@ -132,7 +118,7 @@ int getBattery() {
 /***************************************************************************************
 ** Function name: isCharging()
 ***************************************************************************************/
-bool isCharging() { return PPM.isCharging(); }
+bool isCharging() { return hal_pmic_is_charging(); }
 
 /*********************************************************************
 ** Function: setBrightness
@@ -205,7 +191,7 @@ void InputHandler() {
 /*********************************************************************
 ** Function: powerOff
 **********************************************************************/
-void powerOff() { PPM.shutdown(); }
+void powerOff() { hal_pmic_shutdown(); }
 
 /*********************************************************************
 ** Function: checkReboot

@@ -231,7 +231,7 @@ void InputHandler(void) {
         // I know R3CK.. I Should NOT nest if statements..
         // but it is needed to not keep SPI bus used without need, it save resources
 #if defined(USE_TFT_eSPI_TOUCH)
-        TouchPoint t;
+        BruceTouchPoint t;
         checkPowerSaveTime();
         bool _IH_touched = tft.getTouch(&t.x, &t.y);
         if (_IH_touched) {

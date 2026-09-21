@@ -74,31 +74,6 @@ void _setup_gpio() {
 }
 
 /***************************************************************************************
-** Function: getBattery()  — battery percentage via ADC (no PMIC on Lilka)
-**   GPIO3 (ADC1_CH2). Divider ratio 1.33 and 3.0-4.2V range taken from the
-**   working Lilka ESPHome config (multiply: 1.33, attenuation 12db).
-***************************************************************************************/
-int getBattery() {
-    static bool adcInit = false;
-    if (!adcInit) {
-        pinMode(ANALOG_BAT_PIN, INPUT);
-        analogSetAttenuation(ADC_11db); // full 0..3.3V range (ESPHome 12db ~ Arduino 11db)
-        adcInit = true;
-    }
-
-    uint32_t mv = analogReadMilliVolts(ANALOG_BAT_PIN);
-    float voltage = (float)mv * 1.33f; // Lilka divider ratio (from working ESPHome, NOT x2)
-
-    const float MIN_VOLTAGE = 3000.0f; // 3.0V ~0%  (LiPo)
-    const float MAX_VOLTAGE = 4200.0f; // 4.2V ~100%
-
-    int percent = (int)(((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100.0f);
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-    return percent;
-}
-
-/***************************************************************************************
 ** Function: isCharging()  — Lilka uses a bare TP4056, no charge-status GPIO
 ***************************************************************************************/
 bool isCharging() { return false; }

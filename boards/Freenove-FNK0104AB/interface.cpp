@@ -156,37 +156,6 @@ void _post_setup_gpio() {
     analogWrite(TFT_BL, 255); // Full brightness initially
 }
 
-/***************************************************************************************
-** Function name: getBattery()
-** Description:   Delivers the battery value from 0-100
-**                Uses GPIO9 (ADC1_CH8) with x2 voltage divider
-**                Battery range: 2500mV (0%) to 4200mV (100%)
-***************************************************************************************/
-int getBattery() {
-    static bool adcInitialized = false;
-    if (!adcInitialized) {
-        pinMode(ANALOG_BAT_PIN, INPUT);
-        analogSetAttenuation(ADC_11db); // Full range for 0-3.3V input
-        adcInitialized = true;
-    }
-
-    // Read ADC and convert to actual battery voltage (with x2 divider)
-    uint32_t adcReading = analogReadMilliVolts(ANALOG_BAT_PIN);
-    float actualVoltage = (float)adcReading * 2.0f; // x2 voltage divider
-
-    // Battery voltage range per ES3C28P specs:
-    // Min: 2500mV (cutoff/empty), Max: 4200mV (fully charged)
-    const float MIN_VOLTAGE = 2500.0f;
-    const float MAX_VOLTAGE = 4200.0f;
-
-    int percent = (int)(((actualVoltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100.0f);
-
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-
-    return percent;
-}
-
 /*********************************************************************
 ** Function: setBrightness
 ** set brightness value (0-100)

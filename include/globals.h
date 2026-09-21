@@ -44,20 +44,8 @@ extern tft_logger tft;
 extern tft_sprite sprite;
 extern tft_sprite draw;
 
-#ifdef USE_BQ27220_VIA_I2C
-#include <bq27220.h>
-extern BQ27220 bq;
-#endif
-
-#ifdef USE_BQ25896
-#include <XPowersLib.h>
-extern XPowersPPM PPM;
-#endif
-
-#ifdef USE_BOOST /// to avoid t embed toggle otg on some codes
-#include <XPowersLib.h>
-extern XPowersPPM PPM;
-#endif
+#include "hal/power/gauge.h"
+#include "hal/power/pmic.h"
 
 extern int8_t interpreter_state; // -1 - stopped, 0 - background, 1 - waiting for foreground, 2 - foreground
 
@@ -159,7 +147,7 @@ struct keyStroke { // DO NOT CHANGE IT!!!!!
     }
 };
 
-struct TouchPoint {
+struct BruceTouchPoint {
     bool pressed = false;
     uint16_t x;
     uint16_t y;
@@ -172,7 +160,7 @@ struct TouchPoint {
     }
 };
 
-extern TouchPoint touchPoint;
+extern BruceTouchPoint touchPoint;
 // true (default): touchHeatMap() maps taps anywhere on screen into zone-based Prev/Sel/Next/Esc/Up/Down,
 // same as physical buttons. A screen that wants to hit-test raw taps itself (e.g. tap-to-select in
 // loopOptions) sets this false while it runs; the TouchFooter band keeps working either way.

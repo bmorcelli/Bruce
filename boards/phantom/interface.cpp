@@ -95,8 +95,8 @@ void InputHandler(void) {
     if (millis() - tm > 200 || LongPress) {
         // I know R3CK.. I Should NOT nest if statements..
         // but it is needed to not keep SPI bus used without need, it save resources
-        TouchPoint t;
-        // TouchPoint t2;
+        BruceTouchPoint t;
+        // BruceTouchPoint t2;
         checkPowerSaveTime();
         digitalWrite(TFT_CS, HIGH);
         digitalWrite(TOUCH_CS, LOW);

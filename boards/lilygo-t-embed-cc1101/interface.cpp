@@ -8,9 +8,9 @@
 #include "hal/device.h"
 #include "hal/inputs/encoder.h"
 
-// Encoder pins differ between the two envs built from this directory; USE_BQ27220_VIA_I2C is
+// Encoder pins differ between the two envs built from this directory; GAUGE_BQ27220 is
 // the real discriminator (T_EMBED_1101/T_EMBED are never defined by any -D, see _setup_gpio).
-#ifdef USE_BQ27220_VIA_I2C // lilygo-t-embed-cc1101 env
+#ifdef GAUGE_BQ27220 // lilygo-t-embed-cc1101 env
 #define ENCODER_INA 4
 #define ENCODER_INB 5
 #else // lilygo-t-embed env
@@ -39,19 +39,13 @@ static DeviceEncoder encoderCfg() {
 #if defined(T_EMBED_1101)
 // Power handler for battery detection
 #include <Wire.h>
-// Charger chip
-#define XPOWERS_CHIP_BQ25896
-#include <XPowersLib.h>
 #include <esp32-hal-dac.h>
-XPowersPPM PPM;
 #elif defined(T_EMBED)
 
 #endif
 
-#ifdef USE_BQ27220_VIA_I2C
+#ifdef GAUGE_BQ27220
 #define BATTERY_DESIGN_CAPACITY 1300
-#include <bq27220.h>
-BQ27220 bq;
 #endif
 
 #include "core/i2c_finder.h"
@@ -63,10 +57,10 @@ BQ27220 bq;
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
-#ifdef USE_BQ27220_VIA_I2C
+#ifdef GAUGE_BQ27220
     // lilygo-t-embed-cc1101 env (real discriminator: T_EMBED_1101/T_EMBED are never actually
     // defined by any -D flag in this codebase -- pre-existing dead macros, not touched here --
-    // so USE_BQ27220_VIA_I2C, which IS exclusive to this env's .ini, is used instead)
+    // so GAUGE_BQ27220, which IS exclusive to this env's .ini, is used instead)
     bruceConfigPins.i2c_bus = {(gpio_num_t)8, (gpio_num_t)18};    // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)8, (gpio_num_t)18};    // sda, scl
     bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
@@ -148,20 +142,16 @@ void _setup_gpio() {
     // Power chip pin
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH); // Power on CC1101 and LED
-    bool pmu_ret = false;
-    setSysI2CBus(&Wire); // PPM/bq27220 live on the default Wire object (GROVE == sys_i2c on this variant)
+    setSysI2CBus(&Wire); // PMIC and gauge live on the default Wire object (GROVE == sys_i2c on this variant)
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
-    pmu_ret = PPM.init(
-        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
-    );
-    if (pmu_ret) {
-        // https://github.com/Xinyuan-LilyGO/T-Embed-CC1101/blob/3e6df69af51befdbd5c96761aca28b9a784413eb/examples/factory_test/factory_test.ino#L399-L425
-
-        PPM.resetDefault();
-        PPM.setChargeTargetVoltage(4208);
-        PPM.enableMeasure(PowersBQ25896::CONTINUOUS);
-    }
-    if (bq.getDesignCap() != BATTERY_DESIGN_CAPACITY) { bq.setDesignCap(BATTERY_DESIGN_CAPACITY); }
+    DevicePmic pmicCfg;
+    pmicCfg.pin_sda = bruceConfigPins.sys_i2c.sda;
+    pmicCfg.pin_scl = bruceConfigPins.sys_i2c.scl;
+    pmicCfg.address = 0x6B; // BQ25896
+    hal_pmic_init(pmicCfg);
+    DeviceGauge gaugeCfg;
+    gaugeCfg.design_capacity_mah = BATTERY_DESIGN_CAPACITY;
+    hal_gauge_init(gaugeCfg);
     // Start with default IR, RF and RFID Configs, replace old
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = PN532_I2C_MODULE;
@@ -190,17 +180,6 @@ void _setup_gpio() {
     hal_encoder_init(encoderCfg());
 }
 
-/***************************************************************************************
-** Function name: getBattery()
-** Description:   Delivers the battery value from 1-100
-***************************************************************************************/
-#if defined(USE_BQ27220_VIA_I2C)
-int getBattery() {
-    int percent = 0;
-    percent = bq.getChargePcnt();
-    return (percent < 0) ? 1 : (percent >= 100) ? 100 : percent;
-}
-#endif
 /*********************************************************************
 **  Function: setBrightness
 **  set brightness value
@@ -224,7 +203,7 @@ void InputHandler(void) { hal_encoder_poll(encoderCfg()); }
 
 void powerOff() {
 #ifdef T_EMBED_1101
-    PPM.shutdown();
+    hal_pmic_shutdown();
 #endif
 }
 
@@ -394,9 +373,9 @@ void checkReboot() {
 ** Function name: isCharging()
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
-#ifdef USE_BQ27220_VIA_I2C
+#ifdef GAUGE_BQ27220
 bool isCharging() {
-    return bq.getIsCharging(); // Return the charging status from BQ27220
+    return hal_gauge_is_charging(); // Return the charging status from BQ27220
 }
 #else
 bool isCharging() { return false; }

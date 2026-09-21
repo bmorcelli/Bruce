@@ -115,7 +115,7 @@ API:
 - `hal_touch_init(cfg, i2c_addr = 0x5D, xpt_shared_spi = true)` — call from
   `_setup_gpio()` (or `_post_setup_gpio()` if the panel/bus needs to come up
   first).
-- `hal_touch_read(cfg, TouchPoint &out)` — call every `InputHandler()`
+- `hal_touch_read(cfg, BruceTouchPoint &out)` — call every `InputHandler()`
   cycle. XPT2046/FT6X36 return a raw point and the HAL applies
   `cfg.SwapXY`/`MirrorX`/`MirrorY` on the host side; GT911/CST8xx/GT9895/
   HI8561 hand rotation to the driver itself
@@ -170,6 +170,13 @@ support for that chip is added — don't force it through `DevicePmic`.
 - `hal_pmic_shutdown()` — powers the device off via the PMIC.
 - `hal_pmic_get_input_current_limit_ma()` / `_get_charger_constant_curr_ma()`
   / `_get_system_voltage_mv()` — passthrough getters.
+- `hal_pmic_enable_otg()` / `_disable_otg()` -- 5V boost output (`USE_BOOST`
+  code paths). `hal_pmic_is_charging()` / `_is_charge_done()` /
+  `_get_batt_voltage_mv()` / `_disable_bat_load()` -- charger status for boards
+  that estimate battery % from the charger (no fuel gauge).
+  `DevicePmic.charge_target_mv`/`charge_current_ma` override the default
+  4208mV/832mA, and leaving `pin_sda`/`pin_scl` at -1 uses the driver's own
+  default I2C init.
 - `hal_pmic_get_ntc_percent()` — battery percent estimated from the
   charger's own NTC reading, for a board with no separate fuel gauge
   (instead of `hal_pmic_get_system_voltage_mv()`).
@@ -178,15 +185,25 @@ support for that chip is added — don't force it through `DevicePmic`.
 
 ## `power/gauge.*`
 
-Fuel-gauge IC. Currently implements **`GAUGE_BQ27220` only**. A board with
-a MAX17048 or other gauge stays board-specific until HAL support is added.
+Battery level. Two sources, chosen at compile time:
 
-- `hal_gauge_init(cfg)` — sets the design capacity
-  (`cfg.design_capacity_mah`) if it differs from what's already programmed
-  into the gauge. Leave `design_capacity_mah` at 0 (default) to skip
-  `setDesignCap()` entirely.
-- `hal_gauge_get_percent()` — 0-100, or -1 if unavailable/unread.
+- **`GAUGE_BQ27220`** -- BQ27220 fuel-gauge IC. A board with a MAX17048 or
+  other gauge stays board-specific until HAL support is added.
+- **`ANALOG_BAT_PIN`** (no `GAUGE_*` macro) -- voltage divider on an ADC pin.
+  Tuned by build flags: `ANALOG_BAT_MULTIPLIER` (divider ratio, default
+  `2.0`), `ANALOG_BAT_MIN_MV` (0%, default `3300`), `ANALOG_BAT_MAX_MV`
+  (100%, default `4100`). No board code is needed -- the default
+  `getBattery()` in `core/utils.cpp` calls `hal_gauge_get_percent()`.
+  `hal_gauge_init()` may override the pin/ratio/range through `DeviceGauge`.
+
+- `hal_gauge_init(cfg)` -- BQ27220: sets the design capacity
+  (`cfg.design_capacity_mah`) if it differs from what's programmed. Leave at 0
+  to skip.
+- `hal_gauge_get_percent()` -- 0-100, or -1 if unavailable/unread.
 - `hal_gauge_is_charging()`.
+- `hal_gauge_has_info()` / `hal_gauge_get_info(DeviceGaugeInfo&)` -- detailed
+  BQ27220 readings (capacities, voltages, currents, time to empty), used by
+  the device-info screen and the JS `getBatteryDetailed()`.
 
 ## `bright/bright.*`
 

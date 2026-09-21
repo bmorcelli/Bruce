@@ -60,9 +60,11 @@ struct DeviceEncoder {
 };
 
 struct DevicePmic {
-    int8_t pin_sda = -1;
+    int8_t pin_sda = -1; // pin_sda and pin_scl both -1 -> driver's own default I2C init (no pins)
     int8_t pin_scl = -1;
     uint8_t address = 0;
+    uint16_t charge_target_mv = 4208; // charge voltage limit
+    uint16_t charge_current_ma = 832; // constant-current charge limit
 };
 
 struct DeviceGauge {
@@ -70,6 +72,31 @@ struct DeviceGauge {
     int8_t pin_scl = -1;
     uint8_t address = 0;
     uint16_t design_capacity_mah = 0;
+    // Analog battery reading (voltage divider on an ADC pin) -- used when no
+    // GAUGE_* IC macro is set. Left at -1/0 the values come from the
+    // ANALOG_BAT_PIN / ANALOG_BAT_MULTIPLIER / ANALOG_BAT_MIN_MV /
+    // ANALOG_BAT_MAX_MV build flags, so a board only needs the flags.
+    int8_t analog_pin = -1;
+    float analog_multiplier = 0; // 0 = ANALOG_BAT_MULTIPLIER (default 2.0)
+    uint16_t analog_min_mv = 0;  // 0 = ANALOG_BAT_MIN_MV (default 3300) -> 0%
+    uint16_t analog_max_mv = 0;  // 0 = ANALOG_BAT_MAX_MV (default 4100) -> 100%
+};
+
+// Detailed fuel-gauge readings (GAUGE_BQ27220 only)
+struct DeviceGaugeInfo {
+    int remain_cap_mah = 0;
+    int full_cap_mah = 0;
+    int design_cap_mah = 0;
+    bool charging = false;
+    int charging_mv = 0;
+    int charging_ma = 0;
+    int time_to_empty_min = 0;
+    int avg_power_mw = 0;
+    int volt_mv = 0;
+    int volt_raw_mv = 0;
+    int curr_instant_ma = 0;
+    int curr_average_ma = 0;
+    int curr_raw_ma = 0;
 };
 
 #endif

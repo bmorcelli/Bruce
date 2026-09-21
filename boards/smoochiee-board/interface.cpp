@@ -20,8 +20,6 @@ static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, D
 ***************************************************************************************/
 
 // Power handler for battery detection
-#include <XPowersLib.h>
-XPowersPPM PPM;
 
 void _setup_gpio() {
     bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
@@ -61,43 +59,31 @@ void _setup_gpio() {
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     setSysI2CBus(&Wire); // PMU lives on the default Wire object
     Wire.setPins(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
-    // Wire.begin();
-    bool pmu_ret = false;
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
-    pmu_ret = PPM.init(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS);
-    if (pmu_ret) {
-        PPM.setSysPowerDownVoltage(3300);
-        PPM.setInputCurrentLimit(3250);
-        Serial.printf("getInputCurrentLimit: %d mA\n", PPM.getInputCurrentLimit());
-        PPM.disableCurrentLimitPin();
-        PPM.setChargeTargetVoltage(4208);
-        PPM.setPrechargeCurr(64);
-        PPM.setChargerConstantCurr(832);
-        PPM.getChargerConstantCurr();
-        Serial.printf("getChargerConstantCurr: %d mA\n", PPM.getChargerConstantCurr());
-        PPM.enableMeasure(PowersBQ25896::CONTINUOUS);
-        PPM.disableOTG();
-        PPM.enableCharge();
-    }
+    DevicePmic pmicCfg;
+    pmicCfg.pin_sda = bruceConfigPins.sys_i2c.sda;
+    pmicCfg.pin_scl = bruceConfigPins.sys_i2c.scl;
+    pmicCfg.address = 0x6B; // BQ25896
+    hal_pmic_init(pmicCfg);
 }
 bool isCharging() {
     // PPM.disableBatterPowerPath();
-    return PPM.isCharging();
+    return hal_pmic_is_charging();
 }
 
 int getBattery() {
-    int voltage = PPM.getBattVoltage();
+    int voltage = hal_pmic_get_batt_voltage_mv();
     int percent = (voltage - 3300) * 100 / (float)(4150 - 3350);
 
     if (percent < 0) return 1;
     if (percent > 100) percent = 100;
 
-    if (PPM.isCharging() && percent >= 97) {
-        PPM.disableBatLoad();
+    if (hal_pmic_is_charging() && percent >= 97) {
+        hal_pmic_disable_bat_load();
         percent = 95; // estimate still charging
     }
 
-    if (PPM.isChargeDone()) { percent = 100; }
+    if (hal_pmic_is_charge_done()) { percent = 100; }
 
     return percent;
 }

@@ -2,7 +2,6 @@
 #include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
-#include <bq27220.h>
 #include <globals.h>
 #include <interface.h>
 
@@ -10,7 +9,6 @@
 // Power handler for battery detection
 #include "core/i2c_finder.h"
 #include <Wire.h>
-#include <XPowersLib.h>
 
 #define SEL_BTN 0
 
@@ -25,7 +23,6 @@
 static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN, ESC_BTN}; }
 // Charger chip
 
-XPowersPPM PPM;
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp
@@ -34,8 +31,6 @@ XPowersPPM PPM;
 
 // BATTERY GAUGE
 #define BATTERY_DESIGN_CAPACITY 1000
-#include <bq27220.h>
-BQ27220 bq;
 bool gaugeOn = false;
 
 void _setup_gpio() {
@@ -93,30 +88,16 @@ void _setup_gpio() {
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = ST25R3916_SPI_MODULE;
 
-    bool pmu_ret = false;
-    pmu_ret = PPM.init(
-        Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, BQ25896_SLAVE_ADDRESS
-    );
-    if (pmu_ret) {
-
-        PPM.setSysPowerDownVoltage(3300);
-        PPM.setInputCurrentLimit(2000);
-        Serial.printf("getInputCurrentLimit: %d mA\n", PPM.getInputCurrentLimit());
-        PPM.disableCurrentLimitPin();
-        PPM.setChargeTargetVoltage(4208);
-        PPM.setPrechargeCurr(64);
-        PPM.setChargerConstantCurr(832);
-        PPM.getChargerConstantCurr();
-        Serial.printf("getChargerConstantCurr: %d mA\n", PPM.getChargerConstantCurr());
-        PPM.enableMeasure(PowersBQ25896::CONTINUOUS);
-
-        PPM.disableOTG();
-        // PPM.enableInputDetection();
-        PPM.enableCharge();
-    }
+    DevicePmic pmicCfg;
+    pmicCfg.pin_sda = bruceConfigPins.sys_i2c.sda;
+    pmicCfg.pin_scl = bruceConfigPins.sys_i2c.scl;
+    pmicCfg.address = 0x6B; // BQ25896
+    hal_pmic_init(pmicCfg, 2000);
     Wire.beginTransmission(BQ27220_I2C_ADDRESS);
     if (Wire.endTransmission() == 0) {
-        if (bq.getDesignCap() != BATTERY_DESIGN_CAPACITY) { bq.setDesignCap(BATTERY_DESIGN_CAPACITY); }
+        DeviceGauge gaugeCfg;
+        gaugeCfg.design_capacity_mah = BATTERY_DESIGN_CAPACITY;
+        hal_gauge_init(gaugeCfg);
         gaugeOn = true;
     }
 }
@@ -129,16 +110,16 @@ void _setup_gpio() {
 ***************************************************************************************/
 int getBattery() {
     int percent = 0;
-#if defined(USE_BQ27220_VIA_I2C)
-    if (gaugeOn) percent = bq.getChargePcnt();
+#if defined(GAUGE_BQ27220)
+    if (gaugeOn) percent = hal_gauge_get_percent();
 #endif
 
     return (percent < 0) ? 0 : (percent >= 100) ? 100 : percent;
 }
 
-#ifdef USE_BQ27220_VIA_I2C
+#ifdef GAUGE_BQ27220
 bool isCharging() {
-    return gaugeOn ? bq.getIsCharging() : false; // Return the charging status from BQ27220
+    return gaugeOn ? hal_gauge_is_charging() : false; // Return the charging status from BQ27220
 }
 #else
 bool isCharging() { return false; }
@@ -170,7 +151,7 @@ void InputHandler(void) { hal_buttons_poll_6(buttonsCfg()); }
 ** location: mykeyboard.cpp
 ** Turns off the device (or try to)
 **********************************************************************/
-void powerOff() { PPM.shutdown(); }
+void powerOff() { hal_pmic_shutdown(); }
 
 /*********************************************************************
 ** Function: checkReboot

@@ -144,7 +144,7 @@ void InputHandler(void) {
     static unsigned long tm = 0;
     if (millis() - tm < 200 && !LongPress) return;
 #ifdef HAS_TOUCH
-    TouchPoint t;
+    BruceTouchPoint t;
     checkPowerSaveTime();
     bool _IH_touched = tft.getTouch(&t.x, &t.y);
     if (_IH_touched) {
