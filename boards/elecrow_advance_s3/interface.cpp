@@ -1,13 +1,14 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <interface.h>
 
 #define BOARD_TOUCH_INT 47
 #define GT911_SLAVE_ADDRESS_L 0x5D
-#define HAS_CAPACITIVE_TOUCH 1
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
 
@@ -19,14 +20,24 @@
 //  - Backlight: direct PWM on GPIO38.
 // =============================================================================
 
-#if defined(HAS_CAPACITIVE_TOUCH) && defined(TOUCH_GT911_I2C)
-#include "TouchDrvGT911.hpp"
-TouchDrvGT911 touch;
-struct TouchPointPro {
-    int16_t x = 0;
-    int16_t y = 0;
-};
-#endif
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    cfg.pin_sda = 15;
+    cfg.pin_scl = 16;
+    cfg.pin_irq = BOARD_TOUCH_INT;
+    cfg.i2c_bus = &Wire1;
+    // No RST line on this board (pin_rst stays -1)
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {false, true, false, true};
+    const bool mirrorX[4] = {false, false, true, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -34,10 +45,11 @@ struct TouchPointPro {
 void _setup_gpio() {
     bruceConfigPins.sys_i2c = {(gpio_num_t)15, (gpio_num_t)16}; // sda, scl
     bruceConfigPins.rotation = 1;
-    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)18, (gpio_num_t)17}; // rx, tx
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7
     }; // sck,miso,mosi,cs
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)5, (gpio_num_t)4, (gpio_num_t)6, (gpio_num_t)7};
@@ -45,29 +57,25 @@ void _setup_gpio() {
 
     bruceConfig.colorInverted = 0;
 
-#if defined(HAS_CAPACITIVE_TOUCH) && defined(TOUCH_GT911_I2C)
     // Bring up the I2C bus the GT911 lives on.
     setSysI2CBus(&Wire1);
     Wire1.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl);
 
     // GT911 power-on reset sequence. No RST line on this board, so hold INT low
-    // briefly to keep address 0x5D, then release it as an input.
+    // briefly to keep address 0x5D, then release it as an input. This board-specific dance
+    // (address-select via INT alone, no RST) isn't the generic hal_touch_init int-sync path
+    // (that one needs a real RST line), so it stays here before hal_touch_init() takes over.
     pinMode(BOARD_TOUCH_INT, OUTPUT);
     digitalWrite(BOARD_TOUCH_INT, LOW);
     delay(10);
     pinMode(BOARD_TOUCH_INT, INPUT);
     delay(50);
 
-    // No reset line available -> pass -1 for RST.
-    touch.setPins(-1, BOARD_TOUCH_INT);
-    if (!touch.begin(
-            Wire1, GT911_SLAVE_ADDRESS_L, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl
-        )) {
+    if (!hal_touch_init(touchCfg(), GT911_SLAVE_ADDRESS_L)) {
         Serial.println("Failed to find GT911 touch - check wiring!");
     } else {
         Serial.println("GT911 touch started");
     }
-#endif
 }
 
 /***************************************************************************************
@@ -102,72 +110,14 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler (GT911 capacitive)
 **********************************************************************/
 void InputHandler(void) {
-#if defined(HAS_CAPACITIVE_TOUCH) && defined(TOUCH_GT911_I2C)
     static long d_tmp = 0;
     if (millis() - d_tmp > 200 || LongPress) {
-        static unsigned long tm = millis();
-        TouchPointPro t;
-        uint8_t touched = 0;
-        static uint8_t rot = 5;
-
-        if (rot != bruceConfigPins.rotation) {
-            if (bruceConfigPins.rotation == 1) {
-                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
-                touch.setSwapXY(true);
-                touch.setMirrorXY(false, true);
-            }
-            if (bruceConfigPins.rotation == 3) {
-                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
-                touch.setSwapXY(true);
-                touch.setMirrorXY(true, false);
-            }
-            if (bruceConfigPins.rotation == 0) {
-                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
-                touch.setSwapXY(false);
-                touch.setMirrorXY(false, false);
-            }
-            if (bruceConfigPins.rotation == 2) {
-                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
-                touch.setSwapXY(false);
-                touch.setMirrorXY(true, true);
-            }
-            rot = bruceConfigPins.rotation;
-        }
-
-        static bool lastTouchState = false;
-        static unsigned long lastTouchTime = 0;
-
-        touched = touch.getPoint(&t.x, &t.y);
-        bool currentTouchState = touched > 0;
-
-        if (currentTouchState && !lastTouchState && (millis() - lastTouchTime) > 100) {
-            lastTouchTime = millis();
-        } else if (!currentTouchState || lastTouchState) {
-            touched = 0;
-        }
-        lastTouchState = currentTouchState;
-
-        if (((millis() - tm) > 190 || LongPress) && touched) {
-            tm = millis();
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else goto END;
-
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        END:
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
             d_tmp = millis();
+            hal_touch_apply(t);
         }
     }
-#else
-    checkPowerSaveTime();
-    PrevPress = false;
-    NextPress = false;
-    SelPress = false;
-    AnyKeyPress = false;
-    EscPress = false;
-#endif
 }
 
 /*********************************************************************

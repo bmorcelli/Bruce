@@ -1,13 +1,12 @@
-#include "hal/device.h"
-#include "hal/inputs/touch.h"
 #include "CYD28_TouchscreenR.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <interface.h>
 
 #define BTN_ACT LOW
 #define BTN_PIN 0
-#define HAS_BTN 1
 
 extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
 
@@ -120,7 +119,6 @@ void InputHandler(void) {
         }
     }
 
-#ifdef HAS_BTN
     checkPowerSaveTime();
     if (digitalRead(BTN_PIN) == BTN_ACT) {
         if (!wakeUpScreen()) AnyKeyPress = true;
@@ -128,7 +126,6 @@ void InputHandler(void) {
         long tmp = millis();
         while ((millis() - tmp) < 200 && digitalRead(BTN_PIN) == BTN_ACT);
     }
-#endif
 }
 
 /*********************************************************************

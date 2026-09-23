@@ -1,9 +1,9 @@
-#include "hal/device.h"
-#include "hal/inputs/touch.h"
 #include "CYD28_TouchscreenR.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <Arduino.h>
 #include <interface.h>
 
@@ -45,7 +45,9 @@ void _setup_gpio() {
 void _post_setup_gpio() {
     // Use software SPI (GPIO bit-banging) for touch to avoid conflicts with AUX_SPI
     // CYD28_TouchR::begin() with no arguments uses software SPI mode on the defined GPIO pins
-    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) { Serial.println("Touchscreen initialization failed!"); }
+    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) {
+        Serial.println("Touchscreen initialization failed!");
+    }
 }
 
 int getBattery() { return 0; }
@@ -63,13 +65,6 @@ void InputHandler(void) {
             hal_touch_apply(t);
         }
     }
-
-    checkPowerSaveTime();
-    PrevPress = false;
-    NextPress = false;
-    SelPress = false;
-    AnyKeyPress = false;
-    EscPress = false;
 }
 
 void powerOff() {}

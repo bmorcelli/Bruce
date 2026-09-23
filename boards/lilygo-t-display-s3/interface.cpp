@@ -3,6 +3,7 @@
 #include "core/utils.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
+#include "hal/inputs/touch.h"
 #include <globals.h>
 #include <interface.h>
 
@@ -19,10 +20,26 @@
 #define PIN_SD_D0 12
 #endif
 #ifdef HAS_TOUCH
-#define TOUCH_MODULES_CST_SELF
-#include <TouchLib.h>
-#include <Wire.h>
-TouchLib touch(Wire, 18, 17, CTS820_SLAVE_ADDRESS, 21);
+// CST820 (CST8xx family) over the default Wire object. Raw touch always reads through the old
+// fixed touch.setRotation(1) pre-transform (a plain x/y swap): derived algebraically from
+// composing it with InputHandler's old per-rotation remap block -- see src/hal/README.md.
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    cfg.pin_sda = 18;
+    cfg.pin_scl = 17;
+    cfg.pin_rst = 21;
+    cfg.cst8xx_model = 1; // CST816/CST820/CST716
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {false, true, false, true};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 #endif
 
 #if defined(T_DISPLAY_S3)
@@ -125,15 +142,10 @@ void _setup_gpio() {
     gpio_hold_dis((gpio_num_t)21); // PIN_TOUCH_RES
     pinMode(15, OUTPUT);
     digitalWrite(15, HIGH); // PIN_POWER_ON
-    pinMode(21, OUTPUT);    // PIN_TOUCH_RES
-    digitalWrite(21, LOW);  // PIN_TOUCH_RES
-    delay(500);
-    digitalWrite(21, HIGH); // PIN_TOUCH_RES
     setSysI2CBus(&Wire);    // Touch lives on the default Wire object
-    Wire.begin(18, 17);     // SDA, SCL
-    if (!touch.init()) { Serial.println("Touch IC not found"); }
-
-    touch.setRotation(1);
+    if (!hal_touch_init(touchCfg(), 0x15 /* CTS820_SLAVE_ADDRESS */)) {
+        Serial.println("Touch IC not found");
+    }
 #endif
     // setup buttons
     pinMode(SEL_BTN, INPUT_PULLUP);
@@ -176,49 +188,12 @@ void InputHandler(void) {
     static unsigned long tm = 0;
     if (millis() - tm <= 200 && !LongPress) return;
 #ifdef HAS_TOUCH
-    if (touch.read()) {
-        auto t = touch.getPoint(0);
+    BruceTouchPoint t;
+    if (hal_touch_read(touchCfg(), t)) {
         tm = millis();
-        if (bruceConfigPins.rotation == 1) {
-            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-            // t.x = tftWidth-t.x;
-        }
-        if (bruceConfigPins.rotation == 3) {
-            // t.y = (tftHeight+20)-t.y;
-            t.x = tftWidth - t.x;
-        }
-        // Need to test the other orientations
-
-        if (bruceConfigPins.rotation == 0) {
-            int tmp = t.x;
-            t.x = tftWidth - t.y;
-            t.y = tmp;
-        }
-        if (bruceConfigPins.rotation == 2) {
-            int tmp = t.x;
-            t.x = t.y;
-            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
-        }
-
-        // Serial.printf("\nPressed x=%d , y=%d, rot: %d",t.x, t.y, bruceConfigPins.rotation);
-
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-
-        // Touch point global variable
-        touchPoint.x = t.x;
-        touchPoint.y = t.y;
-        touchPoint.pressed = true;
-        touchHeatMap(touchPoint);
+        if (!hal_touch_apply(t)) return;
     }
 #endif
-    if (digitalRead(SEL_BTN) == BTN_ACT) {
-        tm = millis();
-        if (!wakeUpScreen()) {
-            AnyKeyPress = true;
-            SelPress = true;
-        }
-    }
 }
 
 void powerOff() {

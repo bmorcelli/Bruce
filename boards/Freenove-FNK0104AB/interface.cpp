@@ -15,6 +15,8 @@
 
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <globals.h>
@@ -50,39 +52,26 @@
 #define FNK0104AB_BTN_ACT LOW
 
 // =============================================
-// Touch Screen (FT6336G via I2C)
+// Touch Screen (FT6336G via I2C, hal_touch_init/hal_touch_read -- src/hal/inputs/touch.cpp)
 // =============================================
-// The FT6336G uses the same register protocol as CST816S/FT6236
-// Register 0x02: number of touch points
-// Register 0x03-0x06: touch point 1 X/Y coordinates
-#define FT6336_REG_NUM_TOUCHES 0x02
-#define FT6336_REG_TOUCH_DATA 0x03
-
-static bool touchInitialized = false;
-
-static uint8_t ft6336_read_reg(uint8_t reg) {
-    Wire.beginTransmission(FNK0104AB_TOUCH_ADDR);
-    Wire.write(reg);
-    Wire.endTransmission(false);
-    Wire.requestFrom(FNK0104AB_TOUCH_ADDR, 1);
-    if (Wire.available()) return Wire.read();
-    return 0;
-}
-
-static bool ft6336_read_touch(int16_t &x, int16_t &y) {
-    uint8_t touches = ft6336_read_reg(FT6336_REG_NUM_TOUCHES);
-    if (touches == 0 || touches > 2) return false;
-
-    uint8_t data[4];
-    Wire.beginTransmission(FNK0104AB_TOUCH_ADDR);
-    Wire.write(FT6336_REG_TOUCH_DATA);
-    Wire.endTransmission(false);
-    Wire.requestFrom(FNK0104AB_TOUCH_ADDR, 4);
-    for (int i = 0; i < 4; i++) { data[i] = Wire.read(); }
-
-    x = ((data[0] & 0x0F) << 8) | data[1];
-    y = ((data[2] & 0x0F) << 8) | data[3];
-    return true;
+// Raw touch reads portrait-native (rotation 0 needs no transform in the old code): derived
+// algebraically from InputHandler's old per-rotation remap block -- see src/hal/README.md.
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    cfg.pin_sda = FNK0104AB_TOUCH_SDA;
+    cfg.pin_scl = FNK0104AB_TOUCH_SCL;
+    cfg.pin_rst = FNK0104AB_TOUCH_RST;
+    cfg.pin_irq = FNK0104AB_TOUCH_INT;
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {false, true, false, true};
+    const bool mirrorX[4] = {false, false, true, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
 }
 
 /***************************************************************************************
@@ -121,19 +110,9 @@ void _setup_gpio() {
 #endif
 
     // ---- Touch Screen Init (FT6336G) ----
-    // Reset touch controller
-    pinMode(FNK0104AB_TOUCH_RST, OUTPUT);
-    digitalWrite(FNK0104AB_TOUCH_RST, LOW);
-    delay(10);
-    digitalWrite(FNK0104AB_TOUCH_RST, HIGH);
-    delay(300);
-
-    // Touch interrupt pin
-    pinMode(FNK0104AB_TOUCH_INT, INPUT);
-
-    // Initialize I2C bus (shared with audio codec ES8311)
-    Wire.begin(FNK0104AB_TOUCH_SDA, FNK0104AB_TOUCH_SCL);
-    touchInitialized = true;
+    if (!hal_touch_init(touchCfg(), FNK0104AB_TOUCH_ADDR)) {
+        Serial.println("Touch IC not Started");
+    }
 
     // ---- Amplifier: disable by default (active LOW, so HIGH = disabled) ----
     pinMode(FNK0104AB_AMP_EN, OUTPUT);
@@ -179,39 +158,10 @@ void InputHandler(void) {
 
     if (millis() - tm > 200 || LongPress) {
         // ---- Touch Screen Input ----
-        if (touchInitialized) {
-            int16_t raw_x, raw_y;
-            if (ft6336_read_touch(raw_x, raw_y)) {
-                tm = millis();
-
-                // Apply rotation transformation
-                int16_t t_x = raw_x;
-                int16_t t_y = raw_y;
-
-                if (bruceConfigPins.rotation == 1) {
-                    // Landscape: swap and mirror
-                    t_x = raw_y;
-                    t_y = (TFT_WIDTH - 1) - raw_x;
-                } else if (bruceConfigPins.rotation == 2) {
-                    // Portrait inverted
-                    t_x = (TFT_WIDTH - 1) - raw_x;
-                    t_y = (TFT_HEIGHT - 1) - raw_y;
-                } else if (bruceConfigPins.rotation == 3) {
-                    // Landscape inverted
-                    t_x = (TFT_HEIGHT - 1) - raw_y;
-                    t_y = raw_x;
-                }
-                // rotation == 0: portrait default, no transform needed
-
-                if (!wakeUpScreen()) AnyKeyPress = true;
-                else return;
-
-                // Set global touch point
-                touchPoint.x = t_x;
-                touchPoint.y = t_y;
-                touchPoint.pressed = true;
-                touchHeatMap(touchPoint);
-            }
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
+            tm = millis();
+            if (!hal_touch_apply(t)) return;
         }
 
         // ---- BOOT Button Input ----

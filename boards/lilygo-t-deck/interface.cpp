@@ -1,19 +1,14 @@
-#include "TouchDrvGT911.hpp"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <Wire.h>
 #include <interface.h>
 
 #define BTN_ACT LOW
 #define NORMAL_T_DECK 1
 #define T_DECK_PLUS 1
-TouchDrvGT911 touch;
-
-struct TouchPointPro {
-    int16_t x = 0;
-    int16_t y = 0;
-};
 
 // Setup for Trackball
 void IRAM_ATTR ISR_up();
@@ -61,13 +56,39 @@ void ISR_rst() {
 #define R_BTN 1
 #define PIN_POWER_ON 10
 #define BOARD_TOUCH_INT 16
+
+// isPlus is always false below (NORMAL_T_DECK is always defined in this file), so this table only
+// covers that variant -- same per-rotation values the old InputHandler's isPlus=false branch used.
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    cfg.pin_sda = KB_I2C_SDA;
+    cfg.pin_scl = KB_I2C_SCL;
+    cfg.pin_irq = BOARD_TOUCH_INT;
+    cfg.i2c_bus = &Wire1;
+#ifdef T_DECK_PLUS
+    constexpr bool isPlus = true;
+#else
+    constexpr bool isPlus = false;
+#endif
+    // rotation:          0         1        2         3
+    bool swapXY[4] = {false, true, false, true};
+    bool mirrorX[4] = {false, !isPlus, true, isPlus};
+    bool mirrorY[4] = {!isPlus, true, isPlus, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
+
 /***************************************************************************************
 ** Function name: _setup_gpio()
 ** Location: main.cpp
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
-    bruceConfigPins.sys_i2c = {(gpio_num_t)18, (gpio_num_t)8}; // sda, scl
+    bruceConfigPins.sys_i2c = {(gpio_num_t)18, (gpio_num_t)8};  // sda, scl
     bruceConfigPins.i2c_bus = {(gpio_num_t)43, (gpio_num_t)44}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 43;
     bruceConfigPins.rfRx = 44;
@@ -87,7 +108,8 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
     }; // sck,miso,mosi,cs
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {
@@ -106,18 +128,6 @@ void _setup_gpio() {
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH);
     pinMode(SEL_BTN, INPUT);
-
-    pinMode(BOARD_TOUCH_INT, INPUT);
-    touch.setPins(-1, BOARD_TOUCH_INT);
-    if (!touch.begin(Wire1, GT911_SLAVE_ADDRESS_L)) {
-        Serial.println("Failed to find GT911 - check your wiring!");
-    }
-    // Set touch max xy
-    touch.setMaxCoordinates(320, 240);
-    // Set swap xy
-    touch.setSwapXY(true);
-    // Set mirror xy
-    touch.setMirrorXY(true, true);
 
     pinMode(9, OUTPUT); // LoRa Radio CS Pin to HIGH (Inhibit the SPI Communication for this module)
     digitalWrite(9, HIGH);
@@ -143,6 +153,7 @@ void _setup_gpio() {
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
+    if (!hal_touch_init(touchCfg())) { Serial.println("Failed to find GT911 - check your wiring!"); }
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
     // Brightness control must be initialized after tft in this case @Pirata
@@ -174,39 +185,8 @@ void _setBrightness(uint8_t brightval) {
 void InputHandler(void) {
     char keyValue = 0;
     static unsigned long tm = millis();
-    TouchPointPro t;
-    uint8_t touched = 0;
-    uint8_t rot = 5;
-
-#ifdef NORMAL_T_DECK
-    bool isPlus = false;
-#else
-    bool isPlus = true;
-#endif
-    if (rot != bruceConfigPins.rotation) {
-        if (bruceConfigPins.rotation == 1) {
-            touch.setMaxCoordinates(320, 240);
-            touch.setSwapXY(true);
-            touch.setMirrorXY(!isPlus, true);
-        }
-        if (bruceConfigPins.rotation == 3) {
-            touch.setMaxCoordinates(320, 240);
-            touch.setSwapXY(true);
-            touch.setMirrorXY(isPlus, false);
-        }
-        if (bruceConfigPins.rotation == 0) {
-            touch.setMaxCoordinates(240, 320);
-            touch.setSwapXY(false);
-            touch.setMirrorXY(false, !isPlus);
-        }
-        if (bruceConfigPins.rotation == 2) {
-            touch.setMaxCoordinates(240, 320);
-            touch.setSwapXY(false);
-            touch.setMirrorXY(true, isPlus);
-        }
-        rot = bruceConfigPins.rotation;
-    }
-    touched = touch.getPoint(&t.x, &t.y);
+    BruceTouchPoint t;
+    bool touched = hal_touch_read(touchCfg(), t);
     delay(1);
     Wire1.requestFrom(LILYGO_KB_SLAVE_ADDRESS, 1);
     while (Wire1.available() > 0) {
@@ -272,19 +252,8 @@ void InputHandler(void) {
 
     if ((millis() - tm) > 190 || LongPress) { // one reading each 190ms
         if (touched) {
-
-            // Serial.printf("\nPressed x=%d , y=%d, rot: %d", t.x, t.y, bruceConfigPins.rotation);
             tm = millis();
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else return;
-
-            // Touch point global variable
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-            touched = 0;
+            hal_touch_apply(t);
             return;
         }
     }

@@ -1,6 +1,9 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
+#include "hal/inputs/touch.h"
 #include <SD_MMC.h>
 #include <Wire.h>
 #include <XPowersLib.h>
@@ -13,14 +16,41 @@
 #define TFT_BRIGHT_FREQ 10000
 #define UP_BTN 12
 static PowersSY6970 PMU;
-#define TOUCH_MODULES_CST_SELF
-#include <TouchDrvCSTXXX.hpp>
-#include <Wire.h>
 #define LCD_MODULE_CMD_1
 
 #define BOARD_SENSOR_IRQ 21
 #define BOARD_TOUCH_RST 13
-TouchDrvCSTXXX touch;
+
+// No external/internal pull-ups on these pins -- the old code left them plain INPUT.
+static DeviceButtons buttonsCfg() {
+    DeviceButtons cfg{UP_BTN, DW_BTN, SEL_BTN};
+    cfg.pullup = false;
+    return cfg;
+}
+
+// CST226SE over the system I2C bus (Wire). Raw touch reads landscape-native (like the XPT2046
+// boards): derived algebraically from composing the old fixed driver-level pre-transform
+// (setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH)/setSwapXY(true)/setMirrorXY(false,false), applied at
+// setup regardless of rotation) with InputHandler's old per-rotation remap block -- see
+// src/hal/README.md for the method.
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    cfg.pin_sda = bruceConfigPins.sys_i2c.sda;
+    cfg.pin_scl = bruceConfigPins.sys_i2c.scl;
+    cfg.pin_rst = BOARD_TOUCH_RST;
+    cfg.pin_irq = BOARD_SENSOR_IRQ;
+    cfg.cst8xx_model = 0; // CST226
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {false, false, true, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 void touchHomeKeyCallback(void *user_data) {
     Serial.println("Home key pressed!");
@@ -62,9 +92,7 @@ void _setup_gpio() {
     }; // sck,miso,mosi,cs(ss),ce
 
     gpio_hold_dis((gpio_num_t)BOARD_TOUCH_RST); // PIN_TOUCH_RES
-    pinMode(SEL_BTN, INPUT);
-    pinMode(UP_BTN, INPUT);
-    pinMode(DW_BTN, INPUT);
+    hal_buttons_init(buttonsCfg(), 3);
 
     // CS pins of SPI devices to HIGH
     pinMode(15, OUTPUT);
@@ -82,15 +110,9 @@ void _setup_gpio() {
     Wire.begin(bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl); // SDA, SCL
 
     // Initialize capacitive touch
-    touch.setPins(BOARD_TOUCH_RST, BOARD_SENSOR_IRQ);
-    touch.begin(
-        Wire, CST226SE_SLAVE_ADDRESS, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl
-    );
-    touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
-    touch.setSwapXY(true);
-    touch.setMirrorXY(false, false);
+    hal_touch_init(touchCfg(), 0x5A /* CST226SE_SLAVE_ADDRESS */);
     // Set the screen to turn on or off after pressing the screen Home touch button
-    touch.setHomeButtonCallback(touchHomeKeyCallback);
+    hal_touch_set_home_button(-1, -1, touchHomeKeyCallback);
 
     bool hasPMU =
         PMU.init(Wire, bruceConfigPins.sys_i2c.sda, bruceConfigPins.sys_i2c.scl, SY6970_SLAVE_ADDRESS);
@@ -144,60 +166,14 @@ void _setBrightness(uint8_t brightval) {
     ledcWrite(TFT_BL, dutyCycle);
 }
 
-struct TouchPointPro {
-    int16_t x[5];
-    int16_t y[5];
-};
 /*********************************************************************
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
 void InputHandler(void) {
-    static unsigned long tm = 0;
-    TouchPointPro t;
-    bool touched = touch.getPoint(t.x, t.y, touch.getSupportTouchPoint());
-    if (millis() - tm > 200 || LongPress) {
-        int sel = digitalRead(SEL_BTN);
-        int prev = digitalRead(UP_BTN);
-        int next = digitalRead(DW_BTN);
-        if (sel == 0 || next == 0 || prev == 0) {
-            tm = millis();
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else return;
-            SelPress = !sel;
-            NextPress = !next;
-            PrevPress = !prev;
-            // Serial.printf("Sel: %d, Next: %d, Prev: %d\n", SelPress, NextPress, PrevPress);
-            return;
-        }
-        if (touched && touch.isPressed()) {
-            tm = millis();
-            if (bruceConfigPins.rotation == 1) { t.y[0] = TFT_WIDTH - t.y[0]; }
-            if (bruceConfigPins.rotation == 3) { t.x[0] = TFT_HEIGHT - t.x[0]; }
-            // Need to test these 2
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x[0];
-                t.x[0] = t.y[0];
-                t.y[0] = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x[0];
-                t.x[0] = TFT_WIDTH - t.y[0];
-                t.y[0] = TFT_HEIGHT - tmp;
-            }
-
-            // Serial.printf("\nPressed x=%d , y=%d, rot: %d", t.x[0], t.y[0], bruceConfigPins.rotation);
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else return;
-
-            // Touch point global variable
-            touchPoint.x = t.x[0];
-            touchPoint.y = t.y[0];
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        }
-    }
+    hal_buttons_poll_3(buttonsCfg());
+    BruceTouchPoint t;
+    if (hal_touch_read(touchCfg(), t)) hal_touch_apply(t);
 }
 
 /*********************************************************************

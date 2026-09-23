@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include <interface.h>
 
@@ -6,6 +8,8 @@
 #define DW_BTN 2
 #define MINBRIGHT 1
 #define UP_BTN 3
+
+static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN}; }
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -47,9 +51,7 @@ void _setup_gpio() {
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
 
-    pinMode(UP_BTN, INPUT_PULLUP);
-    pinMode(SEL_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
+    hal_buttons_init(buttonsCfg(), 3);
 
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
@@ -83,23 +85,7 @@ void _setBrightness(uint8_t brightval) {
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-    bool upPressed = (digitalRead(UP_BTN) == LOW);
-    bool selPressed = (digitalRead(SEL_BTN) == LOW);
-    bool dwPressed = (digitalRead(DW_BTN) == LOW);
-
-    bool anyPressed = upPressed || selPressed || dwPressed;
-    if (anyPressed) tm = millis();
-    if (anyPressed && wakeUpScreen()) return;
-
-    AnyKeyPress = anyPressed;
-    PrevPress = upPressed;
-    EscPress = upPressed && dwPressed;
-    NextPress = dwPressed;
-    SelPress = selPressed;
-}
+void InputHandler(void) { hal_buttons_poll_3(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff
