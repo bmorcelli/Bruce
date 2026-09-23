@@ -69,6 +69,9 @@ void ConfigMenu::displayUIMenu() {
             {"Menu Layout", [this]() { setMainMenuStyleMenu(); }            },
             {"UI Color",    [this]() { setUIColor(); }                      },
             {"UI Theme",    [this]() { setTheme(); }                        },
+#if defined(HAS_RESISTIVE_TOUCH)
+            {"Calibrate Touch", []() { calibrateTouch(); }                  },
+#endif
             {"Back",        []() {}                                         },
         };
 

@@ -27,6 +27,9 @@ struct DeviceTouch {
     bool SwapXY[4] = {false, false, false, false};
     int16_t HomeBtn = -1;
     void *i2c_bus = nullptr;
+    // TOUCH_CTRL_XPT2046: SPIClass* to run the touch on when it is neither on the display bus nor
+    // bit-banged (e.g. one returned by acquireSPIBus()). Used when xpt_shared_spi is false.
+    void *spi_bus = nullptr;
     uint16_t raw_width = 0;
     uint16_t raw_height = 0;
     bool gt911_int_sync = false;

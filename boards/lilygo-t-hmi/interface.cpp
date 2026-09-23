@@ -2,14 +2,39 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <Arduino.h>
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <interface.h>
 
 #define PWR_EN_PIN 10
 #define PWR_ON_PIN 14
 
-CYD28_TouchR touch(320, 240);
+#define PIN_SD_CMD 11
+#define PIN_SD_CLK 12
+#define PIN_SD_D0 13
+
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports rotation 2 coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    static SPIClass *bus = acquireSPIBus( // acquired once, on the first call (hal_touch_init)
+        (gpio_num_t)XPT2046_SPI_BUS_SCLK_IO_NUM, (gpio_num_t)XPT2046_SPI_BUS_MISO_IO_NUM,
+        (gpio_num_t)XPT2046_SPI_BUS_MOSI_IO_NUM
+    );
+    cfg.spi_bus = bus;
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -35,13 +60,15 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15, (gpio_num_t)16
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)-1
-    }; // sck,miso,mosi,cs
+    bruceConfigPins.SDCARD_bus = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {
         (gpio_num_t)1, (gpio_num_t)4, (gpio_num_t)3, (gpio_num_t)15, (gpio_num_t)16, GPIO_NUM_NC
     }; // sck,miso,mosi,cs,int,rst
 #endif
+
+    // Using SD_MMC
+    SD.setPins(PIN_SD_CLK, PIN_SD_CMD, PIN_SD_D0);
 
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
@@ -58,11 +85,7 @@ void _setup_gpio() {
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
-    if (!touch.begin(acquireSPIBus(
-            (gpio_num_t)XPT2046_SPI_BUS_SCLK_IO_NUM,
-            (gpio_num_t)XPT2046_SPI_BUS_MISO_IO_NUM,
-            (gpio_num_t)XPT2046_SPI_BUS_MOSI_IO_NUM
-        ))) {
+    if (!hal_touch_init(touchCfg(), 0, true)) { // own SPI bus (touchCfg().spi_bus)
         Serial.println("Touchscreen initialization failed!");
     }
 #define TFT_BRIGHT_Bits 8
@@ -98,41 +121,10 @@ void _setBrightness(uint8_t brightval) {
 void InputHandler(void) {
     static long d_tmp = 0;
     if (millis() - d_tmp > 200 || LongPress) {
-        // I know R3CK.. I Should NOT nest if statements..
-        // but it is needed to not keep SPI bus used without need, it save resources
-        if (touch.touched()) {
-            auto t = touch.getPointScaled();
-            // Serial.printf("\nRAW: Touch Pressed on x=%d, y=%d", t.x, t.y);
-            if (bruceConfigPins.rotation == 3) {
-                // t.y = t.y;
-                t.x = tftWidth - t.x;
-            }
-            if (bruceConfigPins.rotation == 1) {
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-                // t.x = t.x;
-            }
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x;
-                t.x = t.y;
-                t.y = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x;
-                t.x = tftWidth - t.y;
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
-            }
-            // Serial.printf("\nROT: Touch Pressed on x=%d, y=%d\n", t.x, t.y);
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else goto END;
-
-            // Touch point global variable
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        END:
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
             d_tmp = millis();
+            hal_touch_apply(t);
         }
     }
 }

@@ -1,4 +1,7 @@
 #include "hal/device.h"
+#include "hal/inputs/touch.h"
+#include "CYD28_TouchscreenR.h"
+#include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
@@ -14,6 +17,24 @@
 
 #ifdef HAS_3_BUTTONS
 static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN}; }
+#endif
+
+#ifdef HAS_TOUCH
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports landscape (rotation 1) coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 #endif
 
 /***************************************************************************************
@@ -89,32 +110,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
 #ifdef HAS_TOUCH
-    pinMode(TOUCH_CS, OUTPUT);
-    uint16_t calData[5];
-    File caldata = LittleFS.open("/calData", "r");
-
-    if (!caldata) {
-        tft.setRotation(bruceConfigPins.rotation);
-        tft.calibrateTouch(calData, TFT_WHITE, TFT_BLACK, 10);
-
-        caldata = LittleFS.open("/calData", "w");
-        if (caldata) {
-            caldata.printf(
-                "%d\n%d\n%d\n%d\n%d\n", calData[0], calData[1], calData[2], calData[3], calData[4]
-            );
-            caldata.close();
-        }
-    } else {
-        Serial.print("\ntft Calibration data: ");
-        for (int i = 0; i < 5; i++) {
-            String line = caldata.readStringUntil('\n');
-            calData[i] = line.toInt();
-            Serial.printf("%d, ", calData[i]);
-        }
-        Serial.println();
-        caldata.close();
-    }
-    tft.setTouch(calData);
+    hal_touch_init(touchCfg(), 0, true); // shares the display SPI bus
+    // calibration: loadTouchCalibration()/calibrateTouch() in main.cpp (NVS "touch_cal")
 #endif
 }
 
@@ -153,50 +150,14 @@ void InputHandler(void) {
     static unsigned long tm = 0;
     if (millis() - tm < 200 && !LongPress) return;
 #ifdef HAS_TOUCH
-    BruceTouchPoint t;
     checkPowerSaveTime();
-    bool _IH_touched = tft.getTouch(&t.x, &t.y);
-    if (_IH_touched) {
-        NextPress = false;
-        PrevPress = false;
-        UpPress = false;
-        DownPress = false;
-        SelPress = false;
-        EscPress = false;
-        AnyKeyPress = false;
-        NextPagePress = false;
-        PrevPagePress = false;
-        touchPoint.pressed = false;
-        _IH_touched = false;
-        Serial.printf("\nRAW: Touch Pressed on x=%d, y=%d", t.x, t.y);
-        if (bruceConfigPins.rotation == 3) {
-            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-            t.x = tftWidth - t.x;
+    {
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
+            tm = millis();
+            if (!hal_touch_apply(t)) return;
         }
-        if (bruceConfigPins.rotation == 0) {
-            uint16_t tmp = t.x;
-            t.x = map((tftHeight + TOUCH_FOOTER_HEIGHT) - t.y, 0, 320, 0, 240);
-            t.y = map(tmp, 0, 240, 0, 320);
-        }
-        if (bruceConfigPins.rotation == 2) {
-            uint16_t tmp = t.x;
-            t.x = map(t.y, 0, 320, 0, 240);
-            t.y = map(tftWidth - tmp, 0, 240, 0, 320);
-        }
-
-        Serial.printf("\nROT: Touch Pressed on x=%d, y=%d, rot=%d\n", t.x, t.y, bruceConfigPins.rotation);
-
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-
-        // Touch point global variable
-        touchPoint.x = t.x;
-        touchPoint.y = t.y;
-        touchPoint.pressed = true;
-        touchHeatMap(touchPoint);
-        tm = millis();
     }
-
 #endif
 #ifdef HAS_3_BUTTONS
     hal_buttons_poll_3(buttonsCfg());

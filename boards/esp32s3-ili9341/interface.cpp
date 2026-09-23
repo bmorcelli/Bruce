@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include "CYD28_TouchscreenR.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
@@ -7,9 +9,22 @@
 #define BTN_PIN 0
 #define HAS_BTN 1
 
-#define CYD28_DISPLAY_HOR_RES_MAX 320
-#define CYD28_DISPLAY_VER_RES_MAX 240
-CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports landscape (rotation 1) coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -53,12 +68,12 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // Initialize XPT2046 touch using hardware SPI (shares bus with display)
-    if (!touch.begin(&tft.getSPIinstance())) {
+    // Initialize XPT2046 touch using hardware SPI (shares bus with display)
+    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) {
         Serial.println("[TOUCH] XPT2046 not started");
     } else {
         Serial.println("[TOUCH] XPT2046 started OK");
     }
-    touch.setRotation(bruceConfigPins.rotation);
 
     // Backlight on
     pinMode(TFT_BL, OUTPUT);
@@ -98,34 +113,10 @@ void _setBrightness(uint8_t brightval) {
 void InputHandler(void) {
     static long d_tmp = 0;
     if (millis() - d_tmp > 200 || LongPress) {
-        if (touch.touched()) {
-            auto t = touch.getPointScaled();
-
-            // Coordinate transform based on rotation
-            if (bruceConfigPins.rotation == 3) {
-                t.y = (tftHeight + 20) - t.y;
-                t.x = tftWidth - t.x;
-            }
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x;
-                t.x = tftWidth - t.y;
-                t.y = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x;
-                t.x = t.y;
-                t.y = (tftHeight + 20) - tmp;
-            }
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else goto END;
-
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        END:
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
             d_tmp = millis();
+            hal_touch_apply(t);
         }
     }
 

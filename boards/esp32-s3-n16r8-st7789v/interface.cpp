@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include "CYD28_TouchscreenR.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
@@ -5,7 +7,22 @@
 #include <Arduino.h>
 #include <interface.h>
 
-CYD28_TouchR touch(320, 240);
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports rotation 2 coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {false, false, true, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 void _setup_gpio() {
     bruceConfigPins.irTx = -1;
@@ -28,7 +45,7 @@ void _setup_gpio() {
 void _post_setup_gpio() {
     // Use software SPI (GPIO bit-banging) for touch to avoid conflicts with AUX_SPI
     // CYD28_TouchR::begin() with no arguments uses software SPI mode on the defined GPIO pins
-    if (!touch.begin()) { Serial.println("Touchscreen initialization failed!"); }
+    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) { Serial.println("Touchscreen initialization failed!"); }
 }
 
 int getBattery() { return 0; }
@@ -39,30 +56,14 @@ void _setBrightness(uint8_t brightval) { analogWrite(TFT_BL, (brightval * 255) /
 
 void InputHandler(void) {
     static unsigned long lastTouch = 0;
-    if (millis() - lastTouch < 200 && !LongPress) return;
-    if (touch.touched()) {
-        auto point = touch.getPointScaled();
-        lastTouch = millis();
-        if (bruceConfigPins.rotation == 1) point.y = (tftHeight + 20) - point.y;
-        if (bruceConfigPins.rotation == 3) point.x = tftWidth - point.x;
-        if (bruceConfigPins.rotation == 0) {
-            int temporary = point.x;
-            point.x = point.y;
-            point.y = temporary;
+    if (millis() - lastTouch > 200 || LongPress) {
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
+            lastTouch = millis();
+            hal_touch_apply(t);
         }
-        if (bruceConfigPins.rotation == 2) {
-            int temporary = point.x;
-            point.x = tftWidth - point.y;
-            point.y = (tftHeight + 20) - temporary;
-        }
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-        touchPoint.x = point.x;
-        touchPoint.y = point.y;
-        touchPoint.pressed = true;
-        touchHeatMap(touchPoint);
-        return;
     }
+
     checkPowerSaveTime();
     PrevPress = false;
     NextPress = false;

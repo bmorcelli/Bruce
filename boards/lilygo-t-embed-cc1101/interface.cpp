@@ -66,21 +66,22 @@ void _setup_gpio() {
     bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
     bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)18, (gpio_num_t)8}; // rx, tx (CH9329; BAD_RX/BAD_TX
-                                                                   // fell back to GROVE_SCL/GROVE_SDA)
+                                                                  // fell back to GROVE_SCL/GROVE_SDA)
     bruceConfigPins.irTx = 2;
     bruceConfigPins.irRx = 1;
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
-    bruceConfigPins.outer_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)8};
+    bruceConfigPins.outer_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, GPIO_NUM_NC};
     // No dedicated PN532 SPI bus on this env (NFC is PN532_I2C_MODULE) -- RC522-SPI shares the
     // generic SPI bus like on boards without a dedicated NFC slot.
-    bruceConfigPins.PN532_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)8};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, GPIO_NUM_NC};
     bruceConfigPins.CC1101_bus = {
         (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)12, (gpio_num_t)3, (gpio_num_t)38
     }; // sck,miso,mosi,cs,gdo0,gdo2
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)44, (gpio_num_t)43
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)13
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)13
     }; // sck,miso,mosi,cs
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {
@@ -89,12 +90,12 @@ void _setup_gpio() {
 #endif
 #else
     // lilygo-t-embed env (non-CC1101)
-    bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43}; // sda, scl (Grove)
-    bruceConfigPins.sys_i2c = {GPIO_NUM_NC, GPIO_NUM_NC};       // not defined on this variant
-    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
-    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43};    // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {GPIO_NUM_NC, GPIO_NUM_NC};          // not defined on this variant
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
     bruceConfigPins.badusb_bus = {(gpio_num_t)43, (gpio_num_t)44}; // rx, tx (BAD_RX/BAD_TX fell
-                                                                    // back to GROVE_SCL/GROVE_SDA)
+                                                                   // back to GROVE_SCL/GROVE_SDA)
     bruceConfigPins.irTx = 44;
     bruceConfigPins.irRx = 43;
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
@@ -107,7 +108,8 @@ void _setup_gpio() {
     bruceConfigPins.NRF24_bus = {
         (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44
     }; // sck,miso,mosi,cs(ss),ce
-    bruceConfigPins.SDCARD_bus = {(gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)39
     }; // sck,miso,mosi,cs
 #if !defined(LITE_VERSION)
     bruceConfigPins.W5500_bus = {

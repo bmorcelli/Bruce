@@ -1,7 +1,7 @@
-#include "hal/device.h"
-#include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 
 #define SEL_BTN 0
 #define BTN_ACT LOW
@@ -51,9 +51,11 @@ void _setup_gpio() {
 
     pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
 
     digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
     digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
     // Starts SPI instance for CC1101 and NRF24 with CS pins blocking communication at start
 
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;

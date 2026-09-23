@@ -1,3 +1,5 @@
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <interface.h>
@@ -6,7 +8,22 @@
 
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
-CYD28_TouchR touch(TFT_HEIGHT, TFT_WIDTH);
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports landscape (rotation 1) coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -52,7 +69,7 @@ void _setup_gpio() {
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
-    if (!touch.begin(&tft.getSPIinstance())) {
+    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) {
         Serial.println("Touch IC not Started");
         log_i("Touch IC not Started");
     } else Serial.println("Touch IC Started");
@@ -91,33 +108,13 @@ void _setBrightness(uint8_t brightval) {
 **********************************************************************/
 void InputHandler(void) {
     static unsigned long tm = millis();
-    if (!(millis() - tm > 200 || LongPress)) return;
-
-    if (touch.touched()) {
-        auto t = touch.getPointScaled();
-        t = touch.getPointScaled();
-        if (bruceConfigPins.rotation == 3) {
-            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-            t.x = tftWidth - t.x;
-        }
-        if (bruceConfigPins.rotation == 0) {
-            int tmp = t.x;
-            t.x = tftWidth - t.y;
-            t.y = tmp;
-        }
-        if (bruceConfigPins.rotation == 2) {
-            int tmp = t.x;
-            t.x = t.y;
-            t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
-        }
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-        touchPoint.x = t.x;
-        touchPoint.y = t.y;
-        touchPoint.pressed = true;
-        touchHeatMap(touchPoint);
-    } else touchPoint.pressed = false;
+    if (millis() - tm > 200 || LongPress) {
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
+            tm = millis();
+            hal_touch_apply(t);
+        } else touchPoint.pressed = false;
+    }
 }
 
 /*********************************************************************

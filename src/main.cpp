@@ -26,13 +26,24 @@ StartupApp startupApp;
 String startupAppJSInterpreterFile = "";
 
 MainMenu mainMenu;
-SPIClass sdcardSPI;
-#ifdef USE_HSPI_PORT
 #ifndef VSPI
 #define VSPI FSPI
 #endif
+#ifdef USE_HSPI_PORT
+// The display owns HSPI (SPIClass() defaults to HSPI): mounting the SD on it would re-route the
+// HSPI MISO input to the SD card's pin and break every device that shares the display MISO
+// (e.g. the XPT2046 touchscreen).
+SPIClass sdcardSPI(VSPI);
+// SPIClass sdcardSPI;
 SPIClass AUX_SPI(VSPI);
 #else
+// sdcardSPI and AUX_SPI must live on different SPI hosts: SPIClass's default constructor and
+// AUX_SPI(HSPI) both resolve to the same host, so once sdcardSPI has claimed it, calling
+// AUX_SPI.begin() on other pins (e.g. a shared XPT2046 touch bus) succeeds but never actually
+// reroutes that host's GPIO matrix -- every AUX_SPI consumer ends up talking over the SD card's
+// pins instead. Confirmed on the T-HMI: its shared touch bus read only 0x1FFF (floating) through
+// AUX_SPI while the exact same pins, driven bit-banged, answered the XPT2046 correctly.
+SPIClass sdcardSPI(VSPI);
 SPIClass AUX_SPI(HSPI);
 #endif
 
@@ -62,7 +73,6 @@ keyStroke KeyStroke;
 
 volatile int32_t RotaryNetSteps = 0;
 
-
 TaskHandle_t xHandle;
 void __attribute__((weak)) taskInputHandler(void *parameter) {
     auto timer = millis();
@@ -73,6 +83,8 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
         // if AnyKeyPress is false, or rerun if it was not renewed within 75ms (arbitrary)
         // because AnyKeyPress will be true if didn´t passed through a check(bool var)
         if (!AnyKeyPress || millis() - timer > 75) {
+            // Held across the whole update so consumers never observe a half-written state
+            inputLock();
             NextPress = false;
             PrevPress = false;
             UpPress = false;
@@ -86,9 +98,8 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
             touchPoint.pressed = false;
             touchPoint.Clear();
             checkAndRecoverSysI2CBus();
-#ifndef USE_TFT_eSPI_TOUCH
             InputHandler();
-#endif
+            inputUnlock();
             timer = millis();
         }
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -503,7 +514,11 @@ void setup() {
     setBrightness(bruceConfig.bright, false);
     // end of post gpio begin
 
-    // #ifndef USE_TFT_eSPI_TOUCH
+    inputLockInit();
+#if defined(HAS_RESISTIVE_TOUCH)
+    // Runs before the input task exists; asks for the calibration when nothing is stored in the NVS
+    if (!loadTouchCalibration()) calibrateTouch();
+#endif
     // This task keeps running all the time, will never stop
     xTaskCreate(
         taskInputHandler,              // Task function
@@ -513,7 +528,6 @@ void setup() {
         2,                             // Task priority (0 to 3), loopTask has priority 2.
         &xHandle                       // Task handle (not used)
     );
-    // #endif
     _late_setup_gpio();
 #if !defined(USE_DUMMY_TFT)
     bruceConfig.openThemeFile(bruceConfig.themeFS(), bruceConfig.themePath, false);

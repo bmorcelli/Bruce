@@ -4,38 +4,60 @@
 #include <Arduino.h>
 #include <interface.h>
 
-#define BOARD_TOUCH_INT 25
 #define GT911_SLAVE_ADDRESS_L 0x5D
-#define HAS_CAPACITIVE_TOUCH 1
 #define TFT_BRIGHT_Bits 8
 #define TFT_BRIGHT_FREQ 5000
 
 #if defined(HAS_CAPACITIVE_TOUCH)
-#if defined(TOUCH_GT911_I2C)
-#include "TouchDrvGT911.hpp"
-TouchDrvGT911 touch;
-struct TouchPointPro {
-    int16_t x = 0;
-    int16_t y = 0;
-};
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
+// GT911 and CST816S/CST820 both go through the HAL now (TOUCH_CTRL_GT911/TOUCH_CTRL_CST8XX). The
+// table reproduces the old per-rotation setMaxCoordinates/setSwapXY/setMirrorXY dance (GT911) and
+// the old CYD28_TouchscreenC::convertRawXY pre-transform composed with InputHandler's old
+// per-rotation remap (CST8xx) -- both driver families land on the exact same table.
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+#if defined(TOUCH_CTRL_GT911)
+    cfg.pin_sda = SYS_I2C_SDA;
+    cfg.pin_scl = SYS_I2C_SCL;
+    cfg.pin_rst = GT911_TOUCH_CONFIG_RST_GPIO_NUM;
+    cfg.pin_irq = GT911_TOUCH_CONFIG_INT_GPIO_NUM;
 #else
-#include "CYD28_TouchscreenC.h"
-#define CYD28_DISPLAY_HOR_RES_MAX 240
-#define CYD28_DISPLAY_VER_RES_MAX 320
-CYD28_TouchC touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
+    cfg.pin_sda = CST816S_I2C_CONFIG_SDA_IO_NUM;
+    cfg.pin_scl = CST816S_I2C_CONFIG_SCL_IO_NUM;
+    cfg.pin_rst = CST816S_TOUCH_CONFIG_RST_GPIO_NUM;
+    cfg.pin_irq = CST816S_TOUCH_CONFIG_INT_GPIO_NUM;
 #endif
-#elif defined(USE_TFT_eSPI_TOUCH)
-#define XPT2046_CS TOUCH_CS
-#else
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {false, true, false, true};
+    const bool mirrorX[4] = {false, false, true, true};
+    const bool mirrorY[4] = {false, true, true, false};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
+#elif defined(TOUCH_CTRL_XPT2046)
 #include "CYD28_TouchscreenR.h"
-#define CYD28_DISPLAY_HOR_RES_MAX 320
-#define CYD28_DISPLAY_VER_RES_MAX 240
-CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
-#if defined(TOUCH_XPT2046_SPI)
-#define XPT2046_CS XPT2046_SPI_CONFIG_CS_GPIO_NUM
-#else
-#define XPT2046_CS 33
-#endif
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+#define XPT2046_CS CYD28_TouchR_CS
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 #endif
 
 /***************************************************************************************
@@ -43,7 +65,6 @@ CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
 ** Location: main.cpp
 ** Description:   initial setup for the device
 ***************************************************************************************/
-SPIClass touchSPI;
 void _setup_gpio() {
     // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
     bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)27};
@@ -103,27 +124,12 @@ void _setup_gpio() {
 
 #if defined(HAS_CAPACITIVE_TOUCH)
     setSysI2CBus(&Wire1);
-#if defined(TOUCH_GT911_I2C)
+#if defined(TOUCH_CTRL_GT911)
     bruceConfigPins.sys_i2c.sda = (gpio_num_t)SYS_I2C_SDA;
     bruceConfigPins.sys_i2c.scl = (gpio_num_t)SYS_I2C_SCL;
 #else
-    bruceConfigPins.sys_i2c.sda = (gpio_num_t)CYD28_TouchC_SDA;
-    bruceConfigPins.sys_i2c.scl = (gpio_num_t)CYD28_TouchC_SCL;
-#endif
-#endif
-
-#if defined(TOUCH_GT911_I2C)
-    pinMode(BOARD_TOUCH_INT, INPUT);
-    touch.setPins(-1, BOARD_TOUCH_INT);
-    if (!touch.begin(Wire1, GT911_SLAVE_ADDRESS_L, SYS_I2C_SDA, SYS_I2C_SCL)) {
-        Serial.println("Failed to find GT911 - check your wiring!");
-    }
-#else
-#if !defined(USE_TFT_eSPI_TOUCH) // Use libraries
-    if (!touch.begin()) {
-        Serial.println("Touch IC not Started");
-        log_i("Touch IC not Started");
-    } else log_i("Touch IC Started");
+    bruceConfigPins.sys_i2c.sda = (gpio_num_t)CST816S_I2C_CONFIG_SDA_IO_NUM;
+    bruceConfigPins.sys_i2c.scl = (gpio_num_t)CST816S_I2C_CONFIG_SCL_IO_NUM;
 #endif
 #endif
 
@@ -136,33 +142,20 @@ void _setup_gpio() {
 ** Description:   second stage gpio setup to make a few functions work
 ***************************************************************************************/
 void _post_setup_gpio() {
-#if defined(USE_TFT_eSPI_TOUCH)
-    pinMode(TOUCH_CS, OUTPUT);
-    uint16_t calData[5];
-    File caldata = LittleFS.open("/calData", "r");
-
-    if (!caldata) {
-        tft.setRotation(bruceConfigPins.rotation);
-        tft.calibrateTouch(calData, TFT_WHITE, TFT_BLACK, 10);
-
-        caldata = LittleFS.open("/calData", "w");
-        if (caldata) {
-            caldata.printf(
-                "%d\n%d\n%d\n%d\n%d\n", calData[0], calData[1], calData[2], calData[3], calData[4]
-            );
-            caldata.close();
-        }
-    } else {
-        Serial.print("\ntft Calibration data: ");
-        for (int i = 0; i < 5; i++) {
-            String line = caldata.readStringUntil('\n');
-            calData[i] = line.toInt();
-            Serial.printf("%d, ", calData[i]);
-        }
-        Serial.println();
-        caldata.close();
+#if defined(TOUCH_CTRL_GT911)
+    if (!hal_touch_init(touchCfg(), GT911_SLAVE_ADDRESS_L)) {
+        Serial.println("Failed to find GT911 - check your wiring!");
     }
-    tft.setTouch(calData);
+#endif
+#if defined(TOUCH_CTRL_CST8XX)
+    if (!hal_touch_init(touchCfg(), 0x15 /* CST816_SLAVE_ADDRESS -- also CST820's address */)) {
+        Serial.println("Touch IC not Started");
+        log_i("Touch IC not Started");
+    } else log_i("Touch IC Started");
+#endif
+#if defined(TOUCH_CTRL_XPT2046)
+    hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI); // shared with the display SPI bus or on its own pins
+    // calibration: loadTouchCalibration()/calibrateTouch() in main.cpp (NVS "touch_cal")
 #endif
 
     // Brightness control must be initialized after tft in this case @Pirata
@@ -228,104 +221,10 @@ void _setBrightness(uint8_t brightval) {
 void InputHandler(void) {
     static long d_tmp = 0;
     if (millis() - d_tmp > 200 || LongPress) {
-        // I know R3CK.. I Should NOT nest if statements..
-        // but it is needed to not keep SPI bus used without need, it save resources
-#if defined(USE_TFT_eSPI_TOUCH)
         BruceTouchPoint t;
-        checkPowerSaveTime();
-        bool _IH_touched = tft.getTouch(&t.x, &t.y);
-        if (_IH_touched) {
-            NextPress = false;
-            PrevPress = false;
-            UpPress = false;
-            DownPress = false;
-            SelPress = false;
-            EscPress = false;
-            AnyKeyPress = false;
-            NextPagePress = false;
-            PrevPagePress = false;
-            touchPoint.pressed = false;
-            _IH_touched = false;
-#elif defined(TOUCH_GT911_I2C)
-        static unsigned long tm = millis();
-        TouchPointPro t;
-        uint8_t touched = 0;
-        uint8_t rot = 5;
-
-        if (rot != bruceConfigPins.rotation) {
-            if (bruceConfigPins.rotation == 1) {
-                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
-                touch.setSwapXY(true);
-                touch.setMirrorXY(false, true);
-            }
-            if (bruceConfigPins.rotation == 3) {
-                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
-                touch.setSwapXY(true);
-                touch.setMirrorXY(true, false);
-            }
-            if (bruceConfigPins.rotation == 0) {
-                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
-                touch.setSwapXY(false);
-                touch.setMirrorXY(false, false);
-            }
-            if (bruceConfigPins.rotation == 2) {
-                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
-                touch.setSwapXY(false);
-                touch.setMirrorXY(true, true);
-            }
-            rot = bruceConfigPins.rotation;
-        }
-        // Track touch state to prevent double events on press/release
-        static bool lastTouchState = false;
-        static unsigned long lastTouchTime = 0;
-
-        touched = touch.getPoint(&t.x, &t.y);
-        bool currentTouchState = touched > 0;
-
-        // Only process new touch presses with debouncing
-        if (currentTouchState && !lastTouchState && (millis() - lastTouchTime) > 100) {
-            // This is a genuine new touch press
-            lastTouchTime = millis();
-        } else if (!currentTouchState || lastTouchState) {
-            // Touch release or continuing touch - ignore
-            touched = 0;
-        }
-        lastTouchState = currentTouchState;
-        if (((millis() - tm) > 190 || LongPress) && touched) {
-            tm = millis();
-#else
-        if (touch.touched()) {
-            auto t = touch.getPointScaled();
-#endif
-#if !defined(TOUCH_GT911_I2C)
-            // Serial.printf("\nRAW: Touch Pressed on x=%d, y=%d",t.x, t.y);
-            if (bruceConfigPins.rotation == 3) {
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - t.y;
-                t.x = tftWidth - t.x;
-            }
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x;
-                t.x = tftWidth - t.y;
-                t.y = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x;
-                t.x = t.y;
-                t.y = (tftHeight + TOUCH_FOOTER_HEIGHT) - tmp;
-            }
-#endif
-            // Serial.printf("\nROT: Touch Pressed on x=%d, y=%d\n", t.x, t.y);
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else goto END;
-
-            // Touch point global variable
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        END:
+        if (hal_touch_read(touchCfg(), t)) {
             d_tmp = millis();
+            hal_touch_apply(t);
         }
     }
 }

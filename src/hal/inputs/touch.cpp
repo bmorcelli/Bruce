@@ -68,7 +68,7 @@ static bool gt911ResetAndSync(const DeviceTouch &cfg, uint8_t i2c_addr) {
         pinMode(cfg.pin_rst, OUTPUT);
     }
     gpio_hold_dis(static_cast<gpio_num_t>(cfg.pin_irq));
-    pinMode(cfg.pin_irq, OUTPUT;
+    pinMode(cfg.pin_irq, OUTPUT);
     gt911WriteRst(cfg, LOW);
     delay(20);
     digitalWrite(cfg.pin_irq, i2c_addr == 0x14 ? HIGH : LOW);
@@ -127,9 +127,15 @@ static void touchResetPulse(const DeviceTouch &cfg) {
 
 bool hal_touch_init(const DeviceTouch &cfg, uint8_t i2c_addr, bool xpt_shared_spi) {
 #if defined(TOUCH_CTRL_XPT2046)
-    (void)cfg;
     (void)i2c_addr;
-    return xpt_shared_spi ? touch.begin(&SPI) : touch.begin();
+    // Shared with the display: reuse its SPI instance (both sides take the SPI transaction lock)
+#if !defined(TFT_PARALLEL_8_BIT) // parallel displays have no SPI instance to share
+    if (xpt_shared_spi) return touch.begin(&tft.getSPIinstance());
+#else
+    (void)xpt_shared_spi;
+#endif
+    if (cfg.spi_bus) return touch.begin(static_cast<SPIClass *>(cfg.spi_bus));
+    return touch.begin(); // bit-banged on its own pins
 #elif defined(TOUCH_CTRL_GT911)
     (void)xpt_shared_spi;
     if (cfg.pin_sda >= 0 && cfg.pin_scl >= 0) wireFor(cfg).begin(cfg.pin_sda, cfg.pin_scl);
@@ -208,7 +214,7 @@ bool hal_touch_init(const DeviceTouch &cfg, uint8_t i2c_addr, bool xpt_shared_sp
 bool hal_touch_read(const DeviceTouch &cfg, BruceTouchPoint &out) {
 #if defined(TOUCH_CTRL_XPT2046) || defined(TOUCH_CTRL_GT911) || defined(TOUCH_CTRL_CST8XX) ||                \
     defined(TOUCH_CTRL_FT6X36) || defined(TOUCH_CTRL_GT9895) || defined(TOUCH_CTRL_HI8561)
-    uint8_t r = rotation & 0x03;
+    uint8_t r = bruceConfigPins.rotation & 0x03;
     int16_t screenW, screenH;
     panelSize(screenW, screenH);
 #endif

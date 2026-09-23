@@ -103,7 +103,7 @@ Touchscreen drivers selected by one `TOUCH_CTRL_*` build flag:
 
 | Macro | Chip / family | Bus | Notes |
 |---|---|---|---|
-| `TOUCH_CTRL_XPT2046` | XPT2046 (resistive) | SPI, via `CYD28_TouchscreenR` | Pins are separate `CYD28_TouchR_*` macros in `platformio.ini`, not `DeviceTouch` fields. Needs `-DHAS_RESISTIVE_TOUCH=1` for the calibration screen. |
+| `TOUCH_CTRL_XPT2046` | XPT2046 (resistive) | SPI, via `CYD28_TouchscreenR` (bit-banged, or the display's own SPI when `hal_touch_init(..., xpt_shared_spi=true)`) | Pins are separate `CYD28_TouchR_*` macros in `platformio.ini`, not `DeviceTouch` fields. Needs `-DHAS_RESISTIVE_TOUCH=1` for the calibration screen. |
 | `TOUCH_CTRL_GT911` | GT911 | I2C | Reports its own resolution. |
 | `TOUCH_CTRL_CST8XX` | CST816/CST820/CST92xx family | I2C | Auto-detects across the CST8xx family. |
 | `TOUCH_CTRL_FT6X36` | FT6206/FT6236/FT6336(U)/FT3267/FT5336/FT3068 family | I2C | One driver covers the whole family — there's no separate "FT6336" driver. Polling mode (`interruptPolling()`), not IRQ-driven. |
@@ -229,3 +229,14 @@ exact same feel on purpose.
   `setBrightness()` over DSI/SPI, an external I2C backlight-controller
   chip) or boards with no backlight hardware at all (e-paper). Those keep
   their own `_setBrightness()` body untouched.
+
+## Input task and the shared-SPI touchscreen
+
+`taskInputHandler()` (main.cpp) runs `InputHandler()` in its own task on every
+board, including the ones whose XPT2046 shares the display's SPI bus (the old
+`USE_TFT_eSPI_TOUCH` flag that moved those reads into the main loop is gone).
+The task holds a recursive mutex (`inputLock()`/`inputUnlock()`, mykeyboard.cpp)
+while it updates the input globals; `check()` and `_getKeyPress()` take the same
+mutex instead of suspending the task. The bus itself is protected by the SPI
+transaction lock -- `CYD28_TouchscreenR` and TFT_eSPI (`SUPPORT_TRANSACTIONS`)
+both take it.
