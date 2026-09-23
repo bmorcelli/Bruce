@@ -12,7 +12,7 @@ A board only needs to fill a small `Device*` struct (see `device.h`) in
 `hal_*_read()` functions — no board-specific driver code required for
 anything covered here. See `boards/_New-Device-Model/interface.cpp` for a
 commented worked example of every module below, and
-`boards/NEW_BOARD_GUIDE.md` for the full new-board porting process.
+`boards/README.md` for the full new-board porting process.
 
 ## Layout
 
@@ -59,7 +59,7 @@ commented worked example of every module below, and
 ## `inputs/buttons.*`
 
 Raw-GPIO button polling, no debounce library — for `HAS_1_BUTTON` /
-`HAS_3_BUTTON` / `HAS_5_BUTTON` / `HAS_6_BUTTON` (single/double/long-press
+`HAS_3_BUTTONS` / `HAS_5_BUTTONS` / `HAS_6_BUTTONS` (single/double/long-press
 timing baked into each `hal_buttons_poll_N()`) and `HAS_2_BUTTONS` (backed
 by the ESP-IDF `button` component instead of raw polling, gated by
 `BUTTONS_IDF_COMPONENT=1`).
@@ -69,8 +69,8 @@ by the ESP-IDF `button` component instead of raw polling, gated by
   `InputHandler()` cycle. `count` must match which `_poll_N` you call.
   `cfg.pullup = false` for boards without internal/external pull-ups.
 - `hal_buttons_init_2(cfg, long_press_ms = 600)` / `hal_buttons_poll_2()` —
-  the `HAS_2_BUTTONS` pair, needs `lib_deps =
-  https://github.com/bmorcelli/ESP32_Button` and `-DBUTTONS_IDF_COMPONENT=1`.
+  the `HAS_2_BUTTONS` pair, needs `-DBUTTONS_IDF_COMPONENT=1` (the component
+  itself is vendored in `lib/ESP32_Button`, so no `lib_deps` entry).
   btn1: short click → Next, double-click/hold → Sel. btn2: short click →
   Prev, double-click/hold → Esc. Double-click also raises Sel/Esc the same
   way a long press does.
@@ -81,7 +81,7 @@ by the ESP-IDF `button` component instead of raw polling, gated by
 ## `inputs/encoder.*`
 
 Rotary encoder + its Sel/Esc buttons, backed by `mathertel/RotaryEncoder`
-(`lib_deps`, needed only when `HAS_ENCODER=1`). Guarded end-to-end by `#if
+(vendored in `lib/RotaryEncoder`, no `lib_deps` entry needed). Guarded end-to-end by `#if
 defined(HAS_ENCODER)` (stubs otherwise), so the LDF never needs
 `RotaryEncoder` in `lib_deps` for boards without it.
 
