@@ -6,7 +6,26 @@
 ** Location: main.cpp
 ** Description:   initial setup for the device
 ***************************************************************************************/
-void _setup_gpio() {}
+void _setup_gpio() {
+    // -- Audio --
+    // Defaults only: brucePins.conf overrides them on the next boot, and the user can re-map them
+    // from Config > Set Device pins without rebuilding.
+    //
+    // I2S speaker, needs -DHAS_SPEAKER=1 in the .ini. {bclk, ws(LRCLK), dout, mclk}; leave mclk at
+    // GPIO_NUM_NC when the codec derives MCLK from BCLK.
+    // bruceConfigPins.speaker_bus = {(gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)42, GPIO_NUM_NC};
+    //
+    // Microphone, needs -DHAS_MICROPHONE=1 in the .ini. {clk, data, ws, type}:
+    //   MIC_TYPE_PDM         -- PDM mic (e.g. an SPM1423 on its default wiring): clk + data, no ws
+    //   MIC_TYPE_I2S_MSB     -- MSB/left-justified I2S (e.g. an SPM1423 behind an ES8311)
+    //   MIC_TYPE_I2S_PHILIPS -- standard (Philips) I2S, e.g. an INMP441
+    // Both I2S types take clk as BCLK.
+    // bruceConfigPins.mic_bus = {(gpio_num_t)43, (gpio_num_t)46, GPIO_NUM_NC, MIC_TYPE_PDM};
+    //
+    // Piezo buzzer. Always compiled in, no feature gate -- it just stays silent while the pin is
+    // -1. A board with HAS_SPEAKER uses the I2S speaker instead and ignores this.
+    // bruceConfigPins.buzzer = 11;
+}
 
 /***************************************************************************************
 ** Function name: _post_setup_gpio()

@@ -18,6 +18,10 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)17, (gpio_num_t)15, (gpio_num_t)14, (gpio_num_t)18};
+    // clk,data,ws,type
+    bruceConfigPins.mic_bus = {(gpio_num_t)17, (gpio_num_t)16, (gpio_num_t)15, MIC_TYPE_I2S_MSB};
     bruceConfigPins.i2c_bus = {(gpio_num_t)9, (gpio_num_t)10};  // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
     bruceConfigPins.rfTx = 9;
@@ -199,9 +203,6 @@ void _setup_codec_speaker(bool enable) {
 ** Handles audio CODEC to enable/disable microphone
 **********************************************************************/
 void _setup_codec_mic(bool enable) {
-    // Set microfone pin for ADV
-    mic_bclk_pin = (gpio_num_t)17;
-
     static constexpr const uint8_t enabled_bulk_data[] = {
         2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON
         2, 0x01, 0xBA, // 0x01 CLOCK_MANAGER/ MCLK=BCLK

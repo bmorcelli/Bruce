@@ -81,6 +81,11 @@ static DeviceTouch touchCfg() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)5, (gpio_num_t)7, (gpio_num_t)8, (gpio_num_t)4};
+    // ES8311 ADC: clocked off the speaker BCLK, and its LRCLK doubles as the mic WS
+    // clk,data,ws,type
+    bruceConfigPins.mic_bus = {(gpio_num_t)5, (gpio_num_t)6, (gpio_num_t)7, MIC_TYPE_I2S_MSB};
     bruceConfigPins.sys_i2c = {(gpio_num_t)16, (gpio_num_t)15}; // sda, scl
     bruceConfigPins.i2c_bus = {(gpio_num_t)16, (gpio_num_t)15}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 16;
@@ -336,10 +341,6 @@ void _setup_codec_speaker(bool enable) {
 ** Handles audio CODEC to enable/disable microphone
 **********************************************************************/
 void _setup_codec_mic(bool enable) {
-    // Set microphone I2S pin for Bruce's mic module
-    extern gpio_num_t mic_bclk_pin;
-    mic_bclk_pin = (gpio_num_t)BCLK;
-
     if (enable) {
         // Reset codec (exact sequence from LCD Wiki)
         es8311_write_reg(ES8311_REG00_RESET, 0x1F);

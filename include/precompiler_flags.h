@@ -60,9 +60,6 @@
 #ifndef GROVE_SCL           // Pin to be used in I2C communications
   #define GROVE_SCL -1
 #endif
-#ifndef TXLED                 // Default TX Infrared Led
-  #define TXLED GROVE_SDA
-#endif
 #ifndef LED_ON              // Infrared TXLED On state
   #define LED_ON 1
 #endif

@@ -58,7 +58,5 @@ void SerialCli::setup() {
 #ifdef HAS_RGB_LED
     createLedCommands(&_cli);
 #endif
-#if defined(HAS_NS4168_SPKR) || defined(BUZZ_PIN)
     createSoundCommands(&_cli);
-#endif
 }

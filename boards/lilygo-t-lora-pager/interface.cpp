@@ -186,6 +186,10 @@ void initPeripherals() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)11, (gpio_num_t)18, (gpio_num_t)45, (gpio_num_t)10};
+    // clk,data,ws,type
+    bruceConfigPins.mic_bus = {(gpio_num_t)18, (gpio_num_t)17, (gpio_num_t)11, MIC_TYPE_I2S_MSB};
     bruceConfigPins.i2c_bus = {(gpio_num_t)3, (gpio_num_t)2}; // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)3, (gpio_num_t)2}; // sda, scl
     bruceConfigPins.rfTx = 3;

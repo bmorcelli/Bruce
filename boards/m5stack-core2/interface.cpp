@@ -10,6 +10,10 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // Wiring kept for reference; this board has no HAS_SPEAKER gate
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)12, (gpio_num_t)0, (gpio_num_t)2, GPIO_NUM_NC};
+    bruceConfigPins.mic_bus = {(gpio_num_t)0, (gpio_num_t)34, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data,ws,type
     bruceConfigPins.i2c_bus = {(gpio_num_t)32, (gpio_num_t)33};  // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)21, (gpio_num_t)22};  // sda, scl
     bruceConfigPins.rfTx = 32;

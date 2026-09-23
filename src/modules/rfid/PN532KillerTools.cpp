@@ -55,8 +55,7 @@ void PN532KillerTools::setup() {
         sdcardSPI.end();
     }
     if (bruceConfigPins.CC1101_bus.checkConflict(rxdPin) ||
-        bruceConfigPins.CC1101_bus.checkConflict(txdPin) ||
-        bruceConfigPins.NRF24_bus.checkConflict(rxdPin) ||
+        bruceConfigPins.CC1101_bus.checkConflict(txdPin) || bruceConfigPins.NRF24_bus.checkConflict(rxdPin) ||
         bruceConfigPins.NRF24_bus.checkConflict(txdPin)) {
         AUX_SPI.end();
     }
@@ -104,12 +103,7 @@ void PN532KillerTools::playDeviceDetectedSound() {
     if (bruceConfig.soundEnabled == 0) return; // if sound is disabled, do not play sound
 
 #if !defined(LITE_VERSION)
-#if defined(BUZZ_PIN)
-    // Play two beeps to indicate successful device detection
-    _tone(5000, 50);
-    delay(100);
-    _tone(5000, 50);
-#elif defined(HAS_NS4168_SPKR)
+#if defined(HAS_SPEAKER)
     // Try to play a detection sound file, fallback to startup sound if not available
     if (SD.exists("/device_detected.wav")) {
         playAudioFile(&SD, "/device_detected.wav");
@@ -127,6 +121,11 @@ void PN532KillerTools::playDeviceDetectedSound() {
             playAudioFile(&LittleFS, "/boot.wav");
         }
     }
+#else
+    // Two beeps to indicate successful device detection
+    _tone(5000, 50);
+    delay(100);
+    _tone(5000, 50);
 #endif
 #endif
 }
@@ -135,12 +134,7 @@ void PN532KillerTools::playUidFoundSound() {
     if (bruceConfig.soundEnabled == 0) return; // if sound is disabled, do not play sound
 
 #if !defined(LITE_VERSION)
-#if defined(BUZZ_PIN)
-    // Play a single higher tone to indicate UID found
-    _tone(6000, 200);
-    _tone(9000, 200);
-    _tone(12000, 300);
-#elif defined(HAS_NS4168_SPKR)
+#if defined(HAS_SPEAKER)
     // Try to play a UID found sound file, fallback to tone simulation
     if (SD.exists("/uid_found.wav")) {
         playAudioFile(&SD, "/uid_found.wav");

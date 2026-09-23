@@ -25,6 +25,7 @@ static DeviceEncoder encoderCfg() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.buzzer = 3;
     bruceConfigPins.i2c_bus = {(gpio_num_t)1, (gpio_num_t)2};   // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)11, (gpio_num_t)12}; // sda, scl
     bruceConfigPins.rfTx = 1;

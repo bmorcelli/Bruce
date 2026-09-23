@@ -8,7 +8,7 @@
 #include "modules/ir/TV-B-Gone.h"
 #include "modules/ir/custom_ir.h"
 #include "modules/others/audio.h"
-#if defined(HAS_NS4168_SPKR)
+#if defined(HAS_SPEAKER)
 #include "modules/others/audio_player.h"
 #endif
 #include "modules/others/qrcode_menu.h"
@@ -835,7 +835,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                                                      // TODO: show in the text viewer
                                                  }});
             }
-#if defined(HAS_NS4168_SPKR)
+#if defined(HAS_SPEAKER)
             if (isAudioFile(filepath))
                 options.insert(options.begin(), {"Play Audio", [&]() {
                                                      delay(200);

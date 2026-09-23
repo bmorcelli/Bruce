@@ -28,6 +28,7 @@ extern "C" bool verifyRollbackLater() { return true; }
 ** Function: _setup_gpio()  — initial device setup (called from main.cpp)
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.buzzer = 11;
     bruceConfigPins.i2c_bus = {(gpio_num_t)13, (gpio_num_t)14}; // sda, scl (extension header)
     bruceConfigPins.rfTx = 13;
     bruceConfigPins.rfRx = 14;

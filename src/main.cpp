@@ -416,13 +416,7 @@ void init_led() {
 void startup_sound() {
     if (bruceConfig.soundEnabled == 0) return; // if sound is disabled, do not play sound
 #if !defined(LITE_VERSION)
-#if defined(BUZZ_PIN)
-    // Bip M5 just because it can. Does not bip if splashscreen is bypassed
-    _tone(5000, 50);
-    delay(200);
-    _tone(5000, 50);
-    /*  2fix: menu infinite loop */
-#elif defined(HAS_NS4168_SPKR)
+#if defined(HAS_SPEAKER)
     // play a boot sound
     if (bruceConfig.theme.boot_sound) {
         playAudioFile(bruceConfig.themeFS(), bruceConfig.getThemeItemImg(bruceConfig.theme.paths.boot_sound));
@@ -431,6 +425,13 @@ void startup_sound() {
     } else if (LittleFS.exists("/boot.wav")) {
         playAudioFile(&LittleFS, "/boot.wav");
     }
+#else
+    // Bip M5 just because it can. Does not bip if splashscreen is bypassed.
+    // _tone() is a no-op while no buzzer pin is configured.
+    _tone(5000, 50);
+    delay(200);
+    _tone(5000, 50);
+    /*  2fix: menu infinite loop */
 #endif
 #endif
 }

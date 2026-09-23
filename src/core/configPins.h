@@ -22,6 +22,15 @@ enum RFModules {
     CC1101_SPI_MODULE = 1,
 };
 
+// How the microphone is wired. Chosen at runtime (was the MIC_SPM1423 / MIC_INMP441 macros plus
+// the presence of a PIN_BCLK -D); the board picks its default in _setup_gpio(), the user can override it from
+// pinsMenu() without rebuilding.
+enum MicTypes {
+    MIC_TYPE_PDM = 0,         // SPM1423 in PDM mode: clk + data only
+    MIC_TYPE_I2S_MSB = 1,     // SPM1423 wired as MSB/left-justified I2S: clk(BCLK) + ws + data
+    MIC_TYPE_I2S_PHILIPS = 2, // INMP441 & co, standard (Philips) I2S: clk(BCLK) + ws + data
+};
+
 class BruceConfigPins {
 public:
     struct UARTPins {
@@ -113,6 +122,72 @@ public:
         }
     };
 
+    // I2S speaker wiring (HAS_SPEAKER). Was the BCLK/WCLK/DOUT/MCLK -D macros; now set per board
+    // in _setup_gpio() and overridable at runtime from pinsMenu().
+    struct SpeakerPins {
+        gpio_num_t bclk = GPIO_NUM_NC;
+        gpio_num_t ws = GPIO_NUM_NC; // LRCLK / word select
+        gpio_num_t dout = GPIO_NUM_NC;
+        gpio_num_t mclk = GPIO_NUM_NC; // NC when the codec derives MCLK from BCLK (e.g. Cardputer)
+
+        SpeakerPins(
+            gpio_num_t bclk = GPIO_NUM_NC, gpio_num_t ws = GPIO_NUM_NC, gpio_num_t dout = GPIO_NUM_NC,
+            gpio_num_t mclk = GPIO_NUM_NC
+        )
+            : bclk(bclk), ws(ws), dout(dout), mclk(mclk) {}
+
+        void fromJson(JsonObject obj) {
+            bclk = (gpio_num_t)(obj["bclk"] | (int)GPIO_NUM_NC);
+            ws = (gpio_num_t)(obj["ws"] | (int)GPIO_NUM_NC);
+            dout = (gpio_num_t)(obj["dout"] | (int)GPIO_NUM_NC);
+            mclk = (gpio_num_t)(obj["mclk"] | (int)GPIO_NUM_NC);
+        }
+
+        void toJson(JsonObject obj) const {
+            obj["bclk"] = bclk;
+            obj["ws"] = ws;
+            obj["dout"] = dout;
+            obj["mclk"] = mclk;
+        }
+
+        bool isValid() const { return bclk != GPIO_NUM_NC && ws != GPIO_NUM_NC && dout != GPIO_NUM_NC; }
+    };
+
+    // Microphone wiring (HAS_MICROPHONE). Was PIN_CLK/PIN_DATA/PIN_BCLK/PIN_WS + the
+    // MIC_SPM1423/MIC_INMP441 -D macros; now set per board in _setup_gpio().
+    struct MicPins {
+        gpio_num_t clk = GPIO_NUM_NC;  // PDM clock, or BCLK in either I2S mode
+        gpio_num_t ws = GPIO_NUM_NC;   // word select / LRCLK; unused (NC) in PDM mode
+        gpio_num_t data = GPIO_NUM_NC; // DIN
+        int type = MIC_TYPE_PDM;
+
+        MicPins(
+            gpio_num_t clk = GPIO_NUM_NC, gpio_num_t data = GPIO_NUM_NC, gpio_num_t ws = GPIO_NUM_NC,
+            int type = MIC_TYPE_PDM
+        )
+            : clk(clk), ws(ws), data(data), type(type) {}
+
+        void fromJson(JsonObject obj) {
+            clk = (gpio_num_t)(obj["clk"] | (int)GPIO_NUM_NC);
+            ws = (gpio_num_t)(obj["ws"] | (int)GPIO_NUM_NC);
+            data = (gpio_num_t)(obj["data"] | (int)GPIO_NUM_NC);
+            type = obj["type"] | (int)MIC_TYPE_PDM;
+        }
+
+        void toJson(JsonObject obj) const {
+            obj["clk"] = clk;
+            obj["ws"] = ws;
+            obj["data"] = data;
+            obj["type"] = type;
+        }
+
+        bool isValid() const {
+            if (clk == GPIO_NUM_NC || data == GPIO_NUM_NC) return false;
+            if (type != MIC_TYPE_PDM && ws == GPIO_NUM_NC) return false;
+            return true;
+        }
+    };
+
     // An alternate wiring a board can offer for CC1101_bus/NRF24_bus (e.g. a legacy Grove module
     // vs. sharing the SD card's SPI bus, or an M5Stack Cap module). Populated per-board in
     // _setup_gpio(); the generic menus in settings.cpp/NRF24.cpp just list whatever is here, so a
@@ -165,7 +240,7 @@ public:
     String bleName = String("Keyboard_" + String((uint8_t)(ESP.getEfuseMac() >> 32), HEX));
 
     // IR
-    int irTx = TXLED;
+    int irTx = -1;
     uint8_t irTxRepeats = 0;
     int irRx = -1;
 
@@ -185,6 +260,13 @@ public:
 
     // GPS
     int gpsBaudrate = 9600;
+
+    // Audio. No fallback macros -- every board sets these in _setup_gpio().
+    // The buzzer is always compiled in and stays silent while `buzzer` is not a usable pin; a
+    // board with HAS_SPEAKER uses the I2S speaker instead.
+    SpeakerPins speaker_bus;
+    MicPins mic_bus;
+    int buzzer = -1;
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Constructor
@@ -250,4 +332,12 @@ public:
     // GPS
     void setGpsBaudrate(int value);
     void validateGpsBaudrateValue();
+
+    // Audio
+    void setSpeakerPins(SpeakerPins value);
+    void setMicPins(MicPins value);
+    void setBuzzerPin(int value);
+    void validateSpeakerPins(SpeakerPins &value);
+    void validateMicPins(MicPins &value);
+    void validateBuzzerPin();
 };

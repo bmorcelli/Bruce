@@ -88,6 +88,10 @@ void _setup_gpio() {
         (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9, (gpio_num_t)44, (gpio_num_t)43, GPIO_NUM_NC
     }; // sck,miso,mosi,cs,int,rst (no W5500_RST_PIN on this env -> falls back to -1)
 #endif
+    bruceConfigPins.speaker_bus = {
+        (gpio_num_t)46, (gpio_num_t)40, (gpio_num_t)7, (gpio_num_t)39
+    }; // bclk,ws,dout,mclk
+    bruceConfigPins.mic_bus = {(gpio_num_t)39, (gpio_num_t)42, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data
 #else
     // lilygo-t-embed env (non-CC1101)
     bruceConfigPins.i2c_bus = {(gpio_num_t)44, (gpio_num_t)43};    // sda, scl (Grove)
@@ -116,6 +120,10 @@ void _setup_gpio() {
         (gpio_num_t)40, (gpio_num_t)38, (gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)44, GPIO_NUM_NC
     }; // sck,miso,mosi,cs,int,rst (no W5500_RST_PIN on this env -> falls back to -1)
 #endif
+    bruceConfigPins.speaker_bus = {
+        (gpio_num_t)7, (gpio_num_t)5, (gpio_num_t)6, (gpio_num_t)39
+    }; // bclk,ws,dout,mclk
+    bruceConfigPins.mic_bus = {(gpio_num_t)21, (gpio_num_t)14, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data
 #endif
     bruceConfigPins.rotation = 3;
 

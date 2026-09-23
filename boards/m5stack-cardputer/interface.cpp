@@ -88,6 +88,11 @@ inline void mapRawKeyToPhysical(uint8_t keyvalue, uint8_t &row, uint8_t &col) {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // MCLK stays NC: the ES8311 on the ADV derives it from BCLK, and GPIO43 is LRCLK only --
+    // routing MCLK to the same GPIO would overwrite LRCLK in the GPIO matrix.
+    bruceConfigPins.speaker_bus = {(gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)42, GPIO_NUM_NC};
+    // Cardputer classic wiring: PDM mic. The ADV switches to I2S in _post_setup_gpio().
+    bruceConfigPins.mic_bus = {(gpio_num_t)43, (gpio_num_t)46, GPIO_NUM_NC, MIC_TYPE_PDM};
     bruceConfigPins.i2c_bus = {(gpio_num_t)2, (gpio_num_t)1};   // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)-1, (gpio_num_t)-1}; // -1 unless ADV variant detected
     bruceConfigPins.rfTx = 2;
@@ -177,6 +182,10 @@ void _post_setup_gpio() {
     }
     bruceConfigPins.sys_i2c.sda = (gpio_num_t)8;
     bruceConfigPins.sys_i2c.scl = (gpio_num_t)9;
+
+    // Cardputer ADV reads the mic through the ES8311 codec over MSB/left-justified I2S instead
+    // of the classic Cardputer's PDM wiring; GPIO43 is the shared LRCLK.
+    bruceConfigPins.mic_bus = {(gpio_num_t)41, (gpio_num_t)46, (gpio_num_t)43, MIC_TYPE_I2S_MSB};
 
     bruceConfigPins.gps_bus.rx = (gpio_num_t)15;
     bruceConfigPins.gps_bus.tx = (gpio_num_t)13;
@@ -555,8 +564,6 @@ void _setup_codec_speaker(bool enable) {
 **********************************************************************/
 void _setup_codec_mic(bool enable) {
     if (!UseTCA8418) return;
-    // Set microfone pin for ADV
-    mic_bclk_pin = (gpio_num_t)41;
 
     static constexpr const uint8_t enabled_bulk_data[] = {
         2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON

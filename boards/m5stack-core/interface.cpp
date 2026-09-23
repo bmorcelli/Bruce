@@ -9,6 +9,7 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.buzzer = 25;
     bruceConfigPins.i2c_bus = {(gpio_num_t)21, (gpio_num_t)22};   // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)21, (gpio_num_t)22}; // sda, scl
     bruceConfigPins.rfTx = 21;

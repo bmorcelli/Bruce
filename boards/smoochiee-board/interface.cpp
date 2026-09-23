@@ -22,6 +22,11 @@ static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, D
 // Power handler for battery detection
 
 void _setup_gpio() {
+    // INMP441, standard (Philips) I2S
+    bruceConfigPins.mic_bus = {
+        (gpio_num_t)1, (gpio_num_t)10, (gpio_num_t)2, MIC_TYPE_I2S_PHILIPS
+    }; // clk,data,ws,type
+    bruceConfigPins.buzzer = 44;
     bruceConfigPins.sys_i2c = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl
     bruceConfigPins.i2c_bus = {(gpio_num_t)47, (gpio_num_t)48}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 47;

@@ -1124,7 +1124,6 @@ void runClockLoop(bool showMenuHint) {
 int gsetIrTxPin(bool set) {
     int result = bruceConfigPins.irTx;
 
-    if (result < 0) bruceConfigPins.setIrTxPin(TXLED);
     if (set) {
         options.clear();
         std::vector<std::pair<const char *, int>> pins;
@@ -1693,6 +1692,134 @@ RELOAD:
 }
 
 /*********************************************************************
+**  Function: setSpeakerPinsMenu
+**  Menu to manually set the I2S speaker pins (was the BCLK/WCLK/DOUT/MCLK -D macros)
+**********************************************************************/
+void setSpeakerPinsMenu(BruceConfigPins::SpeakerPins &value) {
+    uint8_t opt = 0;
+    bool changed = false;
+    BruceConfigPins::SpeakerPins points = value;
+
+RELOAD:
+    options = {
+        {String("BCLK=" + String(points.bclk)).c_str(), [&]() { opt = 1; }},
+        {String("WCLK=" + String(points.ws)).c_str(), [&]() { opt = 2; }},
+        {String("DOUT=" + String(points.dout)).c_str(), [&]() { opt = 3; }},
+        {String("MCLK=" + String(points.mclk)).c_str(), [&]() { opt = 4; }},
+        {"Save Config", [&]() { opt = 7; }, changed},
+        {"Main Menu", [&]() { opt = 0; }},
+    };
+
+    loopOptions(options);
+    if (opt == 0) return;
+    else if (opt == 7) {
+        if (changed) {
+            value = points;
+            bruceConfigPins.setSpeakerPins(value);
+        }
+    } else {
+        options = {};
+        gpio_num_t sel = GPIO_NUM_NC;
+        int index = 0;
+        if (opt == 1) index = points.bclk + 1;
+        else if (opt == 2) index = points.ws + 1;
+        else if (opt == 3) index = points.dout + 1;
+        else if (opt == 4) index = points.mclk + 1;
+        for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
+            String tmp = String(i);
+            options.push_back({tmp.c_str(), [i, &sel]() { sel = (gpio_num_t)i; }});
+        }
+        loopOptions(options, index);
+        options.clear();
+        if (opt == 1) points.bclk = sel;
+        else if (opt == 2) points.ws = sel;
+        else if (opt == 3) points.dout = sel;
+        else if (opt == 4) points.mclk = sel;
+        changed = true;
+        goto RELOAD;
+    }
+}
+
+/*********************************************************************
+**  Function: setMicPinsMenu
+**  Menu to manually set the microphone wiring (was PIN_CLK/PIN_DATA/PIN_BCLK/PIN_WS)
+**********************************************************************/
+void setMicPinsMenu(BruceConfigPins::MicPins &value) {
+    uint8_t opt = 0;
+    bool changed = false;
+    BruceConfigPins::MicPins points = value;
+
+RELOAD:
+    {
+        const char *typeName = points.type == MIC_TYPE_I2S_PHILIPS ? "I2S Philips"
+                               : points.type == MIC_TYPE_I2S_MSB   ? "I2S MSB"
+                                                                   : "PDM";
+        options = {
+            {String("Type=" + String(typeName)).c_str(), [&]() { opt = 1; }},
+            {String("CLK/BCLK=" + String(points.clk)).c_str(), [&]() { opt = 2; }},
+            {String("WS  =" + String(points.ws)).c_str(), [&]() { opt = 3; }},
+            {String("DATA=" + String(points.data)).c_str(), [&]() { opt = 4; }},
+            {"Save Config", [&]() { opt = 7; }, changed},
+            {"Main Menu", [&]() { opt = 0; }},
+        };
+    }
+
+    loopOptions(options);
+    if (opt == 0) return;
+    else if (opt == 7) {
+        if (changed) {
+            value = points;
+            bruceConfigPins.setMicPins(value);
+        }
+    } else if (opt == 1) {
+        options = {
+            {"PDM",         [&]() { points.type = MIC_TYPE_PDM; }        },
+            {"I2S MSB",     [&]() { points.type = MIC_TYPE_I2S_MSB; }    },
+            {"I2S Philips", [&]() { points.type = MIC_TYPE_I2S_PHILIPS; }},
+        };
+        loopOptions(options, points.type);
+        options.clear();
+        changed = true;
+        goto RELOAD;
+    } else {
+        options = {};
+        gpio_num_t sel = GPIO_NUM_NC;
+        int index = 0;
+        if (opt == 2) index = points.clk + 1;
+        else if (opt == 3) index = points.ws + 1;
+        else if (opt == 4) index = points.data + 1;
+        for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
+            String tmp = String(i);
+            options.push_back({tmp.c_str(), [i, &sel]() { sel = (gpio_num_t)i; }});
+        }
+        loopOptions(options, index);
+        options.clear();
+        if (opt == 2) points.clk = sel;
+        else if (opt == 3) points.ws = sel;
+        else if (opt == 4) points.data = sel;
+        changed = true;
+        goto RELOAD;
+    }
+}
+
+/*********************************************************************
+**  Function: setBuzzerPinMenu
+**  Menu to manually set the buzzer pin (was the BUZZ_PIN -D macro).
+**  -1 disables the buzzer.
+**********************************************************************/
+void setBuzzerPinMenu() {
+    options = {};
+    int sel = bruceConfigPins.buzzer;
+    for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
+        String tmp = String(i);
+        options.push_back({tmp.c_str(), [i, &sel]() { sel = i; }});
+    }
+    loopOptions(options, bruceConfigPins.buzzer + 1);
+    options.clear();
+    bruceConfigPins.setBuzzerPin(sel);
+}
+
+/*********************************************************************
 **  Function: setTheme
 **  Menu to change Theme
 **********************************************************************/
@@ -1891,7 +2018,12 @@ bool loadTouchCalibration() {
 bool saveTouchCalibration(uint16_t x0, uint16_t x1, uint16_t y0, uint16_t y1, uint8_t rot) {
     if (!validTouchCalibration(x0, x1, y0, y1)) {
         Serial.printf(
-            "saveTouchCalibration: Invalid calibration - x0:%u x1:%u y0:%u y1:%u rot:%u\n", x0, x1, y0, y1, rot
+            "saveTouchCalibration: Invalid calibration - x0:%u x1:%u y0:%u y1:%u rot:%u\n",
+            x0,
+            x1,
+            y0,
+            y1,
+            rot
         );
         return false;
     }
@@ -1979,7 +2111,9 @@ void calibrateTouch() {
         if (millis() - lastLog < 1000) return;
         lastLog = millis();
         auto r = touch.getPointRaw();
-        Serial.printf("calibrateTouch[%s]: raw x=%d y=%d z=%d isrWake=%d\n", phase, r.x, r.y, r.z, touch.isrWake);
+        Serial.printf(
+            "calibrateTouch[%s]: raw x=%d y=%d z=%d isrWake=%d\n", phase, r.x, r.y, r.z, touch.isrWake
+        );
     };
     auto readRawPoint = [&]() {
         while (touch.touched()) {
@@ -2041,7 +2175,14 @@ void calibrateTouch() {
 
     Serial.printf(
         "calibrateTouch: x0:%u x1:%u y0:%u y1:%u rot:%u swap:%u invX:%u invY:%u\n",
-        xMin, xMax, yMin, yMax, rot, swapXY, invertX, invertY
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        rot,
+        swapXY,
+        invertX,
+        invertY
     );
     tft.setRotation(bruceConfigPins.rotation);
     tft.fillScreen(bruceConfig.bgColor);

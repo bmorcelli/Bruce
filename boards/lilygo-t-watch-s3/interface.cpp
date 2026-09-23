@@ -40,6 +40,9 @@ static DeviceTouch touchCfg() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)48, (gpio_num_t)15, (gpio_num_t)46, (gpio_num_t)44};
+    bruceConfigPins.mic_bus = {(gpio_num_t)44, (gpio_num_t)47, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data,ws,type
     bruceConfigPins.i2c_bus = {(gpio_num_t)10, (gpio_num_t)11};  // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)10, (gpio_num_t)11};  // sda, scl
     bruceConfigPins.rfTx = 10;

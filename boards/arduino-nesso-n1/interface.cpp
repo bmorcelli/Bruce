@@ -17,6 +17,8 @@ bool enableNessoGrovePower();
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // Piezo buzzer (GPIO11 from schematic)
+    bruceConfigPins.buzzer = 11;
     bruceConfigPins.i2c_bus = {(gpio_num_t)5, (gpio_num_t)4};  // sda, scl (Grove)
     bruceConfigPins.sys_i2c = {(gpio_num_t)10, (gpio_num_t)8}; // sda, scl
     bruceConfigPins.rfTx = 5;

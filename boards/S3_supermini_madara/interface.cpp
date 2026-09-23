@@ -18,6 +18,7 @@ static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN
 ***************************************************************************************/
 
 void _setup_gpio() {
+    bruceConfigPins.buzzer = 47;
     bruceConfigPins.i2c_bus = {(gpio_num_t)4, (gpio_num_t)5}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 4;
     bruceConfigPins.rfRx = 5;

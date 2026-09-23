@@ -51,6 +51,7 @@ static DeviceTouch touchCfg() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.mic_bus = {(gpio_num_t)39, (gpio_num_t)42, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data,ws,type
     // GROVE_SDA/SCL, TXLED/RXLED, SERIAL_TX/RX and the shared SPI buses used to vary per
     // env via -D overrides (see lilygo-t-display-s3.ini history) depending on the
     // HAS_TOUCH / USE_SD_MMC pin-mux combination for this board; mirror those 4

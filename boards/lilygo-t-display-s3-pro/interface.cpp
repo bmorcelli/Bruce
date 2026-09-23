@@ -67,6 +67,9 @@ void touchHomeKeyCallback(void *user_data) {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    // bclk,ws,dout,mclk
+    bruceConfigPins.speaker_bus = {(gpio_num_t)4, (gpio_num_t)15, (gpio_num_t)11, (gpio_num_t)41};
+    bruceConfigPins.mic_bus = {(gpio_num_t)1, (gpio_num_t)2, GPIO_NUM_NC, MIC_TYPE_PDM}; // clk,data,ws,type
     bruceConfigPins.sys_i2c = {(gpio_num_t)5, (gpio_num_t)6}; // sda, scl
     bruceConfigPins.i2c_bus = {(gpio_num_t)5, (gpio_num_t)6}; // sda, scl (Grove)
     bruceConfigPins.rfTx = 5;

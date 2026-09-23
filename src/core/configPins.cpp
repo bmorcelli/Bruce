@@ -244,6 +244,25 @@ void BruceConfigPins::fromJson(JsonObject obj) {
         count++;
         log_e("Fail");
     }
+
+    if (!root["speaker_bus"].isNull()) {
+        speaker_bus.fromJson(root["speaker_bus"].as<JsonObject>());
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!root["mic_bus"].isNull()) {
+        mic_bus.fromJson(root["mic_bus"].as<JsonObject>());
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!root["buzzer"].isNull()) {
+        buzzer = root["buzzer"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
     validateConfig();
     if (count > 0) saveFile();
 }
@@ -298,6 +317,11 @@ void BruceConfigPins::toJson(JsonObject obj) const {
     gps_bus.toJson(_gps);
     JsonObject _badusb = root["badusb_bus"].to<JsonObject>();
     badusb_bus.toJson(_badusb);
+    JsonObject _spkr = root["speaker_bus"].to<JsonObject>();
+    speaker_bus.toJson(_spkr);
+    JsonObject _mic = root["mic_bus"].to<JsonObject>();
+    mic_bus.toJson(_mic);
+    root["buzzer"] = buzzer;
 }
 
 void BruceConfigPins::loadFile(JsonDocument &jsonDoc, bool checkFS) {
@@ -414,6 +438,9 @@ void BruceConfigPins::validateConfig() {
     validateUARTPins(uart_bus);
     validateUARTPins(gps_bus);
     validateUARTPins(badusb_bus);
+    validateSpeakerPins(speaker_bus);
+    validateMicPins(mic_bus);
+    validateBuzzerPin();
 }
 #if !defined(LITE_VERSION)
 void BruceConfigPins::setLoRaPins(SPIPins value) {
@@ -595,4 +622,41 @@ void BruceConfigPins::validateGpsBaudrateValue() {
     if (gpsBaudrate != 9600 && gpsBaudrate != 19200 && gpsBaudrate != 57600 && gpsBaudrate != 38400 &&
         gpsBaudrate != 115200)
         gpsBaudrate = 9600;
+}
+
+void BruceConfigPins::setSpeakerPins(SpeakerPins value) {
+    validateSpeakerPins(value);
+    speaker_bus = value;
+    saveFile();
+}
+
+void BruceConfigPins::setMicPins(MicPins value) {
+    validateMicPins(value);
+    mic_bus = value;
+    saveFile();
+}
+
+void BruceConfigPins::setBuzzerPin(int value) {
+    buzzer = value;
+    validateBuzzerPin();
+    saveFile();
+}
+
+void BruceConfigPins::validateSpeakerPins(SpeakerPins &value) {
+    if (value.bclk < 0 || value.bclk > GPIO_PIN_COUNT) value.bclk = GPIO_NUM_NC;
+    if (value.ws < 0 || value.ws > GPIO_PIN_COUNT) value.ws = GPIO_NUM_NC;
+    if (value.dout < 0 || value.dout > GPIO_PIN_COUNT) value.dout = GPIO_NUM_NC;
+    if (value.mclk < 0 || value.mclk > GPIO_PIN_COUNT) value.mclk = GPIO_NUM_NC;
+}
+
+void BruceConfigPins::validateMicPins(MicPins &value) {
+    if (value.clk < 0 || value.clk > GPIO_PIN_COUNT) value.clk = GPIO_NUM_NC;
+    if (value.ws < 0 || value.ws > GPIO_PIN_COUNT) value.ws = GPIO_NUM_NC;
+    if (value.data < 0 || value.data > GPIO_PIN_COUNT) value.data = GPIO_NUM_NC;
+    if (value.type != MIC_TYPE_PDM && value.type != MIC_TYPE_I2S_MSB && value.type != MIC_TYPE_I2S_PHILIPS)
+        value.type = MIC_TYPE_PDM;
+}
+
+void BruceConfigPins::validateBuzzerPin() {
+    if (buzzer < 0 || buzzer > GPIO_PIN_COUNT) buzzer = -1;
 }

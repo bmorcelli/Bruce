@@ -113,6 +113,12 @@ void setUARTPinsMenu(BruceConfigPins::UARTPins &value);
 
 void setI2CPinsMenu(BruceConfigPins::I2CPins &value);
 
+void setSpeakerPinsMenu(BruceConfigPins::SpeakerPins &value);
+
+void setMicPinsMenu(BruceConfigPins::MicPins &value);
+
+void setBuzzerPinMenu();
+
 void setTheme();
 
 void setMacAddressMenu();
