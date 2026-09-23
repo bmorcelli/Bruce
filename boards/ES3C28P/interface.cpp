@@ -16,6 +16,7 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <Arduino.h>
@@ -26,7 +27,6 @@
 #define ES3C28P 1
 #define ES8311_ADDR 0x18
 #define ES8311_CODEC 1
-#define MINBRIGHT 1
 
 // =============================================
 // SD Card SDIO pins (defined locally for USE_SD_MMC)
@@ -137,22 +137,15 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // Backlight control via PWM (must be after TFT init)
-    pinMode(TFT_BL, OUTPUT);
-    analogWrite(TFT_BL, 255); // Full brightness initially
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100); // Full brightness initially
 }
 
 /*********************************************************************
 ** Function: setBrightness
 ** set brightness value (0-100)
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
@@ -188,7 +181,7 @@ void InputHandler(void) {
 **********************************************************************/
 void powerOff() {
     // Turn off backlight
-    analogWrite(TFT_BL, 0);
+    hal_bright_set(TFT_BL, 0);
     // Turn off amplifier
     digitalWrite(ES3C28P_AMP_EN, HIGH);
     // Send display to sleep

@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
@@ -8,7 +9,6 @@
 #define BTN_ACT LOW
 #define DW_BTN 38
 #define L_BTN 10
-#define MINBRIGHT 1
 #define R_BTN 11
 #define UP_BTN 39
 
@@ -62,6 +62,9 @@ void _setup_gpio() {
     pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
     digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
 
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
+
     // Starts SPI instance for CC1101 and NRF24 with CS pins blocking communication at start
 
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
@@ -100,14 +103,7 @@ int getBattery() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

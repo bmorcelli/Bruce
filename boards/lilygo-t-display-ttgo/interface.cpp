@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
@@ -9,7 +10,6 @@
 #define ADC_EN 14
 #define BTN_ACT LOW
 #define DW_BTN 35
-#define MINBRIGHT 1
 #define UP_BTN 0
 
 /***************************************************************************************
@@ -57,6 +57,9 @@ void _setup_gpio() {
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = PN532_I2C_MODULE;
 
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
+
     Serial.begin(115200);
 }
 
@@ -64,14 +67,7 @@ void _setup_gpio() {
 **  Function: setBrightness
 **  set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

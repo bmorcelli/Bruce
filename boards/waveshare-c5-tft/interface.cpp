@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
@@ -8,7 +9,6 @@
 
 #define DW_BTN 1
 #define L_BTN 14
-#define MINBRIGHT 4
 #define R_BTN 13
 #define UP_BTN 0
 
@@ -53,8 +53,8 @@ void _setup_gpio() {
     digitalWrite(TFT_MOSI, HIGH);
     pinMode(TFT_SCLK, OUTPUT);
 
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
     pinMode(TFT_RST, OUTPUT);
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
@@ -102,14 +102,7 @@ bool isCharging() { return false; }
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

@@ -6,6 +6,7 @@
 #include <interface.h>
 
 // Rotary encoder
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/encoder.h"
 
@@ -36,7 +37,9 @@
 #define KB_I2C_ADDRESS 0x34
 #define KEYBOARD_BL 46
 #define KEY_SHIFT 0x1c
-#define MINBRIGHT 1
+
+static const uint8_t backlightPins[] = {TFT_BL, KEYBOARD_BL};
+
 static DeviceEncoder encoderCfg() {
     DeviceEncoder cfg;
     // A/B swapped on purpose: this board's wiring reports rotation opposite to
@@ -313,7 +316,11 @@ void _setup_gpio() {
     board.begin(cfg);
 }
 
-void _post_setup_gpio() { initPeripherals(); }
+void _post_setup_gpio() {
+    initPeripherals();
+    hal_bright_attach(backlightPins, 2);
+    hal_bright_set(backlightPins, 2, 100);
+}
 
 /***************************************************************************************
 ** Function name: getBattery()
@@ -340,16 +347,7 @@ int getBattery() {
 **  Function: setBrightness
 **  set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-        analogWrite(KEYBOARD_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-        analogWrite(KEYBOARD_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(backlightPins, 2, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

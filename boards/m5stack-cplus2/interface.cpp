@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
@@ -7,7 +8,6 @@
 #define SEL_BTN 37
 
 #define DW_BTN 39
-#define MINBRIGHT 160
 #define UP_BTN 35
 
 static DeviceButtons buttonsCfg() {
@@ -96,6 +96,9 @@ void _setup_gpio() {
         delayMicroseconds(10);
     } // send dummy clocks
     digitalWrite(pin_shared_ctrl, HIGH); // Keep the SD card selected.
+
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
@@ -103,14 +106,7 @@ void _setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

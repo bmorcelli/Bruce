@@ -1,6 +1,7 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "hal/inputs/touch.h"
@@ -12,8 +13,6 @@
 #define SEL_BTN 0
 
 #define DW_BTN 16
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 10000
 #define UP_BTN 12
 static PowersSY6970 PMU;
 #define LCD_MODULE_CMD_1
@@ -132,8 +131,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // PWM backlight setup
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -153,18 +152,7 @@ int getBattery() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 255;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 5;
-    else dutyCycle = ((brightval * 255) / 100);
-
-    Serial.printf("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BL, dutyCycle);
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

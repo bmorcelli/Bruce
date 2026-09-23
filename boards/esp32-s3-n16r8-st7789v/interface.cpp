@@ -2,6 +2,7 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <Arduino.h>
@@ -38,8 +39,8 @@ void _setup_gpio() {
 
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 void _post_setup_gpio() {
@@ -54,7 +55,7 @@ int getBattery() { return 0; }
 
 bool isCharging() { return false; }
 
-void _setBrightness(uint8_t brightval) { analogWrite(TFT_BL, (brightval * 255) / 100); }
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 void InputHandler(void) {
     static unsigned long lastTouch = 0;

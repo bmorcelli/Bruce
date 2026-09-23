@@ -1,16 +1,12 @@
 #include "core/i2c_finder.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include <globals.h>
 #include <interface.h>
+#include <Wire.h>
 
 #define EXPANDER_INT_PIN 28
-#define MINBRIGHT 1
-
-
-#if 1
-#include <Wire.h>
-#endif
 
 // Interrupt flag from expander
 volatile bool expanderInterrupt = false;
@@ -50,8 +46,8 @@ void _setup_gpio() {
     digitalWrite(TFT_MOSI, HIGH);
     pinMode(TFT_SCLK, OUTPUT);
 
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
     pinMode(TFT_RST, OUTPUT);
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
@@ -120,14 +116,7 @@ bool isCharging() { return hal_pmic_is_charging(); }
 /*********************************************************************
 ** Function: setBrightness
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100.0));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

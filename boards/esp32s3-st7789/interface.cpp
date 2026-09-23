@@ -1,6 +1,7 @@
 #include "CYD28_TouchscreenR.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <interface.h>
@@ -74,8 +75,8 @@ void _post_setup_gpio() {
     }
 
     // Backlight on
-    pinMode(TFT_BL, OUTPUT);
-    analogWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -96,13 +97,7 @@ bool isCharging() { return false; }
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        analogWrite(TFT_BL, brightval);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

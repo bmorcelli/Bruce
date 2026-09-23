@@ -1,14 +1,13 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <Wire.h>
 #include <interface.h>
 
 #define BTN_ACT LOW
-#define NORMAL_T_DECK 1
-#define T_DECK_PLUS 1
 
 // Setup for Trackball
 void IRAM_ATTR ISR_up();
@@ -57,7 +56,6 @@ void ISR_rst() {
 #define PIN_POWER_ON 10
 #define BOARD_TOUCH_INT 16
 
-// isPlus is always false below (NORMAL_T_DECK is always defined in this file), so this table only
 // covers that variant -- same per-rotation values the old InputHandler's isPlus=false branch used.
 static DeviceTouch touchCfg() {
     DeviceTouch cfg;
@@ -154,30 +152,17 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     if (!hal_touch_init(touchCfg())) { Serial.println("Failed to find GT911 - check your wiring!"); }
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 5000
     // Brightness control must be initialized after tft in this case @Pirata
-    pinMode(TFT_BL, OUTPUT);
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 /*********************************************************************
 ** Function: setBrightness
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 255;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 0;
-    else dutyCycle = ((brightval * 255) / 100);
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
-    // log_i("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BL, dutyCycle);
-}
 /*********************************************************************
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress

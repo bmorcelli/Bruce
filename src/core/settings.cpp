@@ -111,56 +111,120 @@ int gsetRotation(bool set) {
 
 /*********************************************************************
 **  Function: setBrightnessMenu
-**  Handles Menu to set brightness
+**  Handles Menu to set brightness (live-preview slider; drag on touch
+**  boards, Next/Prev to step by 5%, Sel to apply, Esc to cancel)
 **********************************************************************/
 void setBrightnessMenu() {
-    int idx = 0;
-    if (bruceConfig.bright == 100) idx = 0;
-    else if (bruceConfig.bright == 75) idx = 1;
-    else if (bruceConfig.bright == 50) idx = 2;
-    else if (bruceConfig.bright == 25) idx = 3;
-    else if (bruceConfig.bright == 1) idx = 4;
+    returnToMenu = false;
 
-    options = {
-        {"100%",
-         [=]() { setBrightness((uint8_t)100); },
-         bruceConfig.bright == 100,
-         [](void *pointer, bool shouldRender) {
-             setBrightness((uint8_t)100, false);
-             return false;
-         }},
-        {"75 %",
-         [=]() { setBrightness((uint8_t)75); },
-         bruceConfig.bright == 75,
-         [](void *pointer, bool shouldRender) {
-             setBrightness((uint8_t)75, false);
-             return false;
-         }},
-        {"50 %",
-         [=]() { setBrightness((uint8_t)50); },
-         bruceConfig.bright == 50,
-         [](void *pointer, bool shouldRender) {
-             setBrightness((uint8_t)50, false);
-             return false;
-         }},
-        {"25 %",
-         [=]() { setBrightness((uint8_t)25); },
-         bruceConfig.bright == 25,
-         [](void *pointer, bool shouldRender) {
-             setBrightness((uint8_t)25, false);
-             return false;
-         }},
-        {" 1 %",
-         [=]() { setBrightness((uint8_t)1); },
-         bruceConfig.bright == 1,
-         [](void *pointer, bool shouldRender) {
-             setBrightness((uint8_t)1, false);
-             return false;
-         }}
-    };
-    addOptionToMainMenu(); // this one bugs the brightness selection
-    loopOptions(options, MENU_TYPE_REGULAR, "", idx);
-    setBrightness(bruceConfig.bright, false);
+    int original = bruceConfig.bright;
+    int val = (bruceConfig.bright / 5) * 5;
+    if (val > 100) val = 100;
+    if (val < 0) val = 0;
+
+    const int lineHeight = FM * LH;
+    const int hintHeight = FP * LH;
+    const int sliderH = 12;
+    const int radius = sliderH / 2;
+    const int spacing = 8;
+    const int paddingTop = 8;
+    const int paddingBottom = 8;
+    const int paddingSide = 12;
+
+    int contentWidth = static_cast<int>(tftWidth * 0.8f);
+    int contentHeight = paddingTop + lineHeight + spacing + sliderH + spacing + hintHeight + paddingBottom;
+    int boxX = (tftWidth - contentWidth) / 2;
+    int boxY = (tftHeight - contentHeight) / 2;
+
+    int trackX = boxX + paddingSide;
+    int trackW = contentWidth - 2 * paddingSide;
+    int trackY = boxY + paddingTop + lineHeight + spacing;
+
+    bool redraw = true;
+    bool first_draw = true;
+    while (1) {
+        if (redraw) {
+            if (first_draw) {
+                tft.fillRoundRect(boxX, boxY, contentWidth, contentHeight, 5, bruceConfig.bgColor);
+                tft.drawRoundRect(boxX, boxY, contentWidth, contentHeight, 5, bruceConfig.priColor);
+                first_draw = false;
+            }
+            tft.setTextSize(FM);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            tft.drawCentreString(
+                " Bright: " + String(val) + "% ", boxX + contentWidth / 2, boxY + paddingTop, 1
+            );
+
+            int indicatorX = trackX + (trackW * val) / 100;
+            tft.fillRect(trackX, trackY - 3, trackW, 3, bruceConfig.bgColor);
+            tft.fillRect(trackX, trackY + sliderH, trackW, 3, bruceConfig.bgColor);
+            tft.fillRect(trackX - radius - 2, trackY - 4, radius * 2, sliderH + 8, bruceConfig.bgColor);
+            tft.fillRect(
+                trackX + trackW - radius + 2, trackY - 4, radius * 2, sliderH + 8, bruceConfig.bgColor
+            );
+            tft.drawRoundRect(trackX, trackY, trackW, sliderH, radius, bruceConfig.secColor);
+            int fillW = indicatorX - trackX;
+
+            tft.fillRoundRect(trackX, trackY, fillW, sliderH, radius, bruceConfig.secColor);
+            tft.fillRoundRect(
+                trackX + fillW, trackY + 1, trackW - fillW, sliderH - 2, radius, bruceConfig.bgColor
+            );
+
+            tft.fillCircle(indicatorX, trackY + sliderH / 2, radius + 2, bruceConfig.priColor);
+
+            tft.setTextSize(FP);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            tft.drawCentreString("Sel to apply", boxX + contentWidth / 2, trackY + sliderH + spacing, 1);
+
+            setBrightness(val, false);
+            redraw = false;
+        }
+
+#if defined(HAS_TOUCH)
+        if (touchPoint.pressed) {
+            const int touchX = touchPoint.x;
+            const int touchY = touchPoint.y;
+            touchPoint.Clear();
+
+            const int touchPadding = 10;
+            if (touchX >= boxX && touchX <= boxX + contentWidth && touchY >= trackY - touchPadding &&
+                touchY <= trackY + sliderH + touchPadding) {
+                int clampedX = touchX;
+                if (clampedX < trackX) clampedX = trackX;
+                if (clampedX > trackX + trackW) clampedX = trackX + trackW;
+                int newVal = ((clampedX - trackX) * 100 + trackW / 2) / trackW;
+                newVal = (newVal / 5) * 5;
+                if (newVal > 100) newVal = 100;
+                if (newVal < 0) newVal = 0;
+                if (newVal != val) {
+                    val = newVal;
+                    redraw = true;
+                }
+            }
+        }
+#endif
+
+        if (check(NextPress)) {
+            val += 5;
+            if (val > 100) val = 100;
+            redraw = true;
+        }
+        if (check(PrevPress)) {
+            val -= 5;
+            if (val < 0) val = 0;
+            redraw = true;
+        }
+        if (check(SelPress)) {
+            setBrightness(val);
+            break;
+        }
+        if (check(EscPress) || returnToMenu) {
+            setBrightness(original, false);
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    tft.fillScreen(bruceConfig.bgColor);
 }
 
 /*********************************************************************

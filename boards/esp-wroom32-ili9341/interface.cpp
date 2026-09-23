@@ -1,4 +1,5 @@
 #include "core/powerSave.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include <driver/gpio.h>
@@ -9,7 +10,6 @@
 #define BTN_ACT LOW
 #define DW_BTN 26
 #define L_BTN 33
-#define MINBRIGHT 160
 #define R_BTN 27
 #define UP_BTN 34
 
@@ -73,8 +73,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // Backlight PWM
-    pinMode(TFT_BL, OUTPUT);
-    analogWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
@@ -82,14 +82,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

@@ -1,15 +1,12 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <Wire.h>
 #include <XPowersLib.h>
 #include <interface.h>
-
-#define BACKLIGHT -1
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 1000
 
 XPowersAXP2101 axp192;
 
@@ -162,10 +159,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     if (!hal_touch_init(touchCfg(), 0)) { Serial.println("Touch IC not Started"); }
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -183,18 +178,7 @@ int getBattery() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 255;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 0;
-    else dutyCycle = ((brightval * 255) / 100);
-
-    // log_i("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BL, dutyCycle);
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

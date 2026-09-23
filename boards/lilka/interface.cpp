@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
@@ -13,7 +14,6 @@
 #define DW_BTN 41
 #define ESC_BTN 6
 #define L_BTN 39
-#define MINBRIGHT 1
 #define R_BTN 40
 #define UP_BTN 38
 
@@ -71,6 +71,11 @@ void _setup_gpio() {
 
     // Default I2C bus (extension header)
     Wire.setPins(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
+
+    // TFT_BL = GPIO46 is the display power/SLEEP line, so PWM acts mostly as
+    // on/off rather than smooth dimming.
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -80,17 +85,8 @@ bool isCharging() { return false; }
 
 /*********************************************************************
 ** Function: _setBrightness  — display backlight / power (TFT_BL = GPIO46)
-**   Note: on Lilka GPIO46 is the display power/SLEEP line, so PWM acts
-**   mostly as on/off rather than smooth dimming.
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
@@ -102,7 +98,7 @@ void InputHandler(void) { hal_buttons_poll_6(buttonsCfg()); }
 ** Function: powerOff  — deep sleep, wake on Select (GPIO0)
 **********************************************************************/
 void powerOff() {
-    analogWrite(TFT_BL, 0); // backlight/display off
+    hal_bright_set(TFT_BL, 0); // backlight/display off
     esp_sleep_enable_ext0_wakeup((gpio_num_t)DEEPSLEEP_WAKEUP_PIN, DEEPSLEEP_PIN_ACT);
     esp_deep_sleep_start();
 }

@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
@@ -10,7 +11,6 @@
 
 #define BTN_ACT LOW
 #define DW_BTN 39
-#define MINBRIGHT 1
 #define UP_BTN 38
 
 // LEFT (UP_BTN) -> Previous, RIGHT (DW_BTN) -> Next, CENTER (SEL_BTN) -> Select
@@ -54,6 +54,9 @@ void _setup_gpio() {
 
     hal_buttons_init(buttonsCfg(), 3);
 
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
+
     Serial.begin(115200);
 }
 
@@ -61,14 +64,7 @@ void _setup_gpio() {
 **  Function: setBrightness
 **  set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

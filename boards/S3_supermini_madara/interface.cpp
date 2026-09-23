@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
@@ -6,7 +7,6 @@
 #define SEL_BTN 1
 
 #define DW_BTN 2
-#define MINBRIGHT 1
 #define UP_BTN 3
 
 static DeviceButtons buttonsCfg() { return DeviceButtons{UP_BTN, DW_BTN, SEL_BTN}; }
@@ -45,8 +45,8 @@ void _setup_gpio() {
     digitalWrite(TFT_MOSI, HIGH);
     pinMode(TFT_SCLK, OUTPUT);
 
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
     pinMode(TFT_RST, OUTPUT);
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
@@ -72,14 +72,7 @@ int getBattery() { return 0; }
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

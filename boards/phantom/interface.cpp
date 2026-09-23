@@ -1,13 +1,11 @@
 #include "CYD28_TouchscreenR.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include <Arduino.h>
 #include <interface.h>
-
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 5000
 
 #define XPT2046_CS CYD28_TouchR_CS
 extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
@@ -77,16 +75,9 @@ void _post_setup_gpio() {
     if (!hal_touch_init(touchCfg(), 0, true))
         Serial.println("Touch IC not Started"); // shares the display SPI bus
     else Serial.println("Touch IC Started");
-    // uint16_t calData[5];
-    // bruceConfigPins.rotation = 0;
-    // tft.setRotation(0);
-    // tft.calibrateTouch(calData, TFT_WHITE, TFT_BLACK, 10);
-    // Serial.printf("%d\n%d\n%d\n%d\n%d\n", calData[0], calData[1], calData[2], calData[3], calData[4]);
-    // tft.setTouch(calData);
     // Brightness control must be initialized after tft in this case @Pirata
-    pinMode(TFT_BL, OUTPUT);
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
@@ -94,18 +85,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 255;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 0;
-    else dutyCycle = ((brightval * 255) / 100);
-
-    // log_i("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BL, dutyCycle);
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

@@ -5,6 +5,7 @@
 #include <interface.h>
 
 // Rotary encoder
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/encoder.h"
 
@@ -23,7 +24,6 @@
 
 #define BK_BTN 6
 #define BTN_ACT LOW
-#define MINBRIGHT 1
 static DeviceEncoder encoderCfg() {
     DeviceEncoder cfg;
     cfg.pin_a = ENCODER_INA;
@@ -180,22 +180,16 @@ void _setup_gpio() {
 #endif
 
     hal_encoder_init(encoderCfg());
+
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
 **  Function: setBrightness
 **  set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else if (brightval > 99) {
-        analogWrite(TFT_BL, 254);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
@@ -10,9 +11,6 @@
 
 #define BTN_ACT LOW
 #define DW_BTN 12
-
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 5000
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -84,7 +82,6 @@ void _setup_gpio() {
     pinMode(46, OUTPUT);
     digitalWrite(46, LOW); // Infrared LED Off
 
-    pinMode(TFT_BL, OUTPUT);
     bruceConfig.colorInverted = 0;
 }
 /***************************************************************************************
@@ -94,8 +91,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // PWM backlight setup
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 250);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
@@ -103,25 +100,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 250;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 5;
-    else dutyCycle = ((brightval * 250) / 100);
-
-    // Serial.printf("dutyCycle for bright 0-255: %d\n", dutyCycle);
-
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-    if (!ledcWrite(TFT_BL, dutyCycle)) {
-        // Serial.println("Failed to set brightness");
-        ledcDetach(TFT_BL);
-        ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-        ledcWrite(TFT_BL, dutyCycle);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /***************************************************************************************
 ** Function name: getBattery()

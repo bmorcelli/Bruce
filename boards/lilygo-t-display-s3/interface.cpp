@@ -1,6 +1,7 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "hal/inputs/touch.h"
@@ -11,7 +12,6 @@
 
 #define BTN_ACT LOW
 #define DW_BTN 14
-#define MINBRIGHT 1
 #define UP_BTN 0
 
 #ifdef USE_SD_MMC
@@ -157,6 +157,8 @@ void _setup_gpio() {
     pinMode(PIN_POWER_ON, OUTPUT);
     digitalWrite(PIN_POWER_ON, HIGH);
 
+    hal_bright_attach(TFT_BL);
+
     // Start with default IR, RF and RFID Configs, replace old
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = PN532_I2C_MODULE;
@@ -168,14 +170,7 @@ void _setup_gpio() {
 **  Function: setBrightness
 **  set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

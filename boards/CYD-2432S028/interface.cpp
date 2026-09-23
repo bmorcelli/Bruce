@@ -1,12 +1,11 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include <Arduino.h>
 #include <interface.h>
 
 #define GT911_SLAVE_ADDRESS_L 0x5D
-#define TFT_BRIGHT_Bits 8
-#define TFT_BRIGHT_FREQ 5000
 
 #if defined(HAS_CAPACITIVE_TOUCH)
 #include "hal/device.h"
@@ -159,9 +158,8 @@ void _post_setup_gpio() {
 #endif
 
     // Brightness control must be initialized after tft in this case @Pirata
-    pinMode(TFT_BL, OUTPUT);
-    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
-    ledcWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 
     // Force sync color inversion to prevent bruceConf.json from overriding
     // the value set in _setup_gpio(). For CYD variants with TFT_INVERSION_ON,
@@ -201,18 +199,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    int dutyCycle;
-    if (brightval == 100) dutyCycle = 255;
-    else if (brightval == 75) dutyCycle = 130;
-    else if (brightval == 50) dutyCycle = 70;
-    else if (brightval == 25) dutyCycle = 20;
-    else if (brightval == 0) dutyCycle = 0;
-    else dutyCycle = ((brightval * 255) / 100);
-
-    // log_i("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BL, dutyCycle);
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

@@ -1,3 +1,4 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/bus_HAL.h"
@@ -5,7 +6,6 @@
 #include <globals.h>
 #include <interface.h>
 
-#include <Wire.h>
 // Power handler for battery detection
 #include "core/i2c_finder.h"
 #include <Wire.h>
@@ -16,7 +16,6 @@
 #define DW_BTN 40
 #define ESC_BTN 21
 #define L_BTN 39
-#define MINBRIGHT 1
 #define R_BTN 38
 #define UP_BTN 41
 
@@ -85,6 +84,9 @@ void _setup_gpio() {
     pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
     digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
 
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
+
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
     bruceConfigPins.rfidModule = ST25R3916_SPI_MODULE;
 
@@ -131,14 +133,7 @@ bool isCharging() { return false; }
 ** set brightness value
 **********************************************************************/
 
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

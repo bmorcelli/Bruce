@@ -1,5 +1,6 @@
 #include "core/bus_HAL.h"
 #include "core/powerSave.h"
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/buttons.h"
 
@@ -7,7 +8,6 @@
 #define BTN_ACT LOW
 #define DW_BTN 40
 #define L_BTN 39
-#define MINBRIGHT 1
 #define R_BTN 38
 #define UP_BTN 41
 
@@ -67,6 +67,9 @@ void _setup_gpio() {
     pmicCfg.pin_scl = bruceConfigPins.sys_i2c.scl;
     pmicCfg.address = 0x6B; // BQ25896
     hal_pmic_init(pmicCfg);
+
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 bool isCharging() {
     // PPM.disableBatterPowerPath();
@@ -95,14 +98,7 @@ int getBattery() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler

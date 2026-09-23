@@ -1,13 +1,11 @@
+#include "hal/bright/bright.h"
 #include "hal/device.h"
 #include "hal/inputs/touch.h"
 #include "CYD28_TouchscreenR.h"
-#include "hal/device.h"
 #include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <interface.h>
-
-#define MINBRIGHT 1
 
 #ifdef HAS_3_BUTTONS
 #define UP_BTN 0
@@ -77,8 +75,8 @@ void _setup_gpio() {
     digitalWrite(TFT_MOSI, HIGH);
     pinMode(TFT_SCLK, OUTPUT);
 
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
     pinMode(TFT_RST, OUTPUT);
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
@@ -134,12 +132,7 @@ bool isCharging() { return false; }
 ** set brightness value
 **********************************************************************/
 void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
+    hal_bright_set(TFT_BL, brightval);
 }
 
 /*********************************************************************

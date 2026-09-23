@@ -1,12 +1,12 @@
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
 #include <Adafruit_TCA8418.h>
 #include <Keyboard.h>
 #include <Wire.h>
 #include <interface.h>
 
 #define CAP_CC1101_GDO0_PIN 15
-#define MINBRIGHT 160
 #define TCA8418_I2C_ADDR 0x34
 #define TCA8418_SCL_PIN 9
 #define TCA8418_SDA_PIN 8
@@ -133,6 +133,9 @@ void _setup_gpio() {
     pinMode(5, OUTPUT);
     // Set GPIO5 HIGH for SD card compatibility (thx for the tip @bmorcelli & 7h30th3r0n3)
     digitalWrite(5, HIGH);
+
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 volatile bool kb_interrupt = false;
 void IRAM_ATTR gpio_isr_handler(void *arg) {
@@ -210,14 +213,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
