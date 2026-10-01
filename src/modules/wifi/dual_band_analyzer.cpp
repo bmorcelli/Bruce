@@ -1,7 +1,6 @@
-#if !defined(LITE_VERSION) && defined(CONFIG_IDF_TARGET_ESP32C5)
-
 #include "dual_band_analyzer.h"
 
+#if !defined(LITE_VERSION) && defined(CONFIG_IDF_TARGET_ESP32C5)
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/wifi/webInterface.h"
