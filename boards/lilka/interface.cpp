@@ -33,7 +33,7 @@ void _setup_gpio() {
     bruceConfigPins.rfTx = 13;
     bruceConfigPins.rfRx = 14;
     bruceConfigPins.irTx = 21;
-    bruceConfigPins.irRx = 21;
+    bruceConfigPins.irRx = 14;
     bruceConfigPins.rotation = 3;
     bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
     bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};     // rx, tx
