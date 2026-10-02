@@ -1,11 +1,30 @@
 #include "CYD28_TouchscreenR.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
+#include "hal/bright/bright.h"
+#include "hal/device.h"
+#include "hal/inputs/touch.h"
 #include <interface.h>
 
-#define CYD28_DISPLAY_HOR_RES_MAX 320
-#define CYD28_DISPLAY_VER_RES_MAX 240
-CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
+#define BTN_ACT LOW
+#define BTN_PIN 0
+
+extern CYD28_TouchR touch; // defined by hal/inputs/touch.cpp
+
+static DeviceTouch touchCfg() {
+    DeviceTouch cfg;
+    // The XPT2046 reports landscape (rotation 1) coordinates
+    // rotation:        0      1      2      3
+    const bool swapXY[4] = {true, false, true, false};
+    const bool mirrorX[4] = {true, false, false, true};
+    const bool mirrorY[4] = {false, false, true, true};
+    for (int i = 0; i < 4; i++) {
+        cfg.SwapXY[i] = swapXY[i];
+        cfg.MirrorX[i] = mirrorX[i];
+        cfg.MirrorY[i] = mirrorY[i];
+    }
+    return cfg;
+}
 
 /***************************************************************************************
 ** Function name: _setup_gpio()
@@ -13,6 +32,27 @@ CYD28_TouchR touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.irTx = 40;
+    bruceConfigPins.i2c_bus = {(gpio_num_t)8, (gpio_num_t)9}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 8;
+    bruceConfigPins.rfRx = 9;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43}; // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)9, (gpio_num_t)8}; // rx, tx (Grove, shares I2C pins)
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
+    // No dedicated PN532 pins on this board; PN532_bus shares the same slot as outer_bus
+    bruceConfigPins.PN532_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)10, (gpio_num_t)9
+    }; // sck,miso,mosi,cs,gdo0
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)14, (gpio_num_t)16
+    }; // sck,miso,mosi,cs(ss),ce
+    // No SD card by default on this variant
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)11, (gpio_num_t)4};
+
     // Keep XPT2046 CS high until needed
     pinMode(XPT2046_SPI_CONFIG_CS_GPIO_NUM, OUTPUT);
     digitalWrite(XPT2046_SPI_CONFIG_CS_GPIO_NUM, HIGH);
@@ -27,16 +67,16 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // Initialize XPT2046 touch using hardware SPI (shares bus with display)
-    if (!touch.begin(&tft.getSPIinstance())) {
+    // Initialize XPT2046 touch using hardware SPI (shares bus with display)
+    if (!hal_touch_init(touchCfg(), 0, TFT_MOSI == CYD28_TouchR_MOSI)) {
         Serial.println("[TOUCH] XPT2046 not started");
     } else {
         Serial.println("[TOUCH] XPT2046 started OK");
     }
-    touch.setRotation(ROTATION);
 
     // Backlight on
-    pinMode(TFT_BL, OUTPUT);
-    analogWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -57,13 +97,7 @@ bool isCharging() { return false; }
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, brightval);
-    } else {
-        analogWrite(TFT_BL, brightval);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
@@ -72,38 +106,13 @@ void _setBrightness(uint8_t brightval) {
 void InputHandler(void) {
     static long d_tmp = 0;
     if (millis() - d_tmp > 200 || LongPress) {
-        if (touch.touched()) {
-            auto t = touch.getPointScaled();
-
-            // Coordinate transform based on rotation
-            if (bruceConfigPins.rotation == 3) {
-                t.y = (tftHeight + 20) - t.y;
-                t.x = tftWidth - t.x;
-            }
-            if (bruceConfigPins.rotation == 0) {
-                int tmp = t.x;
-                t.x = tftWidth - t.y;
-                t.y = tmp;
-            }
-            if (bruceConfigPins.rotation == 2) {
-                int tmp = t.x;
-                t.x = t.y;
-                t.y = (tftHeight + 20) - tmp;
-            }
-
-            if (!wakeUpScreen()) AnyKeyPress = true;
-            else goto END;
-
-            touchPoint.x = t.x;
-            touchPoint.y = t.y;
-            touchPoint.pressed = true;
-            touchHeatMap(touchPoint);
-        END:
+        BruceTouchPoint t;
+        if (hal_touch_read(touchCfg(), t)) {
             d_tmp = millis();
+            hal_touch_apply(t);
         }
     }
 
-#ifdef HAS_BTN
     checkPowerSaveTime();
     if (digitalRead(BTN_PIN) == BTN_ACT) {
         if (!wakeUpScreen()) AnyKeyPress = true;
@@ -111,7 +120,6 @@ void InputHandler(void) {
         long tmp = millis();
         while ((millis() - tmp) < 200 && digitalRead(BTN_PIN) == BTN_ACT);
     }
-#endif
 }
 
 /*********************************************************************

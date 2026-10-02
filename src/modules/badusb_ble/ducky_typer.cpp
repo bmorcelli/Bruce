@@ -706,7 +706,9 @@ void ducky_startKb(HIDInterface *&hid, bool ble, int functionId) {
 
             printStatusBadUSBBLE("USB Host Connected");
 #else
-            mySerial.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, BAD_RX, BAD_TX);
+            mySerial.begin(
+                CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, bruceConfigPins.badusb_bus.rx, bruceConfigPins.badusb_bus.tx
+            );
             delay(100);
             hid = new CH9329_Keyboard_();
 #endif
@@ -735,7 +737,9 @@ void ducky_startKb(HIDInterface *&hid, bool ble, int functionId) {
         hid->begin(layout);
         hid->setDelay(bruceConfig.badUSBBLEKeyDelay);
 #else
-        mySerial.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, BAD_RX, BAD_TX);
+        mySerial.begin(
+            CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, bruceConfigPins.badusb_bus.rx, bruceConfigPins.badusb_bus.tx
+        );
         delay(100);
         const uint8_t *layout =
             (const uint8_t *)pgm_read_ptr(&keyboardLayouts[bruceConfig.badUSBBLEKeyboardLayout]);

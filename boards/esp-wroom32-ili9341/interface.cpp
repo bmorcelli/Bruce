@@ -1,6 +1,20 @@
 #include "core/powerSave.h"
+#include "hal/bright/bright.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include <driver/gpio.h>
 #include <interface.h>
+
+#define SEL_BTN 35
+
+#define BTN_ACT LOW
+#define DW_BTN 26
+#define L_BTN 33
+#define R_BTN 27
+#define UP_BTN 34
+
+// GPIO 34/35 are input-only (no internal pull-up) -- external pull-ups are present on this board.
+static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN}; }
 
 // Deselect NRF24/CC1101 before any Arduino/TFT init runs (runs before setup())
 static void __attribute__((constructor)) _early_spi_deselect() {
@@ -19,21 +33,37 @@ static void __attribute__((constructor)) _early_spi_deselect() {
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.irTx = 2;
+    bruceConfigPins.i2c_bus = {(gpio_num_t)21, (gpio_num_t)22}; // sda, scl (Grove)
+    bruceConfigPins.rfTx = 21;
+    bruceConfigPins.rfRx = 22;
+    bruceConfigPins.uart_bus = {(gpio_num_t)3, (gpio_num_t)1};   // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)3, (gpio_num_t)1};    // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)3, (gpio_num_t)1}; // rx, tx
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15};
+    // No dedicated PN532 pins on this board; PN532_bus shares the same slot as outer_bus
+    bruceConfigPins.PN532_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15};
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15, (gpio_num_t)2
+    }; // sck,miso,mosi,cs,gdo0
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)15, (gpio_num_t)4
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)19, (gpio_num_t)23, (gpio_num_t)12};
+
     // 5-way tactile switch — GPIO 34/35 are input-only (no pull-up on chip)
     // Ensure external pull-up resistors are present on these pins
-    pinMode(UP_BTN, INPUT);
-    pinMode(DW_BTN, INPUT_PULLUP);
-    pinMode(L_BTN, INPUT_PULLUP);
-    pinMode(R_BTN, INPUT_PULLUP);
-    pinMode(SEL_BTN, INPUT);
+    hal_buttons_init(buttonsCfg(), 5);
 
     // Deselect CC1101 and NRF24 on shared SPI bus so they don't interfere with TFT
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    digitalWrite(NRF24_SS_PIN, HIGH);
-    pinMode(NRF24_CE_PIN, OUTPUT);
-    digitalWrite(NRF24_CE_PIN, LOW);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
 }
 
 /***************************************************************************************
@@ -43,8 +73,8 @@ void _setup_gpio() {
 ***************************************************************************************/
 void _post_setup_gpio() {
     // Backlight PWM
-    pinMode(TFT_BL, OUTPUT);
-    analogWrite(TFT_BL, 255);
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /*********************************************************************
@@ -52,74 +82,14 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
 ** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
 ** On 5-way joystick: hold UP for ~400ms = EscPress (back/exit)
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    static unsigned long upHoldStart = 0;
-    static bool upEscFired = false;
-
-    // --- Hold-UP-for-Escape: runs every call, bypasses debounce ---
-    // Read UP_BTN on every task cycle (~10ms) so the hold timer
-    // accumulates correctly regardless of the 200ms debounce gate.
-    // Keep setting EscPress while held so the task can't clear it
-    // before the application loop reads it via check().
-    bool _up_raw = (digitalRead(UP_BTN) == BTN_ACT);
-    if (_up_raw) {
-        if (upHoldStart == 0) upHoldStart = millis();
-        if (millis() - upHoldStart >= 400) {
-            EscPress = true;
-            AnyKeyPress = true;
-            upEscFired = true;
-        }
-    } else {
-        upHoldStart = 0;
-        upEscFired = false;
-    }
-
-    if (millis() - tm < 200 && !LongPress) return;
-
-    bool _u = _up_raw;
-    bool _d = (digitalRead(DW_BTN) == BTN_ACT);
-    bool _l = (digitalRead(L_BTN) == BTN_ACT);
-    bool _r = (digitalRead(R_BTN) == BTN_ACT);
-    bool _s = (digitalRead(SEL_BTN) == BTN_ACT);
-
-    if (_u || _d || _l || _r || _s) {
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-
-    if (_l) { PrevPress = true; }
-    if (_r) { NextPress = true; }
-    if (_u && !upEscFired) {
-        UpPress = true;
-        PrevPagePress = true;
-    }
-    if (_d) {
-        DownPress = true;
-        NextPagePress = true;
-    }
-    if (_s) { SelPress = true; }
-    if (_l && _r) {
-        EscPress = true;
-        NextPress = false;
-        PrevPress = false;
-    }
-}
+void InputHandler(void) { hal_buttons_poll_5(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff

@@ -1,9 +1,23 @@
+#include "hal/bright/bright.h"
+#include "hal/device.h"
+#include "hal/inputs/buttons.h"
 #include "core/powerSave.h"
 #include "core/utils.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <globals.h>
 #include <interface.h>
+
+#define SEL_BTN 5
+
+#define BTN_ACT LOW
+#define DW_BTN 41
+#define ESC_BTN 6
+#define L_BTN 39
+#define R_BTN 40
+#define UP_BTN 38
+
+static DeviceButtons buttonsCfg() { return DeviceButtons{L_BTN, R_BTN, UP_BTN, DW_BTN, SEL_BTN, ESC_BTN}; }
 
 // Keep this app "unconfirmed" so it can be launched as a temporary/guest app
 // from the Lilka keira launcher (on reboot the device rolls back to keira).
@@ -14,53 +28,55 @@ extern "C" bool verifyRollbackLater() { return true; }
 ** Function: _setup_gpio()  — initial device setup (called from main.cpp)
 ***************************************************************************************/
 void _setup_gpio() {
+    bruceConfigPins.buzzer = 11;
+    bruceConfigPins.i2c_bus = {(gpio_num_t)13, (gpio_num_t)14}; // sda, scl (extension header)
+    bruceConfigPins.rfTx = 13;
+    bruceConfigPins.rfRx = 14;
+    bruceConfigPins.irTx = 21;
+    bruceConfigPins.irRx = 14;
+    bruceConfigPins.rotation = 3;
+    bruceConfigPins.uart_bus = {(gpio_num_t)44, (gpio_num_t)43};    // rx, tx
+    bruceConfigPins.gps_bus = {(gpio_num_t)44, (gpio_num_t)43};     // rx, tx
+    bruceConfigPins.badusb_bus = {(gpio_num_t)44, (gpio_num_t)43};  // rx, tx
+    // Board's default/generic SPI bus (used by drivers without their own bus, e.g. RC522-SPI)
+    bruceConfigPins.outer_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)14, (gpio_num_t)47};
+    bruceConfigPins.PN532_bus = {(gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)14, (gpio_num_t)47};
+    // CC1101/NRF24 share the extension-header module bus (sck=12, miso=13, mosi=14)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)14, (gpio_num_t)47, (gpio_num_t)21, (gpio_num_t)48
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)12, (gpio_num_t)13, (gpio_num_t)14, (gpio_num_t)47, (gpio_num_t)21
+    }; // sck,miso,mosi,cs(ss),ce
+    bruceConfigPins.SDCARD_bus = {(gpio_num_t)18, (gpio_num_t)8, (gpio_num_t)17, (gpio_num_t)16
+    }; // sck,miso,mosi,cs
+#if !defined(LITE_VERSION)
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)14, (gpio_num_t)47, (gpio_num_t)21, (gpio_num_t)13, (gpio_num_t)48, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+
     // Buttons — Lilka has NO external pull-ups (verified on schematic + working ESPHome),
     // so use INPUT_PULLUP. All buttons are active LOW (wired straight to GND).
-    pinMode(UP_BTN, INPUT_PULLUP);
-    pinMode(DW_BTN, INPUT_PULLUP);
-    pinMode(L_BTN, INPUT_PULLUP);
-    pinMode(R_BTN, INPUT_PULLUP);
-    pinMode(SEL_BTN, INPUT_PULLUP); // A
-    pinMode(ESC_BTN, INPUT_PULLUP); // B
+    hal_buttons_init(buttonsCfg(), 6);
 
     // Keep radio module chip-selects idle (HIGH) at boot so they don't talk on the bus.
     // CC1101 and NRF24 share SS = 47 on Lilka.
-    pinMode(CC1101_SS_PIN, OUTPUT);
-    digitalWrite(CC1101_SS_PIN, HIGH);
-    pinMode(NRF24_SS_PIN, OUTPUT);
-    digitalWrite(NRF24_SS_PIN, HIGH);
+    pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
 
     // Default external modules
     bruceConfigPins.rfModule = CC1101_SPI_MODULE;
-    bruceConfigPins.irRx = RXLED;
 
     // Default I2C bus (extension header)
-    Wire.setPins(GROVE_SDA, GROVE_SCL);
-}
+    Wire.setPins(bruceConfigPins.i2c_bus.sda, bruceConfigPins.i2c_bus.scl);
 
-/***************************************************************************************
-** Function: getBattery()  — battery percentage via ADC (no PMIC on Lilka)
-**   GPIO3 (ADC1_CH2). Divider ratio 1.33 and 3.0-4.2V range taken from the
-**   working Lilka ESPHome config (multiply: 1.33, attenuation 12db).
-***************************************************************************************/
-int getBattery() {
-    static bool adcInit = false;
-    if (!adcInit) {
-        pinMode(ANALOG_BAT_PIN, INPUT);
-        analogSetAttenuation(ADC_11db); // full 0..3.3V range (ESPHome 12db ~ Arduino 11db)
-        adcInit = true;
-    }
-
-    uint32_t mv = analogReadMilliVolts(ANALOG_BAT_PIN);
-    float voltage = (float)mv * 1.33f; // Lilka divider ratio (from working ESPHome, NOT x2)
-
-    const float MIN_VOLTAGE = 3000.0f; // 3.0V ~0%  (LiPo)
-    const float MAX_VOLTAGE = 4200.0f; // 4.2V ~100%
-
-    int percent = (int)(((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100.0f);
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-    return percent;
+    // TFT_BL = GPIO46 is the display power/SLEEP line, so PWM acts mostly as
+    // on/off rather than smooth dimming.
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100);
 }
 
 /***************************************************************************************
@@ -70,58 +86,20 @@ bool isCharging() { return false; }
 
 /*********************************************************************
 ** Function: _setBrightness  — display backlight / power (TFT_BL = GPIO46)
-**   Note: on Lilka GPIO46 is the display power/SLEEP line, so PWM acts
-**   mostly as on/off rather than smooth dimming.
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
-    if (brightval == 0) {
-        analogWrite(TFT_BL, 0);
-    } else {
-        int bl = MINBRIGHT + round(((255 - MINBRIGHT) * brightval / 100));
-        analogWrite(TFT_BL, bl);
-    }
-}
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
 
 /*********************************************************************
 ** Function: InputHandler
 ** Sets PrevPress / NextPress / UpPress / DownPress / SelPress / EscPress
 **********************************************************************/
-void InputHandler(void) {
-    static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
-
-    bool _u = digitalRead(UP_BTN);
-    bool _d = digitalRead(DW_BTN);
-    bool _l = digitalRead(L_BTN);
-    bool _r = digitalRead(R_BTN);
-    bool _s = digitalRead(SEL_BTN); // A
-    bool _e = digitalRead(ESC_BTN); // B
-
-    if (!_u || !_d || !_l || !_r || !_s || !_e) {
-        tm = millis();
-        if (!wakeUpScreen()) AnyKeyPress = true;
-        else return;
-    }
-
-    if (!_l) { PrevPress = true; }
-    if (!_r) { NextPress = true; }
-    if (!_u) {
-        UpPress = true;
-        PrevPagePress = true;
-    }
-    if (!_d) {
-        DownPress = true;
-        NextPagePress = true;
-    }
-    if (!_s) { SelPress = true; }
-    if (!_e) { EscPress = true; }
-}
+void InputHandler(void) { hal_buttons_poll_6(buttonsCfg()); }
 
 /*********************************************************************
 ** Function: powerOff  — deep sleep, wake on Select (GPIO0)
 **********************************************************************/
 void powerOff() {
-    analogWrite(TFT_BL, 0); // backlight/display off
+    hal_bright_set(TFT_BL, 0); // backlight/display off
     esp_sleep_enable_ext0_wakeup((gpio_num_t)DEEPSLEEP_WAKEUP_PIN, DEEPSLEEP_PIN_ACT);
     esp_deep_sleep_start();
 }
