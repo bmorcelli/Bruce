@@ -35,6 +35,7 @@ jobs:
       matrix:
         board:
           - { env: "arduino-nesso-n1",                family: "ESP32-C6",}
+          - { env: "m5stack-atoms3",                  family: "ESP32-S3",}
           - { env: "m5stack-cardputer",               family: "ESP32-S3",}
           - { env: "m5stack-sticks3",                 family: "ESP32-S3",}
           - { env: "m5stack-cplus2",                  family: "ESP32",}
