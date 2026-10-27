@@ -86,6 +86,7 @@ on:
           - "m5stack-cplus1_1"
           - "m5stack-cplus2"
           - "m5stack-dinmeter"
+          - "m5stack-stackchan"
           - "m5stack-sticks3"
           - "m5stack-tab5"
           - "Mako"

@@ -210,6 +210,7 @@ When in doubt, copy from a board that already does the same thing:
 | Resistive touch (XPT2046) on the display SPI | `boards/phantom` |
 | Capacitive touch (GT911) | `boards/lilygo-t-deck` |
 | Capacitive touch (CST8xx) | `boards/lilygo-t-display-s3` (`-touch` env) |
+| I2C device behind a dedicated bus preset (ST25R3916 on sys_i2c) | `boards/m5stack-stackchan` |
 | Physical keyboard | `boards/m5stack-cardputer`, `boards/lilygo-t-lora-pager` |
 | Several envs from one folder | `boards/lilygo-t-display-s3`, `boards/lilygo-t-embed-cc1101` |
 | A fully worked, heavily commented `.ini` | `boards/ESP-General/ESP-General.ini` |
