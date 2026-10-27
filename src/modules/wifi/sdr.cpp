@@ -594,6 +594,11 @@ static String freq_label() {
     return "CH" + String(s_ch) + " " + String(s_freq_mhz) + " MHz";
 }
 
+// Compact variant for menu rows.
+static String freq_short() {
+    return s_custom ? String(s_pending_mhz) + "M" : "CH" + String(s_ch);
+}
+
 static uint32_t run_start_freq(void) {
     return s_custom ? s_pending_mhz : J_CH_FREQ[s_ch - 1];
 }
@@ -636,7 +641,7 @@ static uint8_t pick_channel(void) {
     int sel = -1;
     for (uint8_t c = 1; c <= 14; c++) {
         uint8_t ch = c;
-        opts.push_back({"CH " + String(ch) + "  (" + String(J_CH_FREQ[ch - 1]) + " MHz)",
+        opts.push_back({"CH " + String(ch),
                         [&sel, ch]() { sel = ch; }});
     }
     loopOptions(opts, MENU_TYPE_SUBMENU, "Channel");
@@ -996,20 +1001,20 @@ static void run_iq_play(File &f) {
 // ---------------------------------------------------------------------------
 static void pick_tx_power(void) {
     std::vector<Option> opts;
-    opts.push_back({"Max   (+19.5 dBm)", [&]() { s_tx_power_qdbm = 78; }});
-    opts.push_back({"High  (+17 dBm)", [&]() { s_tx_power_qdbm = 68; }});
-    opts.push_back({"Med   (+13 dBm)", [&]() { s_tx_power_qdbm = 52; }});
-    opts.push_back({"Low   (+10 dBm)", [&]() { s_tx_power_qdbm = 40; }});
-    opts.push_back({"Min   (+4 dBm)", [&]() { s_tx_power_qdbm = 16; }});
+    opts.push_back({"+19.5 dBm", [&]() { s_tx_power_qdbm = 78; }});
+    opts.push_back({"+17 dBm", [&]() { s_tx_power_qdbm = 68; }});
+    opts.push_back({"+13 dBm", [&]() { s_tx_power_qdbm = 52; }});
+    opts.push_back({"+10 dBm", [&]() { s_tx_power_qdbm = 40; }});
+    opts.push_back({"+4 dBm", [&]() { s_tx_power_qdbm = 16; }});
     loopOptions(opts, MENU_TYPE_SUBMENU, "TX Power");
     opts.clear();
 }
 
 static void pick_rate(void) {
     std::vector<Option> opts;
-    opts.push_back({"80 MS/s (widest, noisiest)", [&]() { s_rate = RATE_80M; }});
+    opts.push_back({"80 MS/s", [&]() { s_rate = RATE_80M; }});
     opts.push_back({"40 MS/s", [&]() { s_rate = RATE_40M; }});
-    opts.push_back({"16 MS/s (spectrum only)", [&]() { s_rate = RATE_16M; }});
+    opts.push_back({"16 MS/s", [&]() { s_rate = RATE_16M; }});
     loopOptions(opts, MENU_TYPE_SUBMENU, "Sample rate");
     opts.clear();
 }
@@ -1017,14 +1022,14 @@ static void pick_rate(void) {
 static void pick_rx_gain(void) {
     uint32_t gmax = rx_gain_max();
     std::vector<Option> opts;
-    opts.push_back({"Auto (AGC)", [&]() { s_rx_gain = -1; }});
+    opts.push_back({"Auto", [&]() { s_rx_gain = -1; }});
     const uint32_t steps[] = {24, 40, 56, 72};
     for (uint32_t g : steps) {
         if (g >= gmax) break;
         uint32_t idx = g;
         opts.push_back({String(idx), [&]() { s_rx_gain = (int)idx; }});
     }
-    opts.push_back({"Max (" + String(gmax) + ")", [&]() { s_rx_gain = (int)gmax; }});
+    opts.push_back({"Max " + String(gmax), [&]() { s_rx_gain = (int)gmax; }});
     if (s_rx_gain > (int)gmax) s_rx_gain = (int)gmax;
     loopOptions(opts, MENU_TYPE_SUBMENU, "RX Gain");
     opts.clear();
@@ -1036,7 +1041,7 @@ static void pick_rx_gain(void) {
 // from the radio after the takeover.
 static void pick_frequency(void) {
     std::vector<Option> opts;
-    opts.push_back({"WiFi channel (2.4 GHz)", [&]() {
+    opts.push_back({"WiFi channel", [&]() {
                         s_custom = false;
                         s_ch = pick_channel();
                     }});
@@ -1085,16 +1090,16 @@ void sdr_menu() {
                             if (!s_custom) s_ch = pick_channel();
                             run_jammer(run_noise_jam);
                         }});
-        opts.push_back({"CW Tone Jam", [&]() {
+        opts.push_back({"Tone Jam", [&]() {
                             if (!s_custom) s_ch = pick_channel();
                             run_jammer(run_tone_jam);
                         }});
-        opts.push_back({"Sweep Jam (ch 1-14)", [&]() { run_jammer(run_sweep_jam); }});
-        opts.push_back({"IQ Spectrum", [&]() {
+        opts.push_back({"Sweep Jam", [&]() { run_jammer(run_sweep_jam); }});
+        opts.push_back({"Spectrum", [&]() {
                             if (!s_custom) s_ch = pick_channel();
                             run_jammer(run_iq_spectrum);
                         }});
-        opts.push_back({"IQ Record -> SD", [&]() {
+        opts.push_back({"Record IQ", [&]() {
                             if (!setupSdCard()) {
                                 displayError("No SD card", true);
                                 return;
@@ -1102,7 +1107,7 @@ void sdr_menu() {
                             if (!s_custom) s_ch = pick_channel();
                             run_jammer(run_iq_record);
                         }});
-        opts.push_back({"Play IQ (SD)", [&]() {
+        opts.push_back({"Play IQ", [&]() {
                             if (!setupSdCard()) {
                                 displayError("No SD card", true);
                                 return;
@@ -1117,10 +1122,10 @@ void sdr_menu() {
                             run_jammer([&f]() { run_iq_play(f); });
                             f.close();
                         }});
-        opts.push_back({"Frequency: " + freq_label(), pick_frequency});
+        opts.push_back({"Freq: " + freq_short(), pick_frequency});
         opts.push_back({"TX Power", pick_tx_power});
-        opts.push_back({"RX Gain: " + String(s_rx_gain < 0 ? "Auto" : String(s_rx_gain)), pick_rx_gain});
-        opts.push_back({"Rate (" + String(rate_name(s_rate)) + ")", pick_rate});
+        opts.push_back({"Gain: " + String(s_rx_gain < 0 ? "Auto" : String(s_rx_gain)), pick_rx_gain});
+        opts.push_back({"Rate: " + String(rate_hz(s_rate) / 1000000U) + "M", pick_rate});
         opts.push_back({"Back", [&]() { returnToMenu = true; }});
 
         loopOptions(opts, MENU_TYPE_SUBMENU, "SDR");
