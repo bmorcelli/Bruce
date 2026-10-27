@@ -68,8 +68,8 @@
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
-#include "core/wifi/wifi_common.h"
 #include "core/wifi/webInterface.h"
+#include "core/wifi/wifi_common.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
 
@@ -94,32 +94,32 @@ void stop_tx_tone(unsigned int en);
 // ---------------------------------------------------------------------------
 // Undocumented hardware (addresses/bits per PBJ3000 doc/undocumented-registers-esp32s3.md)
 // ---------------------------------------------------------------------------
-#define J_DUMP_CTRL_REG    0x60033d5cU // undocumented WiFi MAC dump engine, ADC side
-#define J_DUMP_CTRL_RUN    BIT(31)
-#define J_DUMP_CTRL_TRIG   BIT(19)
-#define J_DUMP_CTRL_DONE   BIT(18)
-#define J_DUMP_CTRL_16M    BIT(16)
-#define J_DUMP_CTRL_40M    BIT(15)
-#define J_DUMP_CTRL_COUNT  0x3fffU // 13:0
-#define J_DUMP_CFG_REG     0x60033d90U
-#define J_DUMP_CFG_IQ      0x000c2040U // four 6-bit lane selectors: receive I/Q
-#define J_DAC_TRIG_REG     0x60033d64U // DAC-side mirror, 8 bytes above the ADC control
-#define J_DAC_CTRL_80M     BIT(15)
-#define J_DUMP_TIMEOUT_US  20000U
+#define J_DUMP_CTRL_REG 0x60033d5cU // undocumented WiFi MAC dump engine, ADC side
+#define J_DUMP_CTRL_RUN BIT(31)
+#define J_DUMP_CTRL_TRIG BIT(19)
+#define J_DUMP_CTRL_DONE BIT(18)
+#define J_DUMP_CTRL_16M BIT(16)
+#define J_DUMP_CTRL_40M BIT(15)
+#define J_DUMP_CTRL_COUNT 0x3fffU // 13:0
+#define J_DUMP_CFG_REG 0x60033d90U
+#define J_DUMP_CFG_IQ 0x000c2040U  // four 6-bit lane selectors: receive I/Q
+#define J_DAC_TRIG_REG 0x60033d64U // DAC-side mirror, 8 bytes above the ADC control
+#define J_DAC_CTRL_80M BIT(15)
+#define J_DUMP_TIMEOUT_US 20000U
 
-#define J_FE_TX_CTRL_REG   0x60006000U // front end: bit 1 = force TX on, 17:10 TX gain index, 25:18 base index
-#define J_FE_FORCE_TXON    BIT(1)
-#define J_FE_GAIN_IDX_MSK  (0xffU << 10)
+#define J_FE_TX_CTRL_REG 0x60006000U // front end: bit 1 = force TX on, 17:10 TX gain index, 25:18 base index
+#define J_FE_FORCE_TXON BIT(1)
+#define J_FE_GAIN_IDX_MSK (0xffU << 10)
 
 // Wi-Fi AGC (PBJ3000 doc): forced index 31:24, force-enable 23, largest
 // calibrated index 14:8. S3 maxima above ~82 point at uncalibrated table slots.
-#define J_AGC_FORCE_REG    0x6001c02cU
-#define J_AGC_FORCE_EN     BIT(23)
+#define J_AGC_FORCE_REG 0x6001c02cU
+#define J_AGC_FORCE_EN BIT(23)
 #define J_AGC_GAIN_MAX_MSK 0x7f00U // 14:8
-#define J_AGC_GAIN_MAX_S   8
+#define J_AGC_GAIN_MAX_S 8
 #define J_AGC_GAIN_VALID_MAX 82U
 // bt_rx_force(0) steps this register's bits 9:8 through 0x200, 0x300, 0
-#define J_FE_R110_REG      0x60006110U
+#define J_FE_R110_REG 0x60006110U
 #define J_FE_R110_B9_8_MSK 0x300U
 
 // The dump engine's bank 1: 64 KiB of SRAM the engine streams to/from the
@@ -127,20 +127,20 @@ void stop_tx_tone(unsigned int en);
 // 0x3FCB0000 (bank 0 overlaps static data; the IDF reserve validator aborts
 // at boot on overlap). Bank 1 lies wholly inside the heap arena, below the
 // ROM-reserved DRAM at 0x3FCDB700+.
-#define J_BANK_ADDR  0x3FCC0000U
-#define J_BANK_LEN   0x10000U
+#define J_BANK_ADDR 0x3FCC0000U
+#define J_BANK_LEN 0x10000U
 #define J_BANK_WORDS (J_BANK_LEN / sizeof(uint32_t)) // 16384
-#define J_BANK_USAGE (BIT(1) << 0) // MAC_DUMP_USAGE one-hot, bank 1
+#define J_BANK_USAGE (BIT(1) << 0)                   // MAC_DUMP_USAGE one-hot, bank 1
 
 // Upstream rx_lo.h: the LO selector lives in analog I2C block 0x65, register 0,
 // bit 4 (0 = normal LO, 1 = 6/5-divided LO).
 #define J_LO_BLOCK 0x65
-#define J_LO_REG   0
-#define J_LO_MASK  0x10U
+#define J_LO_REG 0
+#define J_LO_MASK 0x10U
 
 // RF PLL status after the vendor calibration (analog I2C block 0x62): bits 3:2
 // compare the request with the VCO window: 0 inside, 1 below, 2 above.
-#define J_RFPLL_BLOCK      0x62
+#define J_RFPLL_BLOCK 0x62
 #define J_RFPLL_STATUS_REG 12
 #define J_RFPLL_STATUS_VCO 0x0cU
 
@@ -188,13 +188,14 @@ static uint32_t s_freq_mhz = J_CAL_CHANNEL_MHZ;
 
 enum JamRate : uint8_t { RATE_16M = 0, RATE_40M = 1, RATE_80M = 2 };
 static enum JamRate s_rate = RATE_40M;
-static int s_tx_power_qdbm = 78; // 0.25 dBm units, applied before each takeover
-static uint8_t s_ch = 1;         // Wi-Fi channel when !s_custom
-static bool s_custom = false;    // off-grid frequency instead of a Wi-Fi channel
+static int s_tx_power_qdbm = 78;   // 0.25 dBm units, applied before each takeover
+static uint8_t s_ch = 1;           // Wi-Fi channel when !s_custom
+static bool s_custom = false;      // off-grid frequency instead of a Wi-Fi channel
 static uint32_t s_pending_mhz = 0; // custom frequency chosen in the menu, applied at takeover
 
-static const uint32_t J_CH_FREQ[14] = {2412, 2417, 2422, 2427, 2432, 2437, 2442,
-                                       2447, 2452, 2457, 2462, 2467, 2472, 2484};
+static const uint32_t J_CH_FREQ[14] = {
+    2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2484
+};
 
 static uint32_t rate_hz(enum JamRate r) {
     switch (r) {
@@ -252,9 +253,7 @@ static void rx_gain_apply(void) {
     if (s_rx_gain >= 0) rx_gain_apply_locked(true, (uint32_t)s_rx_gain);
 }
 
-static void rx_gain_release(void) {
-    rx_gain_apply_locked(false, 0);
-}
+static void rx_gain_release(void) { rx_gain_apply_locked(false, 0); }
 
 // ---------------------------------------------------------------------------
 // Analog I2C helpers (regi2c critical section is the vendor PHY's own lock)
@@ -388,7 +387,7 @@ static void sdr_deinit_radio(void) {
     REG_WRITE(J_DUMP_CTRL_REG, 0);
     REG_WRITE(SENSITIVE_INTERNAL_SRAM_USAGE_3_REG, s_usage_saved);
     fe_force_txon(false);
-    rx_gain_release(); // hand the AGC back before resting
+    rx_gain_release();                      // hand the AGC back before resting
     rx_front_end(true, J_RETUNE_SETTLE_US); // rest in the RX-ready state, like upstream
     esp_wifi_set_promiscuous(false);
     s_ready = false;
@@ -396,13 +395,13 @@ static void sdr_deinit_radio(void) {
 
 // Hand the bank to the engine (CPU keeps the rest of the SRAM field untouched).
 static inline void bank_to_engine(void) {
-    REG_WRITE(SENSITIVE_INTERNAL_SRAM_USAGE_3_REG,
-              (s_usage_saved & ~SENSITIVE_INTERNAL_SRAM_MAC_DUMP_USAGE_M) | s_usage_bank);
+    REG_WRITE(
+        SENSITIVE_INTERNAL_SRAM_USAGE_3_REG,
+        (s_usage_saved & ~SENSITIVE_INTERNAL_SRAM_MAC_DUMP_USAGE_M) | s_usage_bank
+    );
 }
 
-static inline void bank_to_cpu(void) {
-    REG_WRITE(SENSITIVE_INTERNAL_SRAM_USAGE_3_REG, s_usage_saved);
-}
+static inline void bank_to_cpu(void) { REG_WRITE(SENSITIVE_INTERNAL_SRAM_USAGE_3_REG, s_usage_saved); }
 
 // ---------------------------------------------------------------------------
 // Dump engine: DAC playback (TX) and ADC capture (RX)
@@ -595,13 +594,9 @@ static String freq_label() {
 }
 
 // Compact variant for menu rows.
-static String freq_short() {
-    return s_custom ? String(s_pending_mhz) + "M" : "CH" + String(s_ch);
-}
+static String freq_short() { return s_custom ? String(s_pending_mhz) + "M" : "CH" + String(s_ch); }
 
-static uint32_t run_start_freq(void) {
-    return s_custom ? s_pending_mhz : J_CH_FREQ[s_ch - 1];
-}
+static uint32_t run_start_freq(void) { return s_custom ? s_pending_mhz : J_CH_FREQ[s_ch - 1]; }
 
 // Switch the LO after a custom-frequency step failed the PLL window check.
 static void retune_front_end(bool tx) {
@@ -620,11 +615,25 @@ static bool live_retune(bool tx) {
     uint32_t old = s_freq_mhz;
     bool changed = false;
     if (s_custom) {
-        if (check(NextPress) && s_freq_mhz < J_FREQ_API_MAX_MHZ) { s_freq_mhz++; changed = true; }
-        if (check(PrevPress) && s_freq_mhz > J_FREQ_API_MIN_MHZ) { s_freq_mhz--; changed = true; }
+        if (check(NextPress) && s_freq_mhz < J_FREQ_API_MAX_MHZ) {
+            s_freq_mhz++;
+            changed = true;
+        }
+        if (check(PrevPress) && s_freq_mhz > J_FREQ_API_MIN_MHZ) {
+            s_freq_mhz--;
+            changed = true;
+        }
     } else {
-        if (check(NextPress) && s_ch < 14) { s_ch++; s_freq_mhz = J_CH_FREQ[s_ch - 1]; changed = true; }
-        if (check(PrevPress) && s_ch > 1) { s_ch--; s_freq_mhz = J_CH_FREQ[s_ch - 1]; changed = true; }
+        if (check(NextPress) && s_ch < 14) {
+            s_ch++;
+            s_freq_mhz = J_CH_FREQ[s_ch - 1];
+            changed = true;
+        }
+        if (check(PrevPress) && s_ch > 1) {
+            s_ch--;
+            s_freq_mhz = J_CH_FREQ[s_ch - 1];
+            changed = true;
+        }
     }
     if (!changed) return false;
 
@@ -641,8 +650,7 @@ static uint8_t pick_channel(void) {
     int sel = -1;
     for (uint8_t c = 1; c <= 14; c++) {
         uint8_t ch = c;
-        opts.push_back({"CH " + String(ch),
-                        [&sel, ch]() { sel = ch; }});
+        opts.push_back({"CH " + String(ch), [&sel, ch]() { sel = ch; }});
     }
     loopOptions(opts, MENU_TYPE_SUBMENU, "Channel");
     opts.clear();
@@ -667,22 +675,35 @@ static void run_noise_jam(void) {
     bool timeout = false;
     while (!returnToMenu && !check(EscPress)) {
         bool changed = live_retune(true);
-        if (check(UpPress)) { gen.amp = gen.amp < 500 ? gen.amp + 100 : 100; changed = true; }
-        if (check(DownPress)) { gen.amp = gen.amp > 100 ? gen.amp - 100 : 500; changed = true; }
+        if (check(UpPress)) {
+            gen.amp = gen.amp < 500 ? gen.amp + 100 : 100;
+            changed = true;
+        }
+        if (check(DownPress)) {
+            gen.amp = gen.amp > 100 ? gen.amp - 100 : 500;
+            changed = true;
+        }
         dirty |= changed;
 
-        if (dirty) { fill_bank(gen); dirty = false; }
+        if (dirty) {
+            fill_bank(gen);
+            dirty = false;
+        }
         bank_to_engine();
         dac_trigger(s_rate == RATE_80M, J_SAMPLES_MAX);
-        if (!dac_wait_done()) { timeout = true; bank_to_cpu(); break; }
+        if (!dac_wait_done()) {
+            timeout = true;
+            bank_to_cpu();
+            break;
+        }
         bursts++;
 
         if (esp_timer_get_time() - last_draw > 250000) {
             last_draw = esp_timer_get_time();
             jammer_status(
                 freq_label() + "  " + rate_name(s_rate),
-                "amp " + String(gen.amp) + "  " + String((int)((esp_timer_get_time() - t0) / 1000000)) + "s  " +
-                    String(bursts) + " bursts"
+                "amp " + String(gen.amp) + "  " + String((int)((esp_timer_get_time() - t0) / 1000000)) +
+                    "s  " + String(bursts) + " bursts"
             );
         }
     }
@@ -707,14 +728,27 @@ static void run_tone_jam(void) {
     bool timeout = false;
     while (!returnToMenu && !check(EscPress)) {
         bool changed = live_retune(true);
-        if (check(UpPress) && gen.f_off_hz < 5000000) { gen.f_off_hz += 100000; changed = true; }
-        if (check(DownPress) && gen.f_off_hz > -5000000) { gen.f_off_hz -= 100000; changed = true; }
+        if (check(UpPress) && gen.f_off_hz < 5000000) {
+            gen.f_off_hz += 100000;
+            changed = true;
+        }
+        if (check(DownPress) && gen.f_off_hz > -5000000) {
+            gen.f_off_hz -= 100000;
+            changed = true;
+        }
         dirty |= changed;
 
-        if (dirty) { fill_bank(gen); dirty = false; }
+        if (dirty) {
+            fill_bank(gen);
+            dirty = false;
+        }
         bank_to_engine();
         dac_trigger(s_rate == RATE_80M, J_SAMPLES_MAX);
-        if (!dac_wait_done()) { timeout = true; bank_to_cpu(); break; }
+        if (!dac_wait_done()) {
+            timeout = true;
+            bank_to_cpu();
+            break;
+        }
         bursts++;
 
         if (esp_timer_get_time() - last_draw > 250000) {
@@ -748,12 +782,17 @@ static void run_sweep_jam(void) {
             s_freq_mhz = J_CH_FREQ[ch - 1];
             rx_front_end(true, 0); // retune + RX-ready turnaround
             tx_prepare();
-            jammer_status("CH" + String(ch) + "  " + String(s_freq_mhz) + " MHz  " +
-                              String((int)((esp_timer_get_time() - t0) / 1000000)) + "s");
+            jammer_status(
+                "CH" + String(ch) + "  " + String(s_freq_mhz) + " MHz  " +
+                String((int)((esp_timer_get_time() - t0) / 1000000)) + "s"
+            );
             for (uint32_t b = 0; b < DWELL_BURSTS && !returnToMenu && !check(EscPress); b++) {
                 bank_to_engine();
                 dac_trigger(s_rate == RATE_80M, J_SAMPLES_MAX);
-                if (!dac_wait_done()) { timeout = true; break; }
+                if (!dac_wait_done()) {
+                    timeout = true;
+                    break;
+                }
             }
             bank_to_cpu();
             if (timeout) break;
@@ -767,18 +806,58 @@ static void run_sweep_jam(void) {
 
 // Raw I/Q spectrum analyzer: ADC captures at the current rate, FFT, live plot.
 static void run_iq_spectrum(void) {
-    const uint32_t N = 512; // keeps the FFT plan at ~8 KiB: heap is tight while WiFi is up
-    const uint16_t PLOT_H = 130;
-    const uint16_t PLOT_W = tft.width() - 16;
-    const uint16_t PLOT_Y = 42;
+    // 256-point complex FFT: the plan is three 2 KiB arrays (~6 KiB total), which
+    // fits the fragmented heap left once WiFi is up. 256 is also adc_capture's
+    // minimum and gives one bin per plot pixel, so a bigger N buys no resolution.
+    const uint32_t N = 256;
+
+    // Responsive layout: derive every Y from the screen size so nothing overlaps
+    // on short panels (e.g. Cardputer 240x135) or wastes space on tall ones.
+    // jammer_frame() owns the title + "IQ SPECTRUM" subtitle at the top and the
+    // "ESC: stop" line at height-18; the plot and its freq/rate readout live in
+    // the gap between the two.
+    const int PLOT_X = 8;
+    const int PLOT_Y = 42;                       // just under the subtitle
+    const int PLOT_W = tft.width() - 2 * PLOT_X;
+    const int INFO_Y = tft.height() - 18 - 10;   // freq/rate line, above the footer
+    const int PLOT_H = (INFO_Y - 4) - PLOT_Y;    // plot fills everything in between
 
     rx_front_end(true, J_RETUNE_SETTLE_US);
 
     jammer_frame("IQ SPECTRUM");
-    tft.drawRect(6, PLOT_Y - 2, PLOT_W + 4, PLOT_H + 4, bruceConfig.priColor);
+
+    // The FFT library mallocs its twiddle/input/output buffers and never checks
+    // the result, so a failed alloc stores straight through a NULL pointer and
+    // panics (StoreProhibited in fft_init). Build the plan ONCE, up front, where
+    // the heap is least fragmented -- never per frame -- and bail cleanly if we
+    // can't. The three arrays are 2*N floats each; require one contiguous block
+    // big enough for the whole plan so none of the mallocs can fail mid-init.
+    const size_t PLAN_BYTES = 3 * (2 * N * sizeof(float)) + 256; // +config & malloc headers
+    if (ESP.getMaxAllocHeap() < PLAN_BYTES) {
+        jammer_status("FFT out of memory", "close other radios");
+        Serial.printf(
+            "[SDR] FFT init skipped: max alloc heap %u < %u needed\n",
+            ESP.getMaxAllocHeap(),
+            (unsigned)PLAN_BYTES
+        );
+        delay(1500);
+        rx_front_end(true, J_RETUNE_SETTLE_US);
+        return;
+    }
+    fft_config_t *plan = fft_init(N, FFT_COMPLEX, FFT_FORWARD, NULL, NULL);
+    if (!plan) {
+        jammer_status("FFT init failed", "");
+        Serial.println("[SDR] FFT init failed: fft_init returned NULL");
+        delay(1500);
+        rx_front_end(true, J_RETUNE_SETTLE_US);
+        return;
+    }
+
+    tft.drawRect(PLOT_X - 2, PLOT_Y - 2, PLOT_W + 4, PLOT_H + 4, bruceConfig.priColor);
 
     int64_t last_draw = 0;
     uint32_t captures = 0, timeouts = 0, failStreak = 0;
+    String lastInfo; // redraw the freq/rate line only when it changes (no flicker)
     while (!returnToMenu && !check(EscPress)) {
         live_retune(false);
 
@@ -798,17 +877,6 @@ static void run_iq_spectrum(void) {
         if (esp_timer_get_time() - last_draw < 40000) continue; // ~25 fps cap
         last_draw = esp_timer_get_time();
 
-        fft_config_t *plan = fft_init(N, FFT_COMPLEX, FFT_FORWARD, NULL, NULL);
-        if (!plan) {
-            timeouts++;
-            if (++failStreak > 20) {
-                jammer_status("FFT out of memory", "");
-                delay(1200);
-                break;
-            }
-            continue;
-        }
-        failStreak = 0;
         for (uint32_t j = 0; j < N; j++) {
             plan->input[2 * j] = (float)rx_word_i(s_bank[j]);
             plan->input[2 * j + 1] = (float)rx_word_q(s_bank[j]);
@@ -816,7 +884,8 @@ static void run_iq_spectrum(void) {
         fft_execute(plan);
 
         // FFT shift: bins wrap around DC; plot the full span with DC centered.
-        tft.fillRect(7, PLOT_Y - 1, PLOT_W + 2, PLOT_H + 2, bruceConfig.bgColor);
+        // Repaint each column in place -- bar in priColor, the space above it in
+        // bgColor -- instead of clearing the whole rect first, which flickers.
         uint32_t half = N / 2;
         for (uint16_t x = 0; x < PLOT_W; x++) {
             uint32_t bin = ((uint32_t)x * N / PLOT_W + half) % N; // wrap so DC sits in the middle
@@ -827,14 +896,21 @@ static void run_iq_spectrum(void) {
             int h = (int)((db + 60.0f) * PLOT_H / 60.0f); // -60..0 dB window
             if (h < 0) h = 0;
             if (h > PLOT_H - 1) h = PLOT_H - 1;
-            if (h > 0) tft.drawFastVLine(8 + x, PLOT_Y + PLOT_H - 1 - h, h, bruceConfig.priColor);
+            if (h < PLOT_H) tft.drawFastVLine(PLOT_X + x, PLOT_Y, PLOT_H - h, bruceConfig.bgColor);
+            if (h > 0) tft.drawFastVLine(PLOT_X + x, PLOT_Y + PLOT_H - h, h, bruceConfig.priColor);
         }
-        fft_destroy(plan);
 
-        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-        tft.setTextSize(FP);
-        tft.drawString(freq_label() + "  " + rate_name(s_rate), 8, PLOT_Y + PLOT_H + 4, 1);
+        String info = freq_label() + "  " + rate_name(s_rate);
+        if (info != lastInfo) {
+            tft.fillRect(PLOT_X, INFO_Y, PLOT_W, 10, bruceConfig.bgColor);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            tft.setTextSize(FP);
+            tft.drawCentreString(info, tft.width() / 2, INFO_Y, 1);
+            lastInfo = info;
+        }
     }
+
+    fft_destroy(plan);
 
     jammer_status(String(captures) + " captures", String(timeouts) + " timeouts");
     delay(600);
@@ -889,9 +965,11 @@ static void run_iq_record(void) {
     size_t bufBytes = 0;
     uint8_t *buf = alloc_convert_buf(bufBytes);
     if (!buf) {
-        Serial.printf("[SDR] record OOM: free=%u largest=%u\n",
-                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        Serial.printf(
+            "[SDR] record OOM: free=%u largest=%u\n",
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)
+        );
         displayError("Out of memory", true);
         return;
     }
@@ -930,8 +1008,10 @@ static void run_iq_record(void) {
 
         if (esp_timer_get_time() - last_draw > 500000) {
             last_draw = esp_timer_get_time();
-            jammer_status(freq_label() + "  " + rate_name(s_rate),
-                          String(total / 1024) + " KiB  " + String(snaps) + " snaps");
+            jammer_status(
+                freq_label() + "  " + rate_name(s_rate),
+                String(total / 1024) + " KiB  " + String(snaps) + " snaps"
+            );
         }
     }
     f.close();
@@ -949,9 +1029,11 @@ static void run_iq_play(File &f) {
     size_t bufBytes = 0;
     uint8_t *buf = alloc_convert_buf(bufBytes);
     if (!buf) {
-        Serial.printf("[SDR] play OOM: free=%u largest=%u\n",
-                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        Serial.printf(
+            "[SDR] play OOM: free=%u largest=%u\n",
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)
+        );
         displayError("Out of memory", true);
         return;
     }
@@ -981,13 +1063,19 @@ static void run_iq_play(File &f) {
         }
         bank_to_engine();
         dac_trigger(s_rate == RATE_80M, J_SAMPLES_MAX);
-        if (!dac_wait_done()) { timeout = true; bank_to_cpu(); break; }
+        if (!dac_wait_done()) {
+            timeout = true;
+            bank_to_cpu();
+            break;
+        }
         bursts++;
 
         if (esp_timer_get_time() - last_draw > 500000) {
             last_draw = esp_timer_get_time();
-            jammer_status(freq_label() + "  " + rate_name(s_rate),
-                          String((int)((esp_timer_get_time() - t0) / 1000000)) + "s  " + String(bursts) + " bursts");
+            jammer_status(
+                freq_label() + "  " + rate_name(s_rate),
+                String((int)((esp_timer_get_time() - t0) / 1000000)) + "s  " + String(bursts) + " bursts"
+            );
         }
     }
     free(buf);
@@ -1046,9 +1134,11 @@ static void pick_frequency(void) {
                         s_ch = pick_channel();
                     }});
     opts.push_back({"Custom MHz...", [&]() {
-                        String v = num_keyboard(String(s_pending_mhz), 6,
-                                                "MHz (" + String(J_FREQ_ADV_MIN_MHZ) + "-" +
-                                                    String(J_FREQ_ADV_MAX_MHZ) + "):");
+                        String v = num_keyboard(
+                            String(s_pending_mhz),
+                            6,
+                            "MHz (" + String(J_FREQ_ADV_MIN_MHZ) + "-" + String(J_FREQ_ADV_MAX_MHZ) + "):"
+                        );
                         if (!v.length()) return;
                         uint32_t mhz = (uint32_t)v.toInt();
                         if (mhz >= J_FREQ_API_MIN_MHZ && mhz <= J_FREQ_API_MAX_MHZ) {
